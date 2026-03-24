@@ -1,0 +1,14 @@
+[package]
+name = "raddose3d-cli"
+version = "0.1.0"
+edition = "2021"
+description = "CLI for RADDOSE-3D radiation dose calculator"
+
+[[bin]]
+name = "raddose3d"
+path = "src/main.rs"
+
+[dependencies]
+raddose3d = { path = "../raddose3d" }
+raddose3d-parser = { path = "../raddose3d-parser" }
+clap = { version = "4", features = ["derive"] }

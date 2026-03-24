@@ -1,0 +1,211 @@
+// RADDOSE-3D input file grammar (PEG, case-insensitive)
+// Ported from ANTLR 3.4 grammar: lib/antlrworks-parsergenerator/Inputfile.g
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT    = _{ ("#" | "//" | "!") ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }
+
+configfile = { SOI ~ (crystal | beam | wedge)* ~ EOI }
+
+// ===================== CRYSTAL BLOCK =====================
+
+crystal = { crystal_kw ~ crystal_line+ }
+crystal_kw = _{ ^"crystal" }
+
+crystal_line = _{
+    crystal_type
+  | crystal_ddm
+  | crystal_coefcalc
+  | crystal_dim
+  | crystal_ppm
+  | crystal_angle_p
+  | crystal_angle_l
+  | crystal_decay_param
+  | container_thickness
+  | container_density
+  | crystal_container_material
+  | container_material_mixture
+  | unitcell
+  | num_monomers
+  | num_residues
+  | num_rna
+  | num_dna
+  | num_carb
+  | heavy_protein_atoms
+  | small_mole_atoms
+  | heavy_solution_conc
+  | solvent_fraction
+  | pdb
+  | cif
+  | wireframe_type
+  | model_file
+  | calculate_pe_escape
+  | calculate_fl_escape
+  | fl_resolution
+  | pe_resolution
+  | protein_concentration
+  | container_material_elements
+  | sequence_file
+  | surrounding_heavy_conc
+  | oil_based
+  | goniometer_axis
+  | polarisation_direction
+  | calc_surrounding
+  | oil_elements
+  | oil_density
+  | program
+  | sim_electrons
+  | runs
+  | surrounding_thickness
+}
+
+crystal_type = { ^"type" ~ string_val }
+
+crystal_ddm = { (^"diffractiondecaymodel" | ^"ddm") ~ ddm_keyword }
+ddm_keyword = { ^"simple" | ^"linear" | ^"leal" | ^"bfactor" }
+
+crystal_coefcalc = { (^"abscoefcalc" | ^"coefcalc") ~ coefcalc_keyword }
+coefcalc_keyword = {
+    ^"dummy" | ^"average" | ^"default" | ^"rdjava" | ^"rd3d" | ^"rd3"
+  | ^"rdv3" | ^"rdv2"
+  | ^"expsm" | ^"cif"
+  | ^"exp"
+  | ^"saxsseq" | ^"saxs"
+  | ^"sequence"
+  | ^"smallmole"
+}
+
+crystal_dim = { (^"dimensions" | ^"dimension") ~ float_val ~ float_val? ~ float_val? }
+
+crystal_ppm = { ^"pixelspermicron" ~ float_val }
+
+crystal_angle_p = { ^"anglep" ~ float_val }
+crystal_angle_l = { ^"anglel" ~ float_val }
+
+crystal_decay_param = { ^"decayparam" ~ float_val ~ float_val ~ float_val }
+
+unitcell = { ^"unitcell" ~ float_val ~ float_val ~ float_val ~ (float_val ~ float_val ~ float_val)? }
+
+num_monomers = { ^"nummonomers" ~ float_val }
+num_residues = { ^"numresidues" ~ float_val }
+num_rna = { ^"numrna" ~ float_val }
+num_dna = { ^"numdna" ~ float_val }
+num_carb = { ^"numcarb" ~ float_val }
+
+heavy_protein_atoms = { ^"proteinheavyatoms" ~ (element ~ float_val)+ }
+small_mole_atoms = { ^"smallmoleatoms" ~ (element ~ float_val)+ }
+heavy_solution_conc = { ^"solventheavyconc" ~ (element ~ float_val)+ }
+solvent_fraction = { ^"solventfraction" ~ float_val }
+
+pdb = { ^"pdb" ~ (string_val | float_val) }
+cif = { ^"cif" ~ string_val }
+
+wireframe_type = { ^"wireframetype" ~ string_val }
+model_file = { ^"modelfile" ~ string_val }
+calculate_pe_escape = { ^"calculatepeescape" ~ string_val }
+calculate_fl_escape = { ^"calculateflescape" ~ string_val }
+fl_resolution = { ^"flresolution" ~ float_val }
+pe_resolution = { ^"peresolution" ~ float_val }
+
+protein_concentration = { (^"proteinconcentration" | ^"proteinconc") ~ float_val }
+
+container_material_elements = { (^"containermaterialelements" | ^"materialelements") ~ (element ~ float_val)+ }
+container_thickness = { ^"containerthickness" ~ float_val }
+container_density = { ^"containerdensity" ~ float_val }
+container_material_mixture = { (^"containermaterialmixture" | ^"materialmixture") ~ string_val }
+
+crystal_container_material = { (^"containermaterialtype" | ^"materialtype") ~ container_keyword }
+container_keyword = { ^"none" | ^"mixture" | ^"elemental" }
+
+sequence_file = { (^"sequencefile" | ^"seqfile") ~ string_val }
+
+surrounding_heavy_conc = { ^"surroundingheavyconc" ~ (element ~ float_val)+ }
+surrounding_thickness = { ^"surroundingthickness" ~ float_val ~ float_val ~ float_val }
+oil_based = { ^"densitybased" ~ string_val }
+calc_surrounding = { ^"calcsurrounding" ~ string_val }
+oil_elements = { ^"surroundingelements" ~ (element ~ float_val)+ }
+oil_density = { ^"surroundingdensity" ~ float_val }
+
+goniometer_axis = { ^"goniometeraxis" ~ float_val }
+polarisation_direction = { ^"polarisationdirection" ~ float_val }
+
+program = { ^"subprogram" ~ string_val }
+sim_electrons = { (^"simelectrons" | ^"simphotons") ~ float_val }
+runs = { ^"runs" ~ float_val }
+
+// ===================== BEAM BLOCK =====================
+
+beam = { beam_kw ~ beam_line+ }
+beam_kw = _{ ^"beam" }
+
+beam_line = _{
+    beam_type
+  | beam_flux
+  | beam_fwhm
+  | beam_energy
+  | beam_collimation
+  | beam_file
+  | beam_pixel_size
+  | beam_exposure
+  | beam_semi_angle
+  | beam_aperture_radius
+  | image_dimensions
+  | pulse_energy
+  | energy_fwhm
+}
+
+beam_type = { ^"type" ~ string_val }
+beam_flux = { ^"flux" ~ float_val }
+beam_fwhm = { ^"fwhm" ~ float_val ~ float_val }
+beam_energy = { ^"energy" ~ float_val ~ (^"kev")? }
+beam_exposure = { ^"exposure" ~ float_val }
+beam_file = { ^"file" ~ string_val }
+beam_pixel_size = { ^"pixelsize" ~ float_val ~ float_val }
+beam_semi_angle = { ^"semiangle" ~ float_val }
+beam_aperture_radius = { ^"apertureradius" ~ float_val }
+image_dimensions = { ^"imagedim" ~ float_val ~ float_val }
+pulse_energy = { ^"pulseenergy" ~ float_val }
+energy_fwhm = { ^"energyfwhm" ~ float_val }
+
+beam_collimation = {
+    ^"collimation"
+  | ^"rectangular" ~ float_val ~ float_val
+  | ^"circular" ~ float_val ~ float_val
+  | ^"horizontal" ~ float_val
+  | ^"vertical" ~ float_val
+}
+
+// ===================== WEDGE BLOCK =====================
+
+wedge = { wedge_kw ~ float_val ~ float_val ~ wedge_line+ }
+wedge_kw = _{ ^"wedge" }
+
+wedge_line = _{
+    wedge_exposure
+  | wedge_ang_res
+  | wedge_start_offset
+  | wedge_translate
+  | wedge_rot_ax_beam_offset
+  | wedge_max_res
+}
+
+wedge_exposure = { ^"exposuretime" ~ float_val }
+wedge_ang_res = { ^"angularresolution" ~ float_val }
+wedge_start_offset = { ^"startoffset" ~ float_val ~ float_val ~ float_val? }
+wedge_translate = { ^"translateperdegree" ~ float_val ~ float_val ~ float_val? }
+wedge_rot_ax_beam_offset = { ^"rotaxbeamoffset" ~ float_val }
+wedge_max_res = { ^"maxresolution" ~ float_val }
+
+// ===================== TOKENS =====================
+
+// Element: 1-2 letter symbol (must come before string_val in alternations)
+element = @{ ASCII_ALPHA ~ ASCII_ALPHA? }
+
+// Float: optional sign, digits with optional decimal and exponent
+float_val = @{
+    ("+" | "-")?
+    ~ ( ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? | "." ~ ASCII_DIGIT+ )
+    ~ (("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+}
+
+// String: alphanumeric + special chars
+string_val = @{ (ASCII_ALPHANUMERIC | "." | "$" | "-" | "_" | ":" | "\\" | "/")+ }

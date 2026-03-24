@@ -1,0 +1,11 @@
+[package]
+name = "raddose3d-parser"
+version = "0.1.0"
+edition = "2021"
+description = "Input file parser for RADDOSE-3D"
+
+[dependencies]
+pest = "2"
+pest_derive = "2"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }

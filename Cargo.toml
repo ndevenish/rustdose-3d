@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/raddose3d",
+    "crates/raddose3d-parser",
+    "crates/raddose3d-cli",
+]
