@@ -17,13 +17,18 @@ fn main() {
             std::process::exit(1);
         });
 
-    match raddose3d_parser::parse(&input) {
-        Ok(config) => {
-            println!("Parsed {} crystal(s), {} beam(s), {} wedge(s)",
-                config.crystals.len(), config.beams.len(), config.wedges.len());
-        }
+    let config = match raddose3d_parser::parse(&input) {
+        Ok(config) => config,
         Err(e) => {
             eprintln!("Parse error: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    match raddose3d::experiment::Experiment::run_from_config(&config) {
+        Ok(_experiment) => {}
+        Err(e) => {
+            eprintln!("Simulation error: {}", e);
             std::process::exit(1);
         }
     }

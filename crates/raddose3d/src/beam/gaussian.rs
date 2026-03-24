@@ -1,0 +1,253 @@
+use crate::constants::KEV_TO_JOULES;
+use crate::container::Container;
+use crate::parser::config::{BeamConfig, Collimation};
+
+use statrs::distribution::{ContinuousCDF, Normal};
+
+/// Gaussian beam profile.
+#[derive(Debug, Clone)]
+pub struct BeamGaussian {
+    /// FWHM X in µm.
+    pub fwhm_x: f64,
+    /// FWHM Y in µm.
+    pub fwhm_y: f64,
+    /// Flux in photons/sec.
+    photons_per_sec: f64,
+    /// Photon energy in keV.
+    photon_energy: f64,
+    /// Pulse energy in mJ (optional).
+    pulse_energy: f64,
+    /// Energy FWHM for pink beam (optional).
+    energy_fwhm: Option<f64>,
+    /// Horizontal collimation in µm (None if uncollimated).
+    coll_x_um: Option<f64>,
+    /// Vertical collimation in µm (None if uncollimated).
+    coll_y_um: Option<f64>,
+    /// Whether circular collimation.
+    is_circular: bool,
+    /// Normalization factor for collimated beam.
+    norm_factor: f64,
+    /// Scale factor: converts intensity to J/µm²/s.
+    scale_factor: f64,
+    /// Attenuated photons per second (after container).
+    attenuated_photons_per_sec: f64,
+    /// Gaussian distributions.
+    g_x: Normal,
+    g_y: Normal,
+}
+
+impl BeamGaussian {
+    /// FWHM to sigma conversion factor.
+    const FWHM_TO_SIGMA: f64 = 2.354_820_045_030_949_4; // 2*sqrt(2*ln(2))
+
+    pub fn from_config(config: &BeamConfig) -> Result<Self, String> {
+        let fwhm_x = config.fwhm_x.ok_or("Gaussian beam requires FWHM X")?;
+        let fwhm_y = config.fwhm_y.ok_or("Gaussian beam requires FWHM Y")?;
+        let photons_per_sec = config.flux.ok_or("Gaussian beam requires flux")?;
+        let photon_energy = config.energy.ok_or("Gaussian beam requires energy")?;
+
+        let sigma_x = fwhm_x / Self::FWHM_TO_SIGMA;
+        let sigma_y = fwhm_y / Self::FWHM_TO_SIGMA;
+
+        let g_x = Normal::new(0.0, sigma_x).map_err(|e| e.to_string())?;
+        let g_y = Normal::new(0.0, sigma_y).map_err(|e| e.to_string())?;
+
+        let (coll_x_um, coll_y_um, is_circular) = match &config.collimation {
+            Some(Collimation::Rectangular { h, v }) => (Some(*h), Some(*v), false),
+            Some(Collimation::Circular { h, v }) => (Some(*h), Some(*v), true),
+            Some(Collimation::Horizontal { h }) => (Some(*h), None, false),
+            Some(Collimation::Vertical { v }) => (None, Some(*v), false),
+            _ => (None, None, false),
+        };
+
+        // Calculate normalization factor
+        let norm_factor = Self::calc_norm_factor(&g_x, &g_y, coll_x_um, coll_y_um, is_circular);
+
+        let scale_factor = photon_energy * KEV_TO_JOULES * photons_per_sec / norm_factor;
+
+        Ok(BeamGaussian {
+            fwhm_x,
+            fwhm_y,
+            photons_per_sec,
+            photon_energy,
+            pulse_energy: config.pulse_energy.unwrap_or(0.0),
+            energy_fwhm: config.energy_fwhm,
+            coll_x_um,
+            coll_y_um,
+            is_circular,
+            norm_factor,
+            scale_factor,
+            attenuated_photons_per_sec: photons_per_sec,
+            g_x,
+            g_y,
+        })
+    }
+
+    fn calc_norm_factor(
+        g_x: &Normal,
+        g_y: &Normal,
+        coll_x_um: Option<f64>,
+        coll_y_um: Option<f64>,
+        is_circular: bool,
+    ) -> f64 {
+        if is_circular {
+            // Numerical integration for circular aperture
+            Self::bivariate_gaussian_volume_circular(g_x, g_y, coll_x_um, coll_y_um)
+        } else {
+            Self::bivariate_gaussian_volume_rect(g_x, g_y, coll_x_um, coll_y_um)
+        }
+    }
+
+    fn bivariate_gaussian_volume_rect(
+        g_x: &Normal,
+        g_y: &Normal,
+        coll_x: Option<f64>,
+        coll_y: Option<f64>,
+    ) -> f64 {
+        // CDF-based integration for rectangular collimation
+        let x_frac = match coll_x {
+            Some(h) => g_x.cdf(h / 2.0) - g_x.cdf(-h / 2.0),
+            None => 1.0,
+        };
+        let y_frac = match coll_y {
+            Some(v) => g_y.cdf(v / 2.0) - g_y.cdf(-v / 2.0),
+            None => 1.0,
+        };
+        x_frac * y_frac
+    }
+
+    fn bivariate_gaussian_volume_circular(
+        g_x: &Normal,
+        g_y: &Normal,
+        coll_x: Option<f64>,
+        coll_y: Option<f64>,
+    ) -> f64 {
+        // Numerical integration via Riemann sum for circular/elliptical aperture
+        let half_x = coll_x.unwrap_or(100.0) / 2.0;
+        let half_y = coll_y.unwrap_or(100.0) / 2.0;
+
+        let steps = 100;
+        let dx = 2.0 * half_x / steps as f64;
+        let dy = 2.0 * half_y / steps as f64;
+        let mut volume = 0.0;
+
+        for ix in 0..steps {
+            let x = -half_x + (ix as f64 + 0.5) * dx;
+            for iy in 0..steps {
+                let y = -half_y + (iy as f64 + 0.5) * dy;
+                // Check if inside ellipse
+                if (x / half_x).powi(2) + (y / half_y).powi(2) <= 1.0 {
+                    volume += Self::gaussian_2d_value(g_x, g_y, x, y) * dx * dy;
+                }
+            }
+        }
+
+        volume
+    }
+
+    fn gaussian_2d_value(g_x: &Normal, g_y: &Normal, x: f64, y: f64) -> f64 {
+        use statrs::distribution::Continuous;
+        g_x.pdf(x) * g_y.pdf(y)
+    }
+
+    fn recalc_scale_factor(&mut self) {
+        self.scale_factor =
+            self.photon_energy * KEV_TO_JOULES * self.attenuated_photons_per_sec / self.norm_factor;
+    }
+
+    fn is_in_collimation(&self, x: f64, y: f64) -> bool {
+        if self.is_circular {
+            let hx = self.coll_x_um.unwrap_or(f64::INFINITY) / 2.0;
+            let hy = self.coll_y_um.unwrap_or(f64::INFINITY) / 2.0;
+            (x / hx).powi(2) + (y / hy).powi(2) <= 1.0
+        } else {
+            let in_x = self
+                .coll_x_um
+                .map_or(true, |h| x.abs() <= h / 2.0);
+            let in_y = self
+                .coll_y_um
+                .map_or(true, |v| y.abs() <= v / 2.0);
+            in_x && in_y
+        }
+    }
+}
+
+impl super::Beam for BeamGaussian {
+    fn beam_intensity(&self, coord_x: f64, coord_y: f64, off_axis_um: f64) -> f64 {
+        let x = coord_x - off_axis_um;
+        if !self.is_in_collimation(x, coord_y) {
+            return 0.0;
+        }
+        Self::gaussian_2d_value(&self.g_x, &self.g_y, x, coord_y) * self.scale_factor
+    }
+
+    fn description(&self) -> String {
+        format!(
+            "Gaussian beam: {:.2e} photons/s, {:.2} keV, FWHM [{:.1}, {:.1}] µm",
+            self.photons_per_sec, self.photon_energy, self.fwhm_x, self.fwhm_y
+        )
+    }
+
+    fn photons_per_sec(&self) -> f64 {
+        self.attenuated_photons_per_sec
+    }
+
+    fn photon_energy(&self) -> f64 {
+        self.photon_energy
+    }
+
+    fn pulse_energy(&self) -> f64 {
+        self.pulse_energy
+    }
+
+    fn apply_container_attenuation(&mut self, container: &dyn Container) {
+        let fraction = container.attenuation_fraction();
+        self.attenuated_photons_per_sec = self.photons_per_sec * (1.0 - fraction);
+        self.recalc_scale_factor();
+    }
+
+    fn beam_minimum_dimension(&self) -> f64 {
+        self.fwhm_x.min(self.fwhm_y)
+    }
+
+    fn beam_area(&self) -> f64 {
+        match (&self.coll_x_um, &self.coll_y_um) {
+            (Some(h), Some(v)) if self.is_circular => {
+                std::f64::consts::PI * (h / 2.0) * (v / 2.0)
+            }
+            (Some(h), Some(v)) => h * v,
+            _ => {
+                // Use FWHM as effective area
+                self.fwhm_x * self.fwhm_y
+            }
+        }
+    }
+
+    fn beam_x(&self) -> Option<f64> {
+        self.coll_x_um.or(Some(self.fwhm_x))
+    }
+
+    fn beam_y(&self) -> Option<f64> {
+        self.coll_y_um.or(Some(self.fwhm_y))
+    }
+
+    fn beam_type(&self) -> &str {
+        "Gaussian"
+    }
+
+    fn is_circular(&self) -> bool {
+        self.is_circular
+    }
+
+    fn energy_fwhm(&self) -> Option<f64> {
+        self.energy_fwhm
+    }
+
+    fn sx(&self) -> f64 {
+        self.fwhm_x / Self::FWHM_TO_SIGMA
+    }
+
+    fn sy(&self) -> f64 {
+        self.fwhm_y / Self::FWHM_TO_SIGMA
+    }
+}

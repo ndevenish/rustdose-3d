@@ -1,0 +1,89 @@
+pub mod gaussian;
+pub mod tophat;
+
+pub use gaussian::BeamGaussian;
+pub use tophat::BeamTophat;
+
+use crate::container::Container;
+use crate::parser::config::BeamConfig;
+
+/// Beam trait for X-ray/electron beams.
+pub trait Beam: std::fmt::Debug + Send + Sync {
+    /// Returns the mean intensity at position (x, y) in J/µm²/s.
+    fn beam_intensity(&self, coord_x: f64, coord_y: f64, off_axis_um: f64) -> f64;
+
+    /// Returns a short description of the beam.
+    fn description(&self) -> String;
+
+    /// Returns flux in photons per second.
+    fn photons_per_sec(&self) -> f64;
+
+    /// Returns photon energy in keV.
+    fn photon_energy(&self) -> f64;
+
+    /// Returns pulse energy in mJ (0 if not applicable).
+    fn pulse_energy(&self) -> f64 { 0.0 }
+
+    /// Generate beam array (only used by experimental beam).
+    fn generate_beam_array(&mut self) {}
+
+    /// Apply container attenuation to the beam flux.
+    fn apply_container_attenuation(&mut self, container: &dyn Container);
+
+    /// Returns the minimum beam dimension in µm.
+    fn beam_minimum_dimension(&self) -> f64;
+
+    /// Returns beam area in µm².
+    fn beam_area(&self) -> f64;
+
+    /// Returns exposure in electrons/Å² (for electron beams).
+    fn exposure(&self) -> f64 { 0.0 }
+
+    /// Returns beam horizontal extent in µm.
+    fn beam_x(&self) -> Option<f64>;
+
+    /// Returns beam vertical extent in µm.
+    fn beam_y(&self) -> Option<f64>;
+
+    /// Returns beam type name.
+    fn beam_type(&self) -> &str;
+
+    /// Is the beam circularly collimated?
+    fn is_circular(&self) -> bool { false }
+
+    /// Returns semi-angle (for electron beams).
+    fn semi_angle(&self) -> f64 { 0.0 }
+
+    /// Returns aperture radius (for electron beams).
+    fn aperture_radius(&self) -> f64 { 0.0 }
+
+    /// Image X dimension.
+    fn image_x(&self) -> f64 { 0.0 }
+
+    /// Image Y dimension.
+    fn image_y(&self) -> f64 { 0.0 }
+
+    /// Energy FWHM for pink beam (None if monochromatic).
+    fn energy_fwhm(&self) -> Option<f64> { None }
+
+    /// Sigma X of the beam profile.
+    fn sx(&self) -> f64;
+
+    /// Sigma Y of the beam profile.
+    fn sy(&self) -> f64;
+}
+
+/// Create a Beam from parsed configuration.
+pub fn create_beam(config: &BeamConfig) -> Result<Box<dyn Beam>, String> {
+    let beam_type = config
+        .beam_type
+        .as_deref()
+        .unwrap_or("gaussian")
+        .to_lowercase();
+
+    match beam_type.as_str() {
+        "gaussian" => Ok(Box::new(BeamGaussian::from_config(config)?)),
+        "tophat" => Ok(Box::new(BeamTophat::from_config(config)?)),
+        other => Err(format!("Unknown beam type: {}", other)),
+    }
+}
