@@ -1,6 +1,6 @@
 use crate::beam::Beam;
 use crate::coefcalc::{self, CoefCalc};
-use crate::container::{Container, ContainerTransparent};
+use crate::container::{self, Container, ContainerTransparent};
 use crate::ddm::{self, DdmModel};
 use crate::output::ExposureSummary;
 use crate::parser::config::CrystalConfig;
@@ -183,6 +183,9 @@ impl CrystalCuboid {
         // Create CoefCalc
         let coefcalc = coefcalc::create_coefcalc(config)?;
 
+        // Create container
+        let container = container::create_container(config);
+
         // Create DDM
         let ddm = ddm::create_ddm(
             config.ddm,
@@ -219,7 +222,7 @@ impl CrystalCuboid {
             cryst_coord,
             coefcalc,
             ddm,
-            container: Box::new(ContainerTransparent),
+            container,
             exposure_summary: ExposureSummary::new(),
             subprogram,
             photo_electron_escape,
