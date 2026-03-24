@@ -91,9 +91,9 @@ num_rna = { ^"numrna" ~ float_val }
 num_dna = { ^"numdna" ~ float_val }
 num_carb = { ^"numcarb" ~ float_val }
 
-heavy_protein_atoms = { ^"proteinheavyatoms" ~ (element ~ float_val)+ }
-small_mole_atoms = { ^"smallmoleatoms" ~ (element ~ float_val)+ }
-heavy_solution_conc = { ^"solventheavyconc" ~ (element ~ float_val)+ }
+heavy_protein_atoms = { ^"proteinheavyatoms" ~ (element ~ float_val?)+ }
+small_mole_atoms = { ^"smallmoleatoms" ~ (element ~ float_val?)+ }
+heavy_solution_conc = { ^"solventheavyconc" ~ (element ~ float_val?)+ }
 solvent_fraction = { ^"solventfraction" ~ float_val }
 
 pdb = { ^"pdb" ~ (string_val | float_val) }
@@ -108,7 +108,7 @@ pe_resolution = { ^"peresolution" ~ float_val }
 
 protein_concentration = { (^"proteinconcentration" | ^"proteinconc") ~ float_val }
 
-container_material_elements = { (^"containermaterialelements" | ^"materialelements") ~ (element ~ float_val)+ }
+container_material_elements = { (^"containermaterialelements" | ^"materialelements") ~ (element ~ float_val?)+ }
 container_thickness = { ^"containerthickness" ~ float_val }
 container_density = { ^"containerdensity" ~ float_val }
 container_material_mixture = { (^"containermaterialmixture" | ^"materialmixture") ~ string_val }
@@ -118,11 +118,11 @@ container_keyword = { ^"none" | ^"mixture" | ^"elemental" }
 
 sequence_file = { (^"sequencefile" | ^"seqfile") ~ string_val }
 
-surrounding_heavy_conc = { ^"surroundingheavyconc" ~ (element ~ float_val)+ }
+surrounding_heavy_conc = { ^"surroundingheavyconc" ~ (element ~ float_val?)+ }
 surrounding_thickness = { ^"surroundingthickness" ~ float_val ~ float_val ~ float_val }
 oil_based = { ^"densitybased" ~ string_val }
 calc_surrounding = { ^"calcsurrounding" ~ string_val }
-oil_elements = { ^"surroundingelements" ~ (element ~ float_val)+ }
+oil_elements = { ^"surroundingelements" ~ (element ~ float_val?)+ }
 oil_density = { ^"surroundingdensity" ~ float_val }
 
 goniometer_axis = { ^"goniometeraxis" ~ float_val }
@@ -197,8 +197,8 @@ wedge_max_res = { ^"maxresolution" ~ float_val }
 
 // ===================== TOKENS =====================
 
-// Element: 1-2 letter symbol (must come before string_val in alternations)
-element = @{ ASCII_ALPHA ~ ASCII_ALPHA? }
+// Element: 1-2 letter symbol, NOT followed by more letters (prevents matching keyword prefixes)
+element = @{ ASCII_ALPHA ~ ASCII_ALPHA? ~ !ASCII_ALPHA }
 
 // Float: optional sign, digits with optional decimal and exponent
 float_val = @{
