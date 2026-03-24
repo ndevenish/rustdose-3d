@@ -1,6 +1,10 @@
 pub mod cuboid;
+pub mod polyhedron;
+pub mod spherical;
 
 pub use cuboid::CrystalCuboid;
+pub use polyhedron::CrystalPolyhedron;
+pub use spherical::CrystalSpherical;
 
 use crate::beam::Beam;
 use crate::coefcalc::CoefCalc;
@@ -351,6 +355,12 @@ pub fn create_crystal(
 
     match crystal_type.as_str() {
         "cuboid" => Ok(Box::new(CrystalCuboid::from_config(config)?)),
+        "polyhedron" | "obj" => Ok(Box::new(CrystalPolyhedron::from_config(config)?)),
+        "cylinder" => Ok(Box::new(polyhedron::crystal_cylinder_from_config(config)?)),
+        "sphericalnew" => Ok(Box::new(
+            polyhedron::crystal_spherical_new_from_config(config)?,
+        )),
+        "spherical" => Ok(Box::new(CrystalSpherical::from_config(config)?)),
         other => Err(format!("Crystal type '{}' not yet implemented", other)),
     }
 }

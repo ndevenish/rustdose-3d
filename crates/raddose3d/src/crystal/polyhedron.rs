@@ -1,0 +1,832 @@
+use crate::beam::Beam;
+use crate::coefcalc::{self, CoefCalc};
+use crate::container::{self, Container, ContainerTransparent};
+use crate::ddm::{self, DdmModel};
+use crate::output::ExposureSummary;
+use crate::parser::config::CrystalConfig;
+use crate::wedge::Wedge;
+
+/// General polyhedron crystal: arbitrary vertices and triangulated faces.
+/// Used for OBJ-loaded crystals, cylinders (hardcoded geometry), and
+/// icosphere approximations of spheres (SphericalNew).
+#[derive(Debug)]
+pub struct CrystalPolyhedron {
+    // Geometry (post P/L rotation, pre-wedge)
+    vertices: Vec<[f64; 3]>,
+    indices: Vec<[usize; 3]>,
+    normals: Vec<[f64; 3]>,
+    origin_distances: Vec<f64>,
+    // Rotated geometry (updated per-angle in setup_depth_finding)
+    rotated_vertices: Vec<[f64; 3]>,
+    rotated_normals: Vec<[f64; 3]>,
+    rotated_origin_distances: Vec<f64>,
+    /// Pre-expanded rotated vertices for fast triangle lookup in find_depth.
+    expanded_rotated_vertices: Vec<[[f64; 3]; 3]>,
+    // Crystal size
+    cryst_size_um: [f64; 3],
+    cryst_size_voxels: [usize; 3],
+    pix_per_um: f64,
+    // Voxel data
+    cryst_coord: Vec<[f64; 3]>,
+    dose: Vec<f64>,
+    fluence: Vec<f64>,
+    elastic: Vec<f64>,
+    // Components
+    coefcalc: Box<dyn CoefCalc>,
+    ddm: Box<dyn DdmModel>,
+    container: Box<dyn Container>,
+    exposure_summary: ExposureSummary,
+    subprogram: String,
+    photo_electron_escape: bool,
+    fluorescent_escape: bool,
+    crystal_name: String,
+    angle_p: f64,
+    angle_l: f64,
+}
+
+impl CrystalPolyhedron {
+    const DEFAULT_RESOLUTION: f64 = 0.5;
+
+    /// Create from raw geometry (vertices already in final coordinate space,
+    /// indices already 0-based) and a crystal config.
+    pub fn from_geometry_and_config(
+        mut vertices_raw: Vec<[f64; 3]>,
+        indices_0based: Vec<[usize; 3]>,
+        config: &CrystalConfig,
+        name: &str,
+    ) -> Result<Self, String> {
+        // Apply P/L rotation to vertices (Java's sign convention)
+        let angle_p = config.angle_p.unwrap_or(0.0).to_radians();
+        let angle_l = config.angle_l.unwrap_or(0.0).to_radians();
+
+        if angle_p != 0.0 || angle_l != 0.0 {
+            let cos_p = angle_p.cos();
+            let sin_p = angle_p.sin();
+            let cos_l = angle_l.cos();
+            let sin_l = angle_l.sin();
+            for v in &mut vertices_raw {
+                let x = v[0];
+                let y = v[1];
+                let z = v[2];
+                // Rotate about Z (Java's convention: x2 = x*cos_p + y*sin_p)
+                let x2 = x * cos_p + y * sin_p;
+                let y2 = -x * sin_p + y * cos_p;
+                // Rotate about X
+                let y3 = y2 * cos_l + z * sin_l;
+                let z3 = -y2 * sin_l + z * cos_l;
+                v[0] = x2;
+                v[1] = y3;
+                v[2] = z3;
+            }
+        }
+
+        // Bounding box of rotated vertices
+        let mut min_coords = [f64::INFINITY; 3];
+        let mut max_coords = [f64::NEG_INFINITY; 3];
+        for v in &vertices_raw {
+            for dim in 0..3 {
+                min_coords[dim] = min_coords[dim].min(v[dim]);
+                max_coords[dim] = max_coords[dim].max(v[dim]);
+            }
+        }
+
+        let dim_x = max_coords[0] - min_coords[0];
+        let dim_y = max_coords[1] - min_coords[1];
+        let dim_z = max_coords[2] - min_coords[2];
+        let max_dim = dim_x.max(dim_y).max(dim_z).max(1e-9);
+
+        let pix_per_um = config.pixels_per_micron.unwrap_or_else(|| {
+            (10.0 / max_dim).min(Self::DEFAULT_RESOLUTION)
+        });
+
+        let nx = (dim_x * pix_per_um).round() as usize + 1;
+        let ny = (dim_y * pix_per_um).round() as usize + 1;
+        let nz = (dim_z * pix_per_um).round() as usize + 1;
+        let total_voxels = nx * ny * nz;
+
+        // Voxel coordinates start at bounding box minimum
+        let mut cryst_coord = vec![[0.0f64; 3]; total_voxels];
+        for i in 0..nx {
+            for j in 0..ny {
+                for k in 0..nz {
+                    let idx = i * ny * nz + j * nz + k;
+                    cryst_coord[idx] = [
+                        min_coords[0] + i as f64 / pix_per_um,
+                        min_coords[1] + j as f64 / pix_per_um,
+                        min_coords[2] + k as f64 / pix_per_um,
+                    ];
+                }
+            }
+        }
+
+        // Compute normals and origin distances
+        let num_tris = indices_0based.len();
+        let mut normals = vec![[0.0f64; 3]; num_tris];
+        let mut origin_distances = vec![0.0f64; num_tris];
+        for (t, tri) in indices_0based.iter().enumerate() {
+            let (n, d) = calc_triangle_normal_and_dist(&vertices_raw, tri);
+            normals[t] = n;
+            origin_distances[t] = d;
+        }
+
+        // Build expanded rotated vertices (initially same as vertices)
+        let expanded_rotated_vertices = build_expanded_vertices(&vertices_raw, &indices_0based);
+
+        let coefcalc = coefcalc::create_coefcalc(config)?;
+        let ddm = ddm::create_ddm(
+            config.ddm,
+            config.gamma_param,
+            config.b0_param,
+            config.beta_param,
+        );
+
+        let subprogram = config
+            .program
+            .as_deref()
+            .unwrap_or("RD3D")
+            .to_uppercase();
+
+        let photo_electron_escape = config
+            .calculate_pe_escape
+            .as_deref()
+            .map_or(false, |s| s.eq_ignore_ascii_case("true"));
+        let fluorescent_escape = config
+            .calculate_fl_escape
+            .as_deref()
+            .map_or(false, |s| s.eq_ignore_ascii_case("true"));
+
+        let container = container::create_container(config);
+
+        let rotated_normals = normals.clone();
+        let rotated_origin_distances = origin_distances.clone();
+        let rotated_vertices = vertices_raw.clone();
+
+        Ok(CrystalPolyhedron {
+            vertices: vertices_raw,
+            indices: indices_0based,
+            normals,
+            origin_distances,
+            rotated_vertices,
+            rotated_normals,
+            rotated_origin_distances,
+            expanded_rotated_vertices,
+            cryst_size_um: [dim_x, dim_y, dim_z],
+            cryst_size_voxels: [nx, ny, nz],
+            pix_per_um,
+            cryst_coord,
+            dose: vec![0.0; total_voxels],
+            fluence: vec![0.0; total_voxels],
+            elastic: vec![0.0; total_voxels],
+            coefcalc,
+            ddm,
+            container,
+            exposure_summary: ExposureSummary::new(),
+            subprogram,
+            photo_electron_escape,
+            fluorescent_escape,
+            crystal_name: name.to_string(),
+            angle_p,
+            angle_l,
+        })
+    }
+
+    /// Create from config for OBJ-loaded polyhedron ("polyhedron" / "obj" type).
+    pub fn from_config(config: &CrystalConfig) -> Result<Self, String> {
+        let model_file = config
+            .model_file
+            .as_deref()
+            .ok_or("Polyhedron crystal requires ModelFile")?;
+
+        let (vertices, indices) = load_obj(model_file)?;
+
+        // Scale by diameter if given (dim_x used as overall scale)
+        let scale = config.dim_x.unwrap_or(1.0);
+        let vertices: Vec<[f64; 3]> = vertices
+            .iter()
+            .map(|v| [v[0] * scale, v[1] * scale, v[2] * scale])
+            .collect();
+
+        Self::from_geometry_and_config(vertices, indices, config, "Polyhedron")
+    }
+
+    #[inline]
+    fn voxel_idx(&self, i: usize, j: usize, k: usize) -> usize {
+        let [_, ny, nz] = self.cryst_size_voxels;
+        i * ny * nz + j * nz + k
+    }
+
+    /// Check if a point is inside the polyhedron using ray-casting (Z direction).
+    fn is_inside_polyhedron(&self, coord: &[f64; 3]) -> bool {
+        let mut crossings = 0usize;
+
+        for (t, tri) in self.indices.iter().enumerate() {
+            let n = &self.normals[t];
+            let d = self.origin_distances[t];
+
+            let denom = n[2]; // n · [0,0,1]
+            if denom.abs() < 1e-12 {
+                continue;
+            }
+
+            let t_val = (n[0] * coord[0] + n[1] * coord[1] + n[2] * coord[2] + d) / denom;
+            if t_val <= 0.0 || t_val.is_nan() || t_val.is_infinite() {
+                continue;
+            }
+
+            let p = [coord[0], coord[1], coord[2] + t_val];
+
+            if point_in_triangle(
+                &p,
+                &self.vertices[tri[0]],
+                &self.vertices[tri[1]],
+                &self.vertices[tri[2]],
+            ) {
+                crossings += 1;
+            }
+        }
+
+        crossings % 2 == 1
+    }
+}
+
+/// Load an OBJ file and return (vertices, 0-based indices).
+pub fn load_obj(path: &str) -> Result<(Vec<[f64; 3]>, Vec<[usize; 3]>), String> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read OBJ file '{}': {}", path, e))?;
+
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with("v ") {
+            let parts: Vec<&str> = line[2..].split_whitespace().collect();
+            if parts.len() < 3 {
+                return Err(format!("Invalid vertex line in OBJ: '{}'", line));
+            }
+            let x: f64 = parts[0].parse().map_err(|_| format!("Bad float: {}", parts[0]))?;
+            let y: f64 = parts[1].parse().map_err(|_| format!("Bad float: {}", parts[1]))?;
+            let z: f64 = parts[2].parse().map_err(|_| format!("Bad float: {}", parts[2]))?;
+            vertices.push([x, y, z]);
+        } else if line.starts_with("f ") {
+            let parts: Vec<&str> = line[2..].split_whitespace().collect();
+            if parts.len() < 3 {
+                return Err(format!("Invalid face line in OBJ: '{}'", line));
+            }
+            // Parse index: "a", "a/b", or "a//b" — take the first integer (1-based)
+            let parse_idx = |s: &str| -> Result<usize, String> {
+                let first = s.split('/').next().unwrap_or(s);
+                let idx: usize = first.parse().map_err(|_| format!("Bad face index: {}", s))?;
+                Ok(idx - 1) // Convert to 0-based
+            };
+            // Triangulate face (fan triangulation for polygons)
+            let first = parse_idx(parts[0])?;
+            for i in 1..(parts.len() - 1) {
+                let a = first;
+                let b = parse_idx(parts[i])?;
+                let c = parse_idx(parts[i + 1])?;
+                indices.push([a, b, c]);
+            }
+        }
+    }
+
+    Ok((vertices, indices))
+}
+
+/// Build cylinder geometry matching Java's CrystalCylinder.
+/// Returns (vertices, 0-based indices).
+pub fn cylinder_geometry(radius: f64, height: f64) -> (Vec<[f64; 3]>, Vec<[usize; 3]>) {
+    let num_vertices: usize = 32;
+    let mut vertices = Vec::with_capacity(num_vertices * 2);
+
+    // Build interleaved base/top vertices with Java's angle formula,
+    // then apply 90° CCW rotation about Z: (x,y,z) -> (-y, x, z).
+    // Java uses angleToVertex = -2π/32 (going clockwise in y-z before rotation).
+    // After 90° CCW about Z: vertex (-height/2, y, z) -> (-y, -height/2, z)
+    for vertex in 0..num_vertices {
+        let angle = -(2.0 * std::f64::consts::PI / num_vertices as f64) * vertex as f64;
+        let y_coord = radius * angle.cos();
+        let z_coord = radius * angle.sin();
+
+        // Base vertex (originally at x = -height/2, after 90° CCW Z rot)
+        // pre-rotation: (-height/2, y_coord, z_coord)
+        // after 90° CCW about Z: x' = -y_coord, y' = -height/2, z' = z_coord
+        vertices.push([-y_coord, -height / 2.0, z_coord]); // 2*vertex
+        // Top vertex (originally at x = +height/2)
+        // pre-rotation: (+height/2, y_coord, z_coord)
+        // after 90° CCW about Z: x' = -y_coord, y' = height/2, z' = z_coord
+        vertices.push([-y_coord, height / 2.0, z_coord]); // 2*vertex+1
+    }
+
+    // Java indices are 1-based with 96 triangles, convert to 0-based
+    let java_indices: &[[usize; 3]] = &[
+        [ 2, 4, 3], [ 3, 4, 6], [ 6, 8, 7], [ 8, 10, 9], [ 10, 12, 11], [ 12, 14, 13],
+        [ 14, 16, 15], [ 15, 16, 18], [ 18, 20, 19], [ 20, 22, 21], [ 21, 22, 24], [ 24, 26, 25],
+        [ 26, 28, 27], [ 27, 28, 30], [ 30, 32, 31], [ 32, 34, 33], [ 34, 36, 35], [ 35, 36, 38],
+        [ 38, 40, 39], [ 39, 40, 42], [ 42, 44, 43], [ 44, 46, 45], [ 45, 46, 48], [ 48, 50, 49],
+        [ 49, 50, 52], [ 52, 54, 53], [ 53, 54, 56], [ 56, 58, 57], [ 58, 60, 59], [ 59, 60, 62],
+        [ 62, 38, 22], [ 64, 2, 1], [ 62, 64, 63], [ 53, 55, 63],
+        [ 1, 2, 3], [ 5, 3, 6], [ 5, 6, 7], [ 7, 8, 9], [ 9, 10, 11], [ 11, 12, 13],
+        [ 13, 14, 15], [ 17, 15, 18], [ 17, 18, 19], [ 19, 20, 21], [ 23, 21, 24], [ 23, 24, 25],
+        [ 25, 26, 27], [ 29, 27, 30], [ 29, 30, 31], [ 31, 32, 33], [ 33, 34, 35], [ 37, 35, 38],
+        [ 37, 38, 39], [ 41, 39, 42], [ 41, 42, 43], [ 43, 44, 45], [ 47, 45, 48], [ 47, 48, 49],
+        [ 51, 49, 52], [ 51, 52, 53], [ 55, 53, 56], [ 55, 56, 57], [ 57, 58, 59], [ 61, 59, 62],
+        [ 2, 64, 4], [ 64, 62, 14], [ 58, 54, 60], [ 58, 56, 54], [ 54, 52, 50], [ 48, 46, 44],
+        [ 42, 48, 44], [ 42, 40, 38], [ 34, 32, 36], [ 30, 22, 32], [ 26, 22, 28], [ 26, 24, 22],
+        [ 22, 20, 18], [ 14, 22, 16], [ 10, 8, 12], [ 54, 62, 60], [ 64, 6, 4], [ 8, 14, 12],
+        [ 22, 30, 28], [ 38, 48, 42], [ 38, 36, 22], [ 6, 64, 8], [ 61, 62, 63], [ 36, 32, 22],
+        [ 54, 38, 62], [ 38, 50, 48], [ 38, 54, 50], [ 8, 64, 14], [ 63, 64, 1], [ 22, 18, 16],
+        [ 62, 22, 14], [ 63, 1, 3], [ 3, 5, 7], [ 15, 9, 13], [ 15, 17, 19], [ 21, 23, 31],
+        [ 23, 25, 27], [ 27, 29, 31], [ 31, 33, 35], [ 35, 37, 39], [ 39, 41, 43], [ 47, 51, 45],
+        [ 47, 49, 51], [ 53, 39, 43], [ 59, 63, 57], [ 59, 61, 63], [ 7, 31, 3], [ 9, 11, 13],
+        [ 63, 55, 57], [ 23, 27, 31], [ 39, 63, 35], [ 45, 51, 53], [ 15, 7, 9], [ 15, 19, 21],
+        [ 7, 21, 31], [ 15, 21, 7], [ 39, 53, 63], [ 31, 63, 3], [ 63, 31, 35], [ 43, 45, 53],
+    ];
+
+    // Convert 1-based to 0-based
+    let indices: Vec<[usize; 3]> = java_indices
+        .iter()
+        .map(|tri| [tri[0] - 1, tri[1] - 1, tri[2] - 1])
+        .collect();
+
+    (vertices, indices)
+}
+
+/// Build icosphere geometry matching Java's CrystalSphericalNew (42 vertices, 80 triangles).
+/// Vertices are scaled by `diameter`.
+pub fn icosphere_geometry(diameter: f64) -> (Vec<[f64; 3]>, Vec<[usize; 3]>) {
+    let raw_vertices: &[[f64; 3]] = &[
+        [0.000000,  -0.500000,  0.000000],
+        [0.361804,  -0.223610,  0.262863],
+        [-0.138194, -0.223610,  0.425325],
+        [-0.447213, -0.223608,  0.000000],
+        [-0.138194, -0.223610, -0.425325],
+        [0.361804,  -0.223610, -0.262863],
+        [0.138194,   0.223610,  0.425325],
+        [-0.361804,  0.223610,  0.262863],
+        [-0.361804,  0.223610, -0.262863],
+        [0.138194,   0.223610, -0.425325],
+        [0.447213,   0.223608,  0.000000],
+        [0.000000,   0.500000,  0.000000],
+        [-0.081228, -0.425327,  0.249998],
+        [0.212661,  -0.425327,  0.154506],
+        [0.131434,  -0.262869,  0.404506],
+        [0.425324,  -0.262868,  0.000000],
+        [0.212661,  -0.425327, -0.154506],
+        [-0.262865, -0.425326,  0.000000],
+        [-0.344095, -0.262868,  0.249998],
+        [-0.081228, -0.425327, -0.249998],
+        [-0.344095, -0.262868, -0.249998],
+        [0.131434,  -0.262869, -0.404506],
+        [0.475529,   0.000000,  0.154506],
+        [0.475529,   0.000000, -0.154506],
+        [0.000000,   0.000000,  0.500000],
+        [0.293893,   0.000000,  0.404508],
+        [-0.475529,  0.000000,  0.154506],
+        [-0.293893,  0.000000,  0.404508],
+        [-0.293893,  0.000000, -0.404508],
+        [-0.475529,  0.000000, -0.154506],
+        [0.293893,   0.000000, -0.404508],
+        [0.000000,   0.000000, -0.500000],
+        [0.344095,   0.262868,  0.249998],
+        [-0.131434,  0.262869,  0.404506],
+        [-0.425324,  0.262868,  0.000000],
+        [-0.131434,  0.262869, -0.404506],
+        [0.344095,   0.262868, -0.249998],
+        [0.081228,   0.425327,  0.249998],
+        [0.262865,   0.425326,  0.000000],
+        [-0.212661,  0.425327,  0.154506],
+        [-0.212661,  0.425327, -0.154506],
+        [0.081228,   0.425327, -0.249998],
+    ];
+
+    let vertices: Vec<[f64; 3]> = raw_vertices
+        .iter()
+        .map(|v| [v[0] * diameter, v[1] * diameter, v[2] * diameter])
+        .collect();
+
+    // 1-based Java indices, converted to 0-based
+    let java_indices: &[[usize; 3]] = &[
+        [1, 14, 13], [2, 14, 16], [1, 13, 18], [1, 18, 20], [1, 20, 17],
+        [2, 16, 23], [3, 15, 25], [4, 19, 27], [5, 21, 29], [6, 22, 31],
+        [2, 23, 26], [3, 25, 28], [4, 27, 30], [5, 29, 32], [6, 31, 24],
+        [7, 33, 38], [8, 34, 40], [9, 35, 41], [10, 36, 42], [11, 37, 39],
+        [39, 42, 12], [39, 37, 42], [37, 10, 42], [42, 41, 12], [42, 36, 41],
+        [36, 9, 41], [41, 40, 12], [41, 35, 40], [35, 8, 40], [40, 38, 12],
+        [40, 34, 38], [34, 7, 38], [38, 39, 12], [38, 33, 39], [33, 11, 39],
+        [24, 37, 11], [24, 31, 37], [31, 10, 37], [32, 36, 10], [32, 29, 36],
+        [29, 9, 36], [30, 35, 9], [30, 27, 35], [27, 8, 35], [28, 34, 8],
+        [28, 25, 34], [25, 7, 34], [26, 33, 7], [26, 23, 33], [23, 11, 33],
+        [31, 32, 10], [31, 22, 32], [22, 5, 32], [29, 30, 9], [29, 21, 30],
+        [21, 4, 30], [27, 28, 8], [27, 19, 28], [19, 3, 28], [25, 26, 7],
+        [25, 15, 26], [15, 2, 26], [23, 24, 11], [23, 16, 24], [16, 6, 24],
+        [17, 22, 6], [17, 20, 22], [20, 5, 22], [20, 21, 5], [20, 18, 21],
+        [18, 4, 21], [18, 19, 4], [18, 13, 19], [13, 3, 19], [16, 17, 6],
+        [16, 14, 17], [14, 1, 17], [13, 15, 3], [13, 14, 15], [14, 2, 15],
+    ];
+
+    let indices: Vec<[usize; 3]> = java_indices
+        .iter()
+        .map(|tri| [tri[0] - 1, tri[1] - 1, tri[2] - 1])
+        .collect();
+
+    (vertices, indices)
+}
+
+/// Create a cylinder crystal from config.
+pub fn crystal_cylinder_from_config(config: &CrystalConfig) -> Result<CrystalPolyhedron, String> {
+    let diameter = config.dim_x.ok_or("Cylinder crystal requires DimX (diameter)")?;
+    let height = config.dim_y.unwrap_or(diameter);
+    let radius = diameter / 2.0;
+
+    let (vertices, indices) = cylinder_geometry(radius, height);
+    CrystalPolyhedron::from_geometry_and_config(vertices, indices, config, "Cylinder")
+}
+
+/// Create an icosphere (SphericalNew) crystal from config.
+pub fn crystal_spherical_new_from_config(
+    config: &CrystalConfig,
+) -> Result<CrystalPolyhedron, String> {
+    let diameter = config.dim_x.ok_or("SphericalNew crystal requires DimX (diameter)")?;
+    let (vertices, indices) = icosphere_geometry(diameter);
+    CrystalPolyhedron::from_geometry_and_config(vertices, indices, config, "SphericalNew")
+}
+
+impl super::Crystal for CrystalPolyhedron {
+    fn setup_depth_finding(&mut self, ang_rad: f64, wedge: &Wedge) {
+        let cos_a = ang_rad.cos();
+        let sin_a = ang_rad.sin();
+
+        let delta = ang_rad - wedge.start_ang;
+        let tx = wedge.start_x + wedge.trans_x * delta;
+        let ty = wedge.start_y + wedge.trans_y * delta;
+        let tz = wedge.start_z + wedge.trans_z * delta;
+
+        for (i, v) in self.vertices.iter().enumerate() {
+            let x = v[0] + tx;
+            let y = v[1] + ty;
+            let z = v[2] + tz;
+
+            // Rotate in X-Z plane (about Y axis)
+            self.rotated_vertices[i] = [
+                x * cos_a + z * sin_a,
+                y,
+                -x * sin_a + z * cos_a,
+            ];
+        }
+
+        // Recompute normals for rotated vertices
+        for (t, tri) in self.indices.iter().enumerate() {
+            let (n, d) = calc_triangle_normal_and_dist(&self.rotated_vertices, tri);
+            self.rotated_normals[t] = n;
+            self.rotated_origin_distances[t] = d;
+        }
+
+        // Rebuild expanded rotated vertices
+        self.expanded_rotated_vertices =
+            build_expanded_vertices(&self.rotated_vertices, &self.indices);
+    }
+
+    fn find_depth(&self, vox_coord: &[f64; 3], _delta_phi: f64, _wedge: &Wedge) -> f64 {
+        let dir_z = 1.0f64; // Ray direction [0,0,1]
+        let mut distances = Vec::new();
+
+        for (t, _tri) in self.indices.iter().enumerate() {
+            let n = &self.rotated_normals[t];
+            let d = self.rotated_origin_distances[t];
+
+            let denom = n[2]; // n · [0,0,1]
+            if denom.abs() < 1e-12 {
+                continue;
+            }
+
+            let t_val =
+                (n[0] * vox_coord[0] + n[1] * vox_coord[1] + n[2] * vox_coord[2] + d) / denom;
+            if t_val <= 0.0 || t_val.is_nan() || t_val.is_infinite() {
+                continue;
+            }
+
+            let p = [vox_coord[0], vox_coord[1], vox_coord[2] + t_val * dir_z];
+
+            let exp_verts = &self.expanded_rotated_vertices[t];
+            if point_in_triangle(&p, &exp_verts[0], &exp_verts[1], &exp_verts[2]) {
+                distances.push(t_val);
+            }
+        }
+
+        distances.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        distances.dedup_by(|a, b| (*a - *b).abs() < 1e-10);
+
+        if distances.is_empty() || distances.len() % 2 == 0 {
+            return 0.0;
+        }
+
+        let mut depth = distances[0];
+        let mut idx = 1;
+        while idx + 1 < distances.len() {
+            depth += distances[idx + 1] - distances[idx];
+            idx += 2;
+        }
+
+        depth
+    }
+
+    fn get_cryst_coord(&self, i: usize, j: usize, k: usize) -> [f64; 3] {
+        self.cryst_coord[self.voxel_idx(i, j, k)]
+    }
+
+    fn num_images(&self, wedge: &Wedge) -> usize {
+        if (wedge.start_ang - wedge.end_ang).abs() < wedge.ang_res {
+            crate::constants::STATIC_EXPOSURE
+        } else {
+            let sign: f64 = if wedge.end_ang < wedge.start_ang {
+                -1.0
+            } else {
+                1.0
+            };
+            (sign * (wedge.end_ang - wedge.start_ang) / wedge.ang_res) as usize
+        }
+    }
+
+    fn is_crystal_at(&self, i: usize, j: usize, k: usize) -> bool {
+        let [nx, ny, nz] = self.cryst_size_voxels;
+        if i >= nx || j >= ny || k >= nz {
+            return false;
+        }
+        let coord = self.cryst_coord[self.voxel_idx(i, j, k)];
+        self.is_inside_polyhedron(&coord)
+    }
+
+    fn add_dose(&mut self, i: usize, j: usize, k: usize, dose_increase: f64) {
+        let idx = self.voxel_idx(i, j, k);
+        self.dose[idx] += dose_increase;
+    }
+
+    fn add_fluence(&mut self, i: usize, j: usize, k: usize, fluence_increase: f64) {
+        let idx = self.voxel_idx(i, j, k);
+        self.fluence[idx] += fluence_increase;
+    }
+
+    fn add_elastic(&mut self, i: usize, j: usize, k: usize, elastic_increase: f64) {
+        let idx = self.voxel_idx(i, j, k);
+        self.elastic[idx] += elastic_increase;
+    }
+
+    fn crystal_info(&self) -> String {
+        let base = format!(
+            "{} crystal of size [{:.0}, {:.0}, {:.0}] um [x, y, z] at a resolution of {:.2} microns per voxel edge.",
+            self.crystal_name,
+            self.cryst_size_um[0],
+            self.cryst_size_um[1],
+            self.cryst_size_um[2],
+            1.0 / self.pix_per_um
+        );
+        if self.angle_p != 0.0 || self.angle_l != 0.0 {
+            format!(
+                "{} P={:.2} deg, L={:.2} deg.",
+                base,
+                self.angle_p.to_degrees(),
+                self.angle_l.to_degrees()
+            )
+        } else {
+            base
+        }
+    }
+
+    fn cryst_size_voxels(&self) -> [usize; 3] {
+        self.cryst_size_voxels
+    }
+
+    fn cryst_size_um(&self) -> [f64; 3] {
+        self.cryst_size_um
+    }
+
+    fn get_dose(&self, i: usize, j: usize, k: usize) -> f64 {
+        self.dose[self.voxel_idx(i, j, k)]
+    }
+
+    fn get_fluence(&self, i: usize, j: usize, k: usize) -> f64 {
+        self.fluence[self.voxel_idx(i, j, k)]
+    }
+
+    fn get_elastic(&self, i: usize, j: usize, k: usize) -> f64 {
+        self.elastic[self.voxel_idx(i, j, k)]
+    }
+
+    fn crystal_pix_per_um(&self) -> f64 {
+        self.pix_per_um
+    }
+
+    fn coefcalc(&self) -> &dyn CoefCalc {
+        &*self.coefcalc
+    }
+
+    fn coefcalc_mut(&mut self) -> &mut dyn CoefCalc {
+        &mut *self.coefcalc
+    }
+
+    fn ddm(&self) -> &dyn DdmModel {
+        &*self.ddm
+    }
+
+    fn exposure_summary(&self) -> &ExposureSummary {
+        &self.exposure_summary
+    }
+
+    fn exposure_summary_mut(&mut self) -> &mut ExposureSummary {
+        &mut self.exposure_summary
+    }
+
+    fn subprogram(&self) -> &str {
+        &self.subprogram
+    }
+
+    fn expose(&mut self, beam: &mut dyn Beam, wedge: &Wedge) {
+        eprintln!("{}", self.crystal_info());
+
+        match self.subprogram.as_str() {
+            "RD3D" | "" => {
+                let mut container: Box<dyn Container> =
+                    std::mem::replace(&mut self.container, Box::new(ContainerTransparent));
+                super::expose_rd3d(self, beam, wedge, &mut *container);
+                self.container = container;
+            }
+            other => {
+                eprintln!("Subprogram '{}' not yet implemented, using RD3D", other);
+                let mut container: Box<dyn Container> =
+                    std::mem::replace(&mut self.container, Box::new(ContainerTransparent));
+                super::expose_rd3d(self, beam, wedge, &mut *container);
+                self.container = container;
+            }
+        }
+    }
+}
+
+// ── Shared geometry helpers ────────────────────────────────────────────────────
+
+/// Build expanded vertex array for fast triangle lookup.
+fn build_expanded_vertices(
+    vertices: &[[f64; 3]],
+    indices: &[[usize; 3]],
+) -> Vec<[[f64; 3]; 3]> {
+    indices
+        .iter()
+        .map(|tri| [vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]])
+        .collect()
+}
+
+/// Calculate triangle normal (unit) and signed distance from origin: d = -(n · v0).
+fn calc_triangle_normal_and_dist(vertices: &[[f64; 3]], tri: &[usize; 3]) -> ([f64; 3], f64) {
+    let v0 = vertices[tri[0]];
+    let v1 = vertices[tri[1]];
+    let v2 = vertices[tri[2]];
+
+    let e1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+    let e2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
+
+    let n = [
+        e1[1] * e2[2] - e1[2] * e2[1],
+        e1[2] * e2[0] - e1[0] * e2[2],
+        e1[0] * e2[1] - e1[1] * e2[0],
+    ];
+
+    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+    let normal = if len > 0.0 {
+        [n[0] / len, n[1] / len, n[2] / len]
+    } else {
+        [0.0, 0.0, 0.0]
+    };
+
+    let d = -(normal[0] * v0[0] + normal[1] * v0[1] + normal[2] * v0[2]);
+    (normal, d)
+}
+
+/// 2D polygon inclusion test (ray-casting in X-Y plane).
+/// Matches Java's `Vector.polygonInclusionTest`.
+fn point_in_triangle(p: &[f64; 3], a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> bool {
+    let verts = [*a, *b, *c];
+    let mut inside = false;
+    let n = verts.len();
+    let mut j = n - 1;
+    for i in 0..n {
+        if ((verts[i][1] > p[1]) != (verts[j][1] > p[1]))
+            && (p[0]
+                < (verts[j][0] - verts[i][0]) * (p[1] - verts[i][1])
+                    / (verts[j][1] - verts[i][1])
+                    + verts[i][0])
+        {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
+// ── Tests ──────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crystal::Crystal;
+    use crate::parser::config::CrystalConfig;
+
+    fn make_cylinder_config(diameter: f64, height: f64) -> CrystalConfig {
+        CrystalConfig {
+            crystal_type: Some("cylinder".to_string()),
+            dim_x: Some(diameter),
+            dim_y: Some(height),
+            // Minimal unit cell for CoefCalcFromParams
+            cell_a: Some(78.0),
+            cell_b: Some(78.0),
+            cell_c: Some(37.0),
+            num_residues: Some(60),
+            ..Default::default()
+        }
+    }
+
+    fn make_spherical_new_config(diameter: f64) -> CrystalConfig {
+        CrystalConfig {
+            crystal_type: Some("sphericalnew".to_string()),
+            dim_x: Some(diameter),
+            // Minimal unit cell for CoefCalcFromParams
+            cell_a: Some(78.0),
+            cell_b: Some(78.0),
+            cell_c: Some(37.0),
+            num_residues: Some(60),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_cylinder_geometry_is_valid() {
+        let diameter = 100.0f64;
+        let height = 150.0f64;
+        let config = make_cylinder_config(diameter, height);
+        let crystal =
+            crystal_cylinder_from_config(&config).expect("Cylinder crystal should construct");
+
+        // Bounding box should be approximately [diameter, height, diameter]
+        let [sx, sy, sz] = crystal.cryst_size_um;
+        assert!(
+            (sx - diameter).abs() < 2.0,
+            "x size {:.1} ≈ diameter {:.1}",
+            sx,
+            diameter
+        );
+        assert!(
+            (sy - height).abs() < 2.0,
+            "y size {:.1} ≈ height {:.1}",
+            sy,
+            height
+        );
+        assert!(
+            (sz - diameter).abs() < 2.0,
+            "z size {:.1} ≈ diameter {:.1}",
+            sz,
+            diameter
+        );
+
+        // Center voxel should be inside
+        let [nx, ny, nz] = crystal.cryst_size_voxels;
+        let ci = nx / 2;
+        let cj = ny / 2;
+        let ck = nz / 2;
+        assert!(
+            crystal.is_crystal_at(ci, cj, ck),
+            "Center voxel ({},{},{}) should be inside cylinder",
+            ci,
+            cj,
+            ck
+        );
+
+        // Corner voxel (0,0,0) should be outside (corner of bounding box)
+        assert!(
+            !crystal.is_crystal_at(0, 0, 0),
+            "Corner voxel (0,0,0) should be outside cylinder"
+        );
+    }
+
+    #[test]
+    fn test_spherical_new_occupancy() {
+        let diameter = 100.0f64;
+        let config = make_spherical_new_config(diameter);
+        let crystal =
+            crystal_spherical_new_from_config(&config).expect("SphericalNew should construct");
+
+        // Center voxel should be inside
+        let [nx, ny, nz] = crystal.cryst_size_voxels;
+        let ci = nx / 2;
+        let cj = ny / 2;
+        let ck = nz / 2;
+        assert!(
+            crystal.is_crystal_at(ci, cj, ck),
+            "Center voxel should be inside SphericalNew"
+        );
+
+        // Extreme corner should be outside
+        assert!(
+            !crystal.is_crystal_at(0, 0, 0),
+            "Corner voxel (0,0,0) should be outside SphericalNew"
+        );
+    }
+}
