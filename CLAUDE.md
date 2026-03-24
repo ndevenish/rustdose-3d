@@ -29,7 +29,7 @@ Three crates in a Cargo workspace:
 | `experiment.rs` | `Experiment` — orchestrator, observer pattern | `Experiment.java` (191 lines) |
 | `wedge.rs` | `Wedge` — angles in radians, translations per radian | `Wedge.java` (392 lines) |
 | `ddm.rs` | `DdmModel` trait, `DdmSimple/Linear/Leal/Bfactor` | `DDMSimple.java` etc. |
-| `container.rs` | `Container` trait, `ContainerTransparent` | `ContainerTransparent.java` |
+| `container.rs` | `Container` trait, `ContainerTransparent`, `ContainerMixture`, `ContainerElemental` (stubs), `create_container()` | `ContainerTransparent.java` etc. |
 | `beam/mod.rs` | `Beam` trait, `create_beam()` factory | `Beam.java` |
 | `beam/gaussian.rs` | `BeamGaussian` — CDF normalization via `statrs` | `BeamGaussian.java` |
 | `beam/tophat.rs` | `BeamTophat` — uniform intensity | `BeamTophat.java` |
@@ -38,6 +38,8 @@ Three crates in a Cargo workspace:
 | `coefcalc/from_params.rs` | `CoefCalcFromParams` — composition-based coefficients | `CoefCalcFromParams.java` (294 lines) |
 | `crystal/mod.rs` | `Crystal` trait, `expose_rd3d()`, `create_crystal()` factory | `Crystal.java` |
 | `crystal/cuboid.rs` | `CrystalCuboid` — 8 vertices, 12 triangles, ray-casting | `CrystalCuboid.java` + `CrystalPolyhedron.java` |
+| `crystal/polyhedron.rs` | `CrystalPolyhedron` — general mesh (OBJ, cylinder, icosphere), `cylinder_geometry()`, `icosphere_geometry()` | `CrystalPolyhedron.java`, `CrystalCylinder.java`, `CrystalSphericalNew.java` |
+| `crystal/spherical.rs` | `CrystalSpherical` — analytic sphere, pre-computed occupancy | `CrystalSpherical.java` |
 | `output/mod.rs` | `Output` trait, `ExposeObserver` trait | `Output.java` |
 | `output/summary.rs` | `OutputSummaryText`, `OutputSummaryCSV` | `OutputSummaryText.java` |
 | `output/exposure_summary.rs` | `ExposureSummary` — DWD, dose stats, quantiles | `ExposureSummary.java` (548 lines) |
@@ -117,7 +119,7 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 |-------|-------------|--------|
 | 1 | Skeleton + Parser + Element Database | **Done** |
 | 2 | Core Types + Factories + Cuboid Simulation | **Done** |
-| 3 | Remaining Crystal Geometries (Polyhedron, Cylinder, Spherical) | Not started |
+| 3 | Remaining Crystal Geometries (Polyhedron, Cylinder, Spherical) | **Done** |
 | 4 | Remaining CoefCalc Modes + Beam Types | Not started |
 | 5 | DDM + All Output Modules | Not started |
 | 6 | Monte Carlo, XFEL, MicroED | Not started |
@@ -127,6 +129,11 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - Input parsing (all keywords from Java grammar)
 - Element databases (X-ray + electron)
 - CoefCalcCompute + CoefCalcFromParams (RD3D default mode)
+- CrystalPolyhedron (general mesh, OBJ loader, cylinder geometry, icosphere geometry)
+- CrystalCylinder (via CrystalPolyhedron with hardcoded 64-vertex/96-triangle cylinder)
+- CrystalSphericalNew (via CrystalPolyhedron with hardcoded 42-vertex/80-triangle icosphere)
+- CrystalSpherical (analytic: radius occupancy check, analytic depth formula)
+- ContainerMixture + ContainerElemental stubs (structure present, NIST lookup not yet implemented)
 - CrystalCuboid with polyhedron ray-casting
 - BeamGaussian + BeamTophat (rectangular/circular collimation)
 - DDM: Simple, Linear, Leal, Bfactor
@@ -137,11 +144,10 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - Full pipeline: parse → construct → expose → output
 
 ### What's Not Yet Ported
-- Crystal: Cylinder, Spherical, Polyhedron (custom mesh), OBJ import
 - CoefCalc: FromPDB, FromCIF, FromSequence, SAXS, SmallMolecules, MicroED, Average, Raddose (legacy)
 - Beam: Experimental (2D grid), EnergyDistribution (pink beam)
 - Output: VoxelDose, DWDs, DoseStateCSV/R, RDECSV, Progress, FluencePerDoseHist
-- Container: Mixture, Elemental
+- Container: Mixture/Elemental NIST mass-attenuation lookup (structure done, lookup not implemented)
 - PE/FL escape code paths in expose loop
 - Cryo-surrounding voxel lattice
 - Monte Carlo, XFEL, MicroED simulation engines
