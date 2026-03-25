@@ -121,7 +121,7 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 | 2 | Core Types + Factories + Cuboid Simulation | **Done** |
 | 3 | Remaining Crystal Geometries (Polyhedron, Cylinder, Spherical) | **Done** |
 | 4 | Remaining CoefCalc Modes + Beam Types | **Done** |
-| 5 | DDM + All Output Modules | Not started |
+| 5 | DDM + All Output Modules | **Done** |
 | 6 | Monte Carlo, XFEL, MicroED | Not started |
 | 7 | CLI + WASM + Polish | Not started |
 
@@ -151,13 +151,17 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - ContainerTransparent
 - Experiment orchestrator
 - OutputSummaryText + OutputSummaryCSV
-- ExposureSummary (DWD, dose quantiles, dose contrast)
+- OutputDWDs, OutputRDECSV, OutputFinalDoseStateCSV/R
+- OutputVoxelDose, OutputVoxelFluences
+- OutputProgressIndicator, OutputProgressEstimate
+- OutputFluencePerDoseHistCSV
+- writer module: file_writer, stdout_writer, StringWriter, TeeWriter, NullWriter
+- ExposureSummary (DWD, dose quantiles, dose contrast, per-image RDE, voxel snapshots)
 - Full pipeline: parse → construct → expose → output
 
 ### What's Not Yet Ported
 - CoefCalc: Raddose (legacy v2 subprocess — stubs to Default)
 - Beam: EnergyDistribution integration with Experimental beam for pink beam multi-energy loop
-- Output: VoxelDose, DWDs, DoseStateCSV/R, RDECSV, Progress, FluencePerDoseHist
 - Container: Mixture/Elemental NIST mass-attenuation lookup (structure done, lookup not implemented)
 - PE/FL escape code paths in expose loop
 - Cryo-surrounding voxel lattice
