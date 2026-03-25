@@ -5,9 +5,8 @@ const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fix
 
 #[test]
 fn test_smxray_example() {
-    let input = std::fs::read_to_string(
-        format!("{}/SMXray_example_input.txt", FIXTURES_DIR)
-    ).unwrap();
+    let input =
+        std::fs::read_to_string(format!("{}/SMXray_example_input.txt", FIXTURES_DIR)).unwrap();
     let config = parse(&input).unwrap();
     assert_eq!(config.crystals.len(), 1);
     assert_eq!(config.beams.len(), 1);
@@ -28,9 +27,8 @@ fn test_smxray_example() {
 
 #[test]
 fn test_smxray2_example() {
-    let input = std::fs::read_to_string(
-        format!("{}/SMXray2_example_input.txt", FIXTURES_DIR)
-    ).unwrap();
+    let input =
+        std::fs::read_to_string(format!("{}/SMXray2_example_input.txt", FIXTURES_DIR)).unwrap();
     let config = parse(&input).unwrap();
     assert_eq!(config.crystals.len(), 1);
     assert_eq!(config.beams.len(), 1);

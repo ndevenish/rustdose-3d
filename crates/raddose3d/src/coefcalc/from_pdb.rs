@@ -82,9 +82,7 @@ impl CoefCalcFromPDB {
                     parse_seqres(line, &mut compute);
                 }
                 "REMARK" => {
-                    if line.len() >= SMTRY1_POS.1
-                        && &line[SMTRY1_POS.0..SMTRY1_POS.1] == "SMTRY1"
-                    {
+                    if line.len() >= SMTRY1_POS.1 && &line[SMTRY1_POS.0..SMTRY1_POS.1] == "SMTRY1" {
                         cs_sym += 1;
                     }
                 }

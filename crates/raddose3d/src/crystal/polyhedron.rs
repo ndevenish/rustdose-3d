@@ -260,7 +260,11 @@ pub fn load_obj(path: &str) -> Result<ObjGeometry, String> {
     for line in content.lines() {
         let line = line.trim();
         if line.starts_with("v ") {
-            let parts: Vec<&str> = line.strip_prefix("v ").unwrap_or("").split_whitespace().collect();
+            let parts: Vec<&str> = line
+                .strip_prefix("v ")
+                .unwrap_or("")
+                .split_whitespace()
+                .collect();
             if parts.len() < 3 {
                 return Err(format!("Invalid vertex line in OBJ: '{}'", line));
             }
@@ -275,7 +279,11 @@ pub fn load_obj(path: &str) -> Result<ObjGeometry, String> {
                 .map_err(|_| format!("Bad float: {}", parts[2]))?;
             vertices.push([x, y, z]);
         } else if line.starts_with("f ") {
-            let parts: Vec<&str> = line.strip_prefix("f ").unwrap_or("").split_whitespace().collect();
+            let parts: Vec<&str> = line
+                .strip_prefix("f ")
+                .unwrap_or("")
+                .split_whitespace()
+                .collect();
             if parts.len() < 3 {
                 return Err(format!("Invalid face line in OBJ: '{}'", line));
             }

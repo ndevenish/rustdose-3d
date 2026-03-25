@@ -11,15 +11,15 @@ pub struct Config {
 /// Absorption coefficient calculation method.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CoefCalcType {
-    Average,    // 1: DUMMY / AVERAGE
-    Default,    // 2: DEFAULT / RDJAVA / RD3D
-    RdFortran,  // 3: RDV2 / RDV3
-    Pdb,        // 4: EXP
-    Saxs,       // 5: SAXS
-    Sequence,   // 6: SEQUENCE
-    SaxsSeq,    // 7: SAXSSEQ
-    SmallMole,  // 8: SMALLMOLE
-    Cif,        // 9: EXPSM / CIF
+    Average,   // 1: DUMMY / AVERAGE
+    Default,   // 2: DEFAULT / RDJAVA / RD3D
+    RdFortran, // 3: RDV2 / RDV3
+    Pdb,       // 4: EXP
+    Saxs,      // 5: SAXS
+    Sequence,  // 6: SEQUENCE
+    SaxsSeq,   // 7: SAXSSEQ
+    SmallMole, // 8: SMALLMOLE
+    Cif,       // 9: EXPSM / CIF
 }
 
 /// Diffraction decay model.
