@@ -17,19 +17,15 @@ pub fn parse(input: &str) -> Result<Config, ParseError> {
     let mut config = Config::default();
 
     for pair in pairs {
-        match pair.as_rule() {
-            Rule::configfile => {
-                for inner in pair.into_inner() {
-                    match inner.as_rule() {
-                        Rule::crystal => config.crystals.push(parse_crystal(inner)?),
-                        Rule::beam => config.beams.push(parse_beam(inner)?),
-                        Rule::wedge => config.wedges.push(parse_wedge(inner)?),
-                        Rule::EOI => {}
-                        _ => {}
-                    }
+        if pair.as_rule() == Rule::configfile {
+            for inner in pair.into_inner() {
+                match inner.as_rule() {
+                    Rule::crystal => config.crystals.push(parse_crystal(inner)?),
+                    Rule::beam => config.beams.push(parse_beam(inner)?),
+                    Rule::wedge => config.wedges.push(parse_wedge(inner)?),
+                    _ => {}
                 }
             }
-            _ => {}
         }
     }
 
@@ -127,9 +123,15 @@ fn parse_crystal(pair: Pairs<'_>) -> Result<CrystalConfig, ParseError> {
             }
             Rule::crystal_dim => {
                 let floats = collect_floats(&line)?;
-                if let Some(&x) = floats.first() { c.dim_x = Some(x); }
-                if let Some(&y) = floats.get(1) { c.dim_y = Some(y); }
-                if let Some(&z) = floats.get(2) { c.dim_z = Some(z); }
+                if let Some(&x) = floats.first() {
+                    c.dim_x = Some(x);
+                }
+                if let Some(&y) = floats.get(1) {
+                    c.dim_y = Some(y);
+                }
+                if let Some(&z) = floats.get(2) {
+                    c.dim_z = Some(z);
+                }
             }
             Rule::crystal_ppm => {
                 let f = line.into_inner().next().unwrap();
@@ -151,12 +153,24 @@ fn parse_crystal(pair: Pairs<'_>) -> Result<CrystalConfig, ParseError> {
             }
             Rule::unitcell => {
                 let floats = collect_floats(&line)?;
-                if let Some(&a) = floats.first() { c.cell_a = Some(a); }
-                if let Some(&b) = floats.get(1) { c.cell_b = Some(b); }
-                if let Some(&cc) = floats.get(2) { c.cell_c = Some(cc); }
-                if let Some(&al) = floats.get(3) { c.cell_alpha = Some(al); }
-                if let Some(&be) = floats.get(4) { c.cell_beta = Some(be); }
-                if let Some(&ga) = floats.get(5) { c.cell_gamma = Some(ga); }
+                if let Some(&a) = floats.first() {
+                    c.cell_a = Some(a);
+                }
+                if let Some(&b) = floats.get(1) {
+                    c.cell_b = Some(b);
+                }
+                if let Some(&cc) = floats.get(2) {
+                    c.cell_c = Some(cc);
+                }
+                if let Some(&al) = floats.get(3) {
+                    c.cell_alpha = Some(al);
+                }
+                if let Some(&be) = floats.get(4) {
+                    c.cell_beta = Some(be);
+                }
+                if let Some(&ga) = floats.get(5) {
+                    c.cell_gamma = Some(ga);
+                }
             }
             Rule::num_monomers => {
                 let f = line.into_inner().next().unwrap();
@@ -372,11 +386,13 @@ fn parse_beam(pair: Pairs<'_>) -> Result<BeamConfig, ParseError> {
                 let floats = collect_floats(&line)?;
                 if text.starts_with("rectangular") {
                     b.collimation = Some(Collimation::Rectangular {
-                        h: floats[0], v: floats[1],
+                        h: floats[0],
+                        v: floats[1],
                     });
                 } else if text.starts_with("circular") {
                     b.collimation = Some(Collimation::Circular {
-                        h: floats[0], v: floats[1],
+                        h: floats[0],
+                        v: floats[1],
                     });
                 } else if text.starts_with("horizontal") {
                     b.collimation = Some(Collimation::Horizontal { h: floats[0] });
@@ -492,7 +508,10 @@ ExposureTime 60
         assert_eq!(b.flux, Some(3.8e12));
         assert_eq!(b.fwhm_x, Some(10.0));
         assert_eq!(b.energy, Some(12.4));
-        assert!(matches!(b.collimation, Some(Collimation::Circular { h: 30.0, v: 30.0 })));
+        assert!(matches!(
+            b.collimation,
+            Some(Collimation::Circular { h: 30.0, v: 30.0 })
+        ));
 
         let w = &config.wedges[0];
         assert_eq!(w.start_ang, 0.0);

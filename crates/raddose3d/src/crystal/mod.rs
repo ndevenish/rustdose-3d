@@ -110,14 +110,25 @@ pub fn expose_rd3d(
     container: &mut dyn Container,
 ) {
     // Update coefficients for beam energy
-    crystal.coefcalc_mut().update_coefficients(beam.photon_energy());
+    crystal
+        .coefcalc_mut()
+        .update_coefficients(beam.photon_energy());
 
     // Print coefficient info
     let cc = crystal.coefcalc();
-    println!("Photoelectric Coefficient: {:.2e} /um.", cc.absorption_coefficient());
-    println!("Inelastic Coefficient: {:.2e} /um.", cc.inelastic_coefficient());
+    println!(
+        "Photoelectric Coefficient: {:.2e} /um.",
+        cc.absorption_coefficient()
+    );
+    println!(
+        "Inelastic Coefficient: {:.2e} /um.",
+        cc.inelastic_coefficient()
+    );
     println!("Elastic Coefficient: {:.2e} /um.", cc.elastic_coefficient());
-    println!("Attenuation Coefficient: {:.2e} /um.", cc.attenuation_coefficient());
+    println!(
+        "Attenuation Coefficient: {:.2e} /um.",
+        cc.attenuation_coefficient()
+    );
     println!("Density: {:.2} g/ml.", cc.density());
 
     // Apply container attenuation
@@ -133,7 +144,9 @@ pub fn expose_rd3d(
     let crystal_size = crystal.cryst_size_voxels();
 
     // Notify exposure summary
-    crystal.exposure_summary_mut().exposure_start(angles.len(), wedge, crystal_size);
+    crystal
+        .exposure_summary_mut()
+        .exposure_start(angles.len(), wedge, crystal_size);
 
     // Energy sampling (monochromatic for now)
     let energies = vec![beam.photon_energy()];
@@ -166,8 +179,8 @@ pub fn expose_rd3d(
     }
 
     // Summary observations
-    let voxel_mass_kg = UNIT_CONVERSION
-        * (crystal.crystal_pix_per_um().powi(-3) * crystal.coefcalc().density());
+    let voxel_mass_kg =
+        UNIT_CONVERSION * (crystal.crystal_pix_per_um().powi(-3) * crystal.coefcalc().density());
 
     let size = crystal.cryst_size_voxels();
     for i in 0..size[0] {
@@ -175,9 +188,13 @@ pub fn expose_rd3d(
             for k in 0..size[2] {
                 if crystal.is_crystal_at(i, j, k) {
                     let dose = crystal.get_dose(i, j, k);
-                    crystal
-                        .exposure_summary_mut()
-                        .summary_observation(i, j, k, dose, voxel_mass_kg);
+                    crystal.exposure_summary_mut().summary_observation(
+                        i,
+                        j,
+                        k,
+                        dose,
+                        voxel_mass_kg,
+                    );
                 }
             }
         }
@@ -207,6 +224,7 @@ fn compute_angles(wedge: &Wedge) -> Vec<f64> {
 }
 
 /// Expose one angle of the crystal.
+#[allow(clippy::too_many_arguments)]
 fn expose_angle(
     crystal: &mut dyn Crystal,
     beam: &dyn Beam,
@@ -294,8 +312,7 @@ fn expose_angle(
 
                 // Compton electron energy
                 let compton_ratio = mc_squared / (2.0 * beam_energy_j + mc_squared);
-                let compton_electron_energy =
-                    beam_energy_j * (1.0 - compton_ratio.sqrt());
+                let compton_electron_energy = beam_energy_j * (1.0 - compton_ratio.sqrt());
 
                 let num_photons = vox_fluence / beam_energy_j;
                 let compton_fluence = num_photons * compton_electron_energy;
@@ -313,13 +330,15 @@ fn expose_angle(
                     let total_dose_before = crystal.get_dose(i, j, k);
                     let rde = crystal.ddm().calc_decay(total_dose_before);
                     let energy_per_fluence = -(-abs_coeff / pix_per_um).exp_m1();
-                    let energy_absorbed = energy_per_fluence * vox_fluence
-                        + energy_per_fluence * compton_fluence;
+                    let energy_absorbed =
+                        energy_per_fluence * vox_fluence + energy_per_fluence * compton_fluence;
 
                     // Notify exposure summary
                     crystal.exposure_summary_mut().exposure_observation(
                         angle_num,
-                        i, j, k,
+                        i,
+                        j,
+                        k,
                         vox_dose,
                         total_dose_before,
                         vox_fluence,
@@ -357,9 +376,9 @@ pub fn create_crystal(
         "cuboid" => Ok(Box::new(CrystalCuboid::from_config(config)?)),
         "polyhedron" | "obj" => Ok(Box::new(CrystalPolyhedron::from_config(config)?)),
         "cylinder" => Ok(Box::new(polyhedron::crystal_cylinder_from_config(config)?)),
-        "sphericalnew" => Ok(Box::new(
-            polyhedron::crystal_spherical_new_from_config(config)?,
-        )),
+        "sphericalnew" => Ok(Box::new(polyhedron::crystal_spherical_new_from_config(
+            config,
+        )?)),
         "spherical" => Ok(Box::new(CrystalSpherical::from_config(config)?)),
         other => Err(format!("Crystal type '{}' not yet implemented", other)),
     }

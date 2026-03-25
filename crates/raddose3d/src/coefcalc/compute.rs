@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::element::{ElementDatabase, CrossSection};
+use crate::element::{CrossSection, ElementDatabase};
 
 /// Constants for amino acid/nucleotide/carbohydrate composition.
 pub const PROTEIN_DENSITY: f64 = 1.35;
@@ -89,6 +89,12 @@ pub struct CoefCalcCompute {
     pub cryo_elements: HashSet<String>,
 }
 
+impl Default for CoefCalcCompute {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CoefCalcCompute {
     pub fn new() -> Self {
         CoefCalcCompute {
@@ -168,8 +174,12 @@ impl CoefCalcCompute {
     /// Calculate unit cell volume and return the value.
     pub fn calculate_cell_volume_ret(
         &mut self,
-        a: f64, b: f64, c: f64,
-        alpha_deg: f64, beta_deg: f64, gamma_deg: f64,
+        a: f64,
+        b: f64,
+        c: f64,
+        alpha_deg: f64,
+        beta_deg: f64,
+        gamma_deg: f64,
     ) -> f64 {
         self.calculate_cell_volume(a, b, c, alpha_deg, beta_deg, gamma_deg);
         self.cell_volume
@@ -178,15 +188,18 @@ impl CoefCalcCompute {
     /// Calculate unit cell volume from dimensions and angles.
     pub fn calculate_cell_volume(
         &mut self,
-        a: f64, b: f64, c: f64,
-        alpha_deg: f64, beta_deg: f64, gamma_deg: f64,
+        a: f64,
+        b: f64,
+        c: f64,
+        alpha_deg: f64,
+        beta_deg: f64,
+        gamma_deg: f64,
     ) {
         let alpha = alpha_deg.to_radians();
         let beta = beta_deg.to_radians();
         let gamma = gamma_deg.to_radians();
 
-        let ult = 1.0
-            + 2.0 * alpha.cos() * beta.cos() * gamma.cos()
+        let ult = 1.0 + 2.0 * alpha.cos() * beta.cos() * gamma.cos()
             - alpha.cos().powi(2)
             - beta.cos().powi(2)
             - gamma.cos().powi(2);
@@ -223,26 +236,29 @@ impl CoefCalcCompute {
             }
         }
 
-        self.crystal_density = mass * MASS_TO_CELL_VOLUME / (self.cell_volume * UNITS_PER_MILLI_UNIT);
+        self.crystal_density =
+            mass * MASS_TO_CELL_VOLUME / (self.cell_volume * UNITS_PER_MILLI_UNIT);
     }
 
     /// Calculate solvent fraction from composition numbers.
     pub fn calculate_solvent_fraction_from_nums(&mut self) -> f64 {
-        let protein_mass = ATOMIC_MASS_UNIT * AMINO_ACID_AVE_MASS * self.num_amino_acids
+        let protein_mass = ATOMIC_MASS_UNIT
+            * AMINO_ACID_AVE_MASS
+            * self.num_amino_acids
             * self.num_monomers as f64
             / (self.cell_volume * PROTEIN_DENSITY * ANGSTROMS_TO_ML);
 
-        let rna_mass = ATOMIC_MASS_UNIT * RNA_NUCLEOTIDE_MASS * self.num_rna
-            * self.num_monomers as f64
-            / (self.cell_volume * RNA_DENSITY * ANGSTROMS_TO_ML);
+        let rna_mass =
+            ATOMIC_MASS_UNIT * RNA_NUCLEOTIDE_MASS * self.num_rna * self.num_monomers as f64
+                / (self.cell_volume * RNA_DENSITY * ANGSTROMS_TO_ML);
 
-        let dna_mass = ATOMIC_MASS_UNIT * DNA_NUCLEOTIDE_MASS * self.num_dna
-            * self.num_monomers as f64
-            / (self.cell_volume * DNA_DENSITY * ANGSTROMS_TO_ML);
+        let dna_mass =
+            ATOMIC_MASS_UNIT * DNA_NUCLEOTIDE_MASS * self.num_dna * self.num_monomers as f64
+                / (self.cell_volume * DNA_DENSITY * ANGSTROMS_TO_ML);
 
-        let carb_mass = ATOMIC_MASS_UNIT * CARBOHYDRATE_AVE_MASS * self.num_carb
-            * self.num_monomers as f64
-            / (self.cell_volume * CARBOHYDRATE_DENSITY * ANGSTROMS_TO_ML);
+        let carb_mass =
+            ATOMIC_MASS_UNIT * CARBOHYDRATE_AVE_MASS * self.num_carb * self.num_monomers as f64
+                / (self.cell_volume * CARBOHYDRATE_DENSITY * ANGSTROMS_TO_ML);
 
         let sf = 1.0 - protein_mass - rna_mass - dna_mass - carb_mass;
 
@@ -314,14 +330,14 @@ impl CoefCalcCompute {
                 let cs = e.get_abs_coefficients(energy);
                 let atoms = self.total_atoms(name);
 
-                photo += atoms * cs[&CrossSection::Photoelectric] / self.cell_volume
+                photo += atoms * cs[&CrossSection::Photoelectric]
+                    / self.cell_volume
                     / UNITS_PER_DECI_UNIT;
-                coherent += atoms * cs[&CrossSection::Coherent] / self.cell_volume
-                    / UNITS_PER_DECI_UNIT;
-                total += atoms * cs[&CrossSection::Total] / self.cell_volume
-                    / UNITS_PER_DECI_UNIT;
-                compton += atoms * cs[&CrossSection::Compton] / self.cell_volume
-                    / UNITS_PER_DECI_UNIT;
+                coherent +=
+                    atoms * cs[&CrossSection::Coherent] / self.cell_volume / UNITS_PER_DECI_UNIT;
+                total += atoms * cs[&CrossSection::Total] / self.cell_volume / UNITS_PER_DECI_UNIT;
+                compton +=
+                    atoms * cs[&CrossSection::Compton] / self.cell_volume / UNITS_PER_DECI_UNIT;
             }
         }
 
@@ -350,12 +366,12 @@ impl CoefCalcCompute {
                     .copied()
                     .unwrap_or(0.0);
 
-                photo +=
-                    atoms * cs[&CrossSection::Photoelectric] / self.cell_volume / UNITS_PER_DECI_UNIT;
+                photo += atoms * cs[&CrossSection::Photoelectric]
+                    / self.cell_volume
+                    / UNITS_PER_DECI_UNIT;
                 coherent +=
                     atoms * cs[&CrossSection::Coherent] / self.cell_volume / UNITS_PER_DECI_UNIT;
-                total +=
-                    atoms * cs[&CrossSection::Total] / self.cell_volume / UNITS_PER_DECI_UNIT;
+                total += atoms * cs[&CrossSection::Total] / self.cell_volume / UNITS_PER_DECI_UNIT;
                 compton +=
                     atoms * cs[&CrossSection::Compton] / self.cell_volume / UNITS_PER_DECI_UNIT;
             }
@@ -391,16 +407,9 @@ impl CoefCalcCompute {
     }
 
     /// Add cryo-solution concentrations (stub — populates cryo_occurrence for density calc).
-    pub fn add_cryo_concentrations(
-        &mut self,
-        cryo_names: &[String],
-        cryo_concs: &[f64],
-    ) {
+    pub fn add_cryo_concentrations(&mut self, cryo_names: &[String], cryo_concs: &[f64]) {
         for (name, &conc) in cryo_names.iter().zip(cryo_concs.iter()) {
-            *self
-                .cryo_concentration
-                .entry(name.clone())
-                .or_insert(0.0) += conc;
+            *self.cryo_concentration.entry(name.clone()).or_insert(0.0) += conc;
         }
         // Populate cryo_occurrence for density calculation
         let vol = self.cell_volume;
@@ -423,8 +432,7 @@ impl CoefCalcCompute {
 
                 // mu_ratio: element absorption / total absorption
                 let el_cs = e.get_abs_coefficients(beam_energy);
-                let el_photo = self.total_atoms(name)
-                    * el_cs[&CrossSection::Photoelectric]
+                let el_photo = self.total_atoms(name) * el_cs[&CrossSection::Photoelectric]
                     / self.cell_volume
                     / UNITS_PER_DECI_UNIT
                     / UNITS_PER_MILLI_UNIT;
@@ -489,8 +497,7 @@ impl CoefCalcCompute {
 
                 // M shells (Z >= 73 for heavy elements)
                 if beam_energy > m1_edge_val && m1_edge_val > 0.0 && e.atomic_number() >= 73 {
-                    row[17] = e.m1_ionisation_prob()
-                        * (1.0 - row[1] - row[5] - row[9] - row[13]);
+                    row[17] = e.m1_ionisation_prob() * (1.0 - row[1] - row[5] - row[9] - row[13]);
                     row[18] = m1_edge_val;
                 }
                 if beam_energy > m2_edge && m2_edge > 0.0 && e.atomic_number() >= 73 {
@@ -510,7 +517,15 @@ impl CoefCalcCompute {
                 }
                 if beam_energy > m5_edge && m5_edge > 0.0 && e.atomic_number() >= 73 {
                     row[25] = e.m5_ionisation_prob()
-                        * (1.0 - row[1] - row[5] - row[9] - row[13] - row[17] - row[19] - row[21] - row[23]);
+                        * (1.0
+                            - row[1]
+                            - row[5]
+                            - row[9]
+                            - row[13]
+                            - row[17]
+                            - row[19]
+                            - row[21]
+                            - row[23]);
                     row[26] = m5_edge;
                 }
 

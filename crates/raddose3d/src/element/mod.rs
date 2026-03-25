@@ -1,5 +1,5 @@
 pub mod database;
 pub mod database_em;
 
-pub use database::{Element, ElementDatabase, CrossSection, DatabaseField};
-pub use database_em::{ElementEM, ElementDatabaseEM};
+pub use database::{CrossSection, DatabaseField, Element, ElementDatabase};
+pub use database_em::{ElementDatabaseEM, ElementEM};

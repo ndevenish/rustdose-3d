@@ -46,9 +46,13 @@ impl BeamExperimental {
     /// `set_data` before `generate_beam_array` is called.
     pub fn from_config(config: &BeamConfig) -> Result<Self, String> {
         let photon_energy = config.energy.ok_or("Experimental beam requires energy")?;
-        let total_flux    = config.flux.ok_or("Experimental beam requires flux")?;
-        let pix_x = config.pixel_size_x.ok_or("Experimental beam requires pixel_size_x")?;
-        let pix_y = config.pixel_size_y.ok_or("Experimental beam requires pixel_size_y")?;
+        let total_flux = config.flux.ok_or("Experimental beam requires flux")?;
+        let pix_x = config
+            .pixel_size_x
+            .ok_or("Experimental beam requires pixel_size_x")?;
+        let pix_y = config
+            .pixel_size_y
+            .ok_or("Experimental beam requires pixel_size_y")?;
 
         // Collimation: if circular, set flag
         use crate::parser::config::Collimation;
@@ -82,10 +86,7 @@ impl BeamExperimental {
     }
 
     fn bilinear_interpolate(v00: f64, v10: f64, v01: f64, v11: f64, x: f64, y: f64) -> f64 {
-        v00 * (1.0 - x) * (1.0 - y)
-            + v10 * x * (1.0 - y)
-            + v01 * (1.0 - x) * y
-            + v11 * x * y
+        v00 * (1.0 - x) * (1.0 - y) + v10 * x * (1.0 - y) + v01 * (1.0 - x) * y + v11 * x * y
     }
 
     fn do_bilinear(&self, coord_x: f64, coord_y: f64, off_axis_um: f64) -> f64 {
@@ -95,7 +96,11 @@ impl BeamExperimental {
         let vv = (real_y / self.pix_y - 0.5).floor() as isize;
 
         let rows = self.beam_array.len() as isize;
-        let cols = self.beam_array.first().map(|r| r.len() as isize).unwrap_or(0);
+        let cols = self
+            .beam_array
+            .first()
+            .map(|r| r.len() as isize)
+            .unwrap_or(0);
 
         if vh >= 0 && vv >= 0 && vh < cols - 1 && vv < rows - 1 {
             let frac_x = real_x / self.pix_x - (vh as f64 + 0.5);
@@ -129,10 +134,9 @@ impl super::Beam for BeamExperimental {
         let mut beam_sum = 0.0;
         // Build padded array (nrows+2 × ncols+2)
         let mut arr = vec![vec![0.0f64; ncols + 2]; nrows + 2];
-        for i in 1..=nrows {
-            for j in 1..=ncols {
-                let v = self.data[i - 1][j - 1];
-                arr[i][j] = v;
+        for (row_idx, data_row) in self.data.iter().enumerate() {
+            for (col_idx, &v) in data_row.iter().enumerate() {
+                arr[row_idx + 1][col_idx + 1] = v;
                 beam_sum += v;
             }
         }
@@ -181,11 +185,21 @@ impl super::Beam for BeamExperimental {
         )
     }
 
-    fn photons_per_sec(&self) -> f64 { self.attenuated_flux }
-    fn photon_energy(&self) -> f64 { self.photon_energy }
-    fn pulse_energy(&self) -> f64 { self.pulse_energy }
-    fn energy_fwhm(&self) -> Option<f64> { self.energy_fwhm }
-    fn is_circular(&self) -> bool { self.is_circular }
+    fn photons_per_sec(&self) -> f64 {
+        self.attenuated_flux
+    }
+    fn photon_energy(&self) -> f64 {
+        self.photon_energy
+    }
+    fn pulse_energy(&self) -> f64 {
+        self.pulse_energy
+    }
+    fn energy_fwhm(&self) -> Option<f64> {
+        self.energy_fwhm
+    }
+    fn is_circular(&self) -> bool {
+        self.is_circular
+    }
 
     fn apply_container_attenuation(&mut self, container: &dyn Container) {
         let frac = container.attenuation_fraction();
@@ -211,10 +225,20 @@ impl super::Beam for BeamExperimental {
         self.data.len() as f64 * ncols as f64 * self.pix_x * self.pix_y
     }
 
-    fn beam_x(&self) -> Option<f64> { Some(self.beam_x_size) }
-    fn beam_y(&self) -> Option<f64> { Some(self.beam_y_size) }
-    fn beam_type(&self) -> &str { "Experimental" }
+    fn beam_x(&self) -> Option<f64> {
+        Some(self.beam_x_size)
+    }
+    fn beam_y(&self) -> Option<f64> {
+        Some(self.beam_y_size)
+    }
+    fn beam_type(&self) -> &str {
+        "Experimental"
+    }
 
-    fn sx(&self) -> f64 { self.beam_x_size / (2.0 * std::f64::consts::SQRT_2) }
-    fn sy(&self) -> f64 { self.beam_y_size / (2.0 * std::f64::consts::SQRT_2) }
+    fn sx(&self) -> f64 {
+        self.beam_x_size / (2.0 * std::f64::consts::SQRT_2)
+    }
+    fn sy(&self) -> f64 {
+        self.beam_y_size / (2.0 * std::f64::consts::SQRT_2)
+    }
 }

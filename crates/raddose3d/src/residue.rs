@@ -18,9 +18,16 @@ pub struct Residue {
 }
 
 impl Residue {
+    #[allow(clippy::too_many_arguments)]
     const fn new(
         residue_type: u8,
-        c: i32, h: i32, o: i32, n: i32, s: i32, p: i32, se: i32,
+        c: i32,
+        h: i32,
+        o: i32,
+        n: i32,
+        s: i32,
+        p: i32,
+        se: i32,
         mw: f64,
     ) -> Self {
         Residue {
@@ -63,15 +70,15 @@ pub fn get_residue_by_three_letter(code: &str) -> Option<Residue> {
         "TYR" => Some(Residue::new(TYPE_PROTEIN, 9, 9, 2, 1, 0, 0, 0, 181.19)),
         "VAL" => Some(Residue::new(TYPE_PROTEIN, 5, 9, 1, 1, 0, 0, 0, 117.15)),
         // RNA (3-letter codes from PDB, padded with leading spaces in Java)
-        "A"   => Some(Residue::new(TYPE_RNA,     10, 12, 6, 5, 0, 1, 0, 347.2)),
-        "U"   => Some(Residue::new(TYPE_RNA,     9,  11, 8, 2, 0, 1, 0, 324.2)),
-        "G"   => Some(Residue::new(TYPE_RNA,     10, 12, 7, 5, 0, 1, 0, 363.2)),
-        "C"   => Some(Residue::new(TYPE_RNA,     9,  12, 7, 3, 0, 1, 0, 323.2)),
+        "A" => Some(Residue::new(TYPE_RNA, 10, 12, 6, 5, 0, 1, 0, 347.2)),
+        "U" => Some(Residue::new(TYPE_RNA, 9, 11, 8, 2, 0, 1, 0, 324.2)),
+        "G" => Some(Residue::new(TYPE_RNA, 10, 12, 7, 5, 0, 1, 0, 363.2)),
+        "C" => Some(Residue::new(TYPE_RNA, 9, 12, 7, 3, 0, 1, 0, 323.2)),
         // DNA
-        "DA"  => Some(Residue::new(TYPE_DNA,     10, 12, 5, 5, 0, 1, 0, 331.2)),
-        "DT"  => Some(Residue::new(TYPE_DNA,     10, 11, 7, 2, 0, 1, 0, 322.2)),
-        "DG"  => Some(Residue::new(TYPE_DNA,     10, 12, 6, 5, 0, 1, 0, 347.2)),
-        "DC"  => Some(Residue::new(TYPE_DNA,     9,  12, 6, 3, 0, 1, 0, 307.2)),
+        "DA" => Some(Residue::new(TYPE_DNA, 10, 12, 5, 5, 0, 1, 0, 331.2)),
+        "DT" => Some(Residue::new(TYPE_DNA, 10, 11, 7, 2, 0, 1, 0, 322.2)),
+        "DG" => Some(Residue::new(TYPE_DNA, 10, 12, 6, 5, 0, 1, 0, 347.2)),
+        "DC" => Some(Residue::new(TYPE_DNA, 9, 12, 6, 3, 0, 1, 0, 307.2)),
         _ => None,
     }
 }

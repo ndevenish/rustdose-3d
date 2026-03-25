@@ -2,11 +2,7 @@
 ///
 /// Ported from `NormalEnergyDistribution` and `SampleNormalEnergyDistribution`
 /// in the Java source.
-use statrs::distribution::{ContinuousCDF, Continuous, Normal};
-
-/// FWHM → σ conversion: σ = FWHM / (2 √(2 ln 2)) ≈ FWHM / 2.3548.
-/// Pre-computed value.
-const FWHM_TO_SIGMA: f64 = 0.424_660_900_144_009_8; // 1/(2√(2 ln 2))
+use statrs::distribution::{Continuous, ContinuousCDF, Normal};
 
 /// Truncation bound: ±40σ from mean (same as Java).
 const TRUNCATION_SIGMAS: f64 = 40.0;
@@ -24,17 +20,28 @@ impl NormalEnergyDistribution {
     pub fn new(mean: f64, fwhm: f64) -> Self {
         let sigma = fwhm_to_sigma(fwhm);
         let dist = Normal::new(mean, sigma).expect("Invalid Normal distribution parameters");
-        NormalEnergyDistribution { dist, mean_energy: mean, energy_fwhm: fwhm, sigma }
+        NormalEnergyDistribution {
+            dist,
+            mean_energy: mean,
+            energy_fwhm: fwhm,
+            sigma,
+        }
     }
 
     /// PDF at `value`.
-    pub fn pdf(&self, value: f64) -> f64 { self.dist.pdf(value) }
+    pub fn pdf(&self, value: f64) -> f64 {
+        self.dist.pdf(value)
+    }
 
     /// CDF at `value`.
-    pub fn cdf(&self, value: f64) -> f64 { self.dist.cdf(value) }
+    pub fn cdf(&self, value: f64) -> f64 {
+        self.dist.cdf(value)
+    }
 
     /// Inverse CDF (quantile function) at `p` ∈ (0, 1).
-    pub fn inverse_cdf(&self, p: f64) -> f64 { self.dist.inverse_cdf(p) }
+    pub fn inverse_cdf(&self, p: f64) -> f64 {
+        self.dist.inverse_cdf(p)
+    }
 
     /// Returns `true` if `value` is outside the truncation bounds.
     pub fn is_neglected(&self, value: f64) -> bool {
@@ -43,10 +50,14 @@ impl NormalEnergyDistribution {
     }
 
     /// Lower truncation bound.
-    pub fn lower_bound(&self) -> f64 { self.mean_energy - TRUNCATION_SIGMAS * self.sigma }
+    pub fn lower_bound(&self) -> f64 {
+        self.mean_energy - TRUNCATION_SIGMAS * self.sigma
+    }
 
     /// Upper truncation bound.
-    pub fn upper_bound(&self) -> f64 { self.mean_energy + TRUNCATION_SIGMAS * self.sigma }
+    pub fn upper_bound(&self) -> f64 {
+        self.mean_energy + TRUNCATION_SIGMAS * self.sigma
+    }
 }
 
 /// Sample `n` energies from a truncated normal distribution.

@@ -12,6 +12,7 @@ use crate::wedge::Wedge;
 /// ray-tracing for occupancy. For a cuboid, occupancy is trivially determined
 /// by bounding box, so we implement it directly with a simpler approach.
 #[derive(Debug)]
+#[allow(dead_code)] // phase-6 fields (angle_p, angle_l, photo_electron_escape, fluorescent_escape, first_wedge)
 pub struct CrystalCuboid {
     /// Crystal dimensions in µm [x, y, z].
     cryst_size_um: [f64; 3],
@@ -66,6 +67,7 @@ impl CrystalCuboid {
     /// Default resolution in voxels/µm.
     const DEFAULT_RESOLUTION: f64 = 0.5;
     /// Max voxels before reducing resolution.
+    #[allow(dead_code)]
     const MAX_VOXELS: usize = 1_000_000;
 
     pub fn from_config(config: &CrystalConfig) -> Result<Self, String> {
@@ -96,14 +98,14 @@ impl CrystalCuboid {
         let hz = dim_z / 2.0;
 
         let mut vertices = [
-            [-hx, -hy,  hz],
+            [-hx, -hy, hz],
             [-hx, -hy, -hz],
-            [-hx,  hy, -hz],
-            [-hx,  hy,  hz],
-            [ hx, -hy,  hz],
-            [ hx, -hy, -hz],
-            [ hx,  hy, -hz],
-            [ hx,  hy,  hz],
+            [-hx, hy, -hz],
+            [-hx, hy, hz],
+            [hx, -hy, hz],
+            [hx, -hy, -hz],
+            [hx, hy, -hz],
+            [hx, hy, hz],
         ];
 
         // Apply initial rotations (P about Z, L about X)
@@ -128,9 +130,18 @@ impl CrystalCuboid {
 
         // Triangle indices (1-based in Java, 0-based here)
         let indices: [[usize; 3]; 12] = [
-            [0, 2, 1], [3, 2, 0], [2, 5, 1], [6, 5, 2],
-            [1, 4, 0], [1, 5, 4], [3, 7, 2], [7, 6, 2],
-            [3, 0, 7], [0, 4, 7], [7, 4, 6], [6, 4, 5],
+            [0, 2, 1],
+            [3, 2, 0],
+            [2, 5, 1],
+            [6, 5, 2],
+            [1, 4, 0],
+            [1, 5, 4],
+            [3, 7, 2],
+            [7, 6, 2],
+            [3, 0, 7],
+            [0, 4, 7],
+            [7, 4, 6],
+            [6, 4, 5],
         ];
 
         // Calculate normals and origin distances
@@ -195,20 +206,16 @@ impl CrystalCuboid {
         );
 
         // Subprogram
-        let subprogram = config
-            .program
-            .as_deref()
-            .unwrap_or("RD3D")
-            .to_uppercase();
+        let subprogram = config.program.as_deref().unwrap_or("RD3D").to_uppercase();
 
         let photo_electron_escape = config
             .calculate_pe_escape
             .as_deref()
-            .map_or(false, |s| s.eq_ignore_ascii_case("true"));
+            .is_some_and(|s| s.eq_ignore_ascii_case("true"));
         let fluorescent_escape = config
             .calculate_fl_escape
             .as_deref()
-            .map_or(false, |s| s.eq_ignore_ascii_case("true"));
+            .is_some_and(|s| s.eq_ignore_ascii_case("true"));
 
         Ok(CrystalCuboid {
             cryst_size_um: [actual_dim_x, actual_dim_y, actual_dim_z],
@@ -274,7 +281,12 @@ impl CrystalCuboid {
             ];
 
             // Check if point is inside triangle
-            if point_in_triangle(&p, &self.vertices[tri[0]], &self.vertices[tri[1]], &self.vertices[tri[2]]) {
+            if point_in_triangle(
+                &p,
+                &self.vertices[tri[0]],
+                &self.vertices[tri[1]],
+                &self.vertices[tri[2]],
+            ) {
                 crossings += 1;
             }
         }
@@ -295,11 +307,7 @@ impl super::Crystal for CrystalCuboid {
             let z = v[2] + wedge.start_z + wedge.trans_z * (ang_rad - wedge.start_ang);
 
             // Rotate in X-Z plane
-            self.rotated_vertices[i] = [
-                x * cos_a + z * sin_a,
-                y,
-                -x * sin_a + z * cos_a,
-            ];
+            self.rotated_vertices[i] = [x * cos_a + z * sin_a, y, -x * sin_a + z * cos_a];
         }
 
         // Recalculate normals for rotated vertices
@@ -530,8 +538,7 @@ fn point_in_triangle(p: &[f64; 3], a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> 
     for i in 0..n {
         if ((verts[i][1] > p[1]) != (verts[j][1] > p[1]))
             && (p[0]
-                < (verts[j][0] - verts[i][0]) * (p[1] - verts[i][1])
-                    / (verts[j][1] - verts[i][1])
+                < (verts[j][0] - verts[i][0]) * (p[1] - verts[i][1]) / (verts[j][1] - verts[i][1])
                     + verts[i][0])
         {
             inside = !inside;

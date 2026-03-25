@@ -1,10 +1,10 @@
+pub mod experimental;
 pub mod gaussian;
 pub mod tophat;
-pub mod experimental;
 
+pub use experimental::BeamExperimental;
 pub use gaussian::BeamGaussian;
 pub use tophat::BeamTophat;
-pub use experimental::BeamExperimental;
 
 use crate::container::Container;
 use crate::parser::config::BeamConfig;
@@ -24,7 +24,9 @@ pub trait Beam: std::fmt::Debug + Send + Sync {
     fn photon_energy(&self) -> f64;
 
     /// Returns pulse energy in mJ (0 if not applicable).
-    fn pulse_energy(&self) -> f64 { 0.0 }
+    fn pulse_energy(&self) -> f64 {
+        0.0
+    }
 
     /// Generate beam array (only used by experimental beam).
     fn generate_beam_array(&mut self) {}
@@ -39,7 +41,9 @@ pub trait Beam: std::fmt::Debug + Send + Sync {
     fn beam_area(&self) -> f64;
 
     /// Returns exposure in electrons/Å² (for electron beams).
-    fn exposure(&self) -> f64 { 0.0 }
+    fn exposure(&self) -> f64 {
+        0.0
+    }
 
     /// Returns beam horizontal extent in µm.
     fn beam_x(&self) -> Option<f64>;
@@ -51,22 +55,34 @@ pub trait Beam: std::fmt::Debug + Send + Sync {
     fn beam_type(&self) -> &str;
 
     /// Is the beam circularly collimated?
-    fn is_circular(&self) -> bool { false }
+    fn is_circular(&self) -> bool {
+        false
+    }
 
     /// Returns semi-angle (for electron beams).
-    fn semi_angle(&self) -> f64 { 0.0 }
+    fn semi_angle(&self) -> f64 {
+        0.0
+    }
 
     /// Returns aperture radius (for electron beams).
-    fn aperture_radius(&self) -> f64 { 0.0 }
+    fn aperture_radius(&self) -> f64 {
+        0.0
+    }
 
     /// Image X dimension.
-    fn image_x(&self) -> f64 { 0.0 }
+    fn image_x(&self) -> f64 {
+        0.0
+    }
 
     /// Image Y dimension.
-    fn image_y(&self) -> f64 { 0.0 }
+    fn image_y(&self) -> f64 {
+        0.0
+    }
 
     /// Energy FWHM for pink beam (None if monochromatic).
-    fn energy_fwhm(&self) -> Option<f64> { None }
+    fn energy_fwhm(&self) -> Option<f64> {
+        None
+    }
 
     /// Sigma X of the beam profile.
     fn sx(&self) -> f64;

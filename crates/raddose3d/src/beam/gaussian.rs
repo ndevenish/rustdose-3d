@@ -12,7 +12,7 @@ pub struct BeamGaussian {
     /// FWHM Y in µm.
     pub fwhm_y: f64,
     /// Flux in photons/sec.
-    photons_per_sec: f64,
+    total_flux: f64,
     /// Photon energy in keV.
     photon_energy: f64,
     /// Pulse energy in mJ (optional).
@@ -68,7 +68,7 @@ impl BeamGaussian {
         Ok(BeamGaussian {
             fwhm_x,
             fwhm_y,
-            photons_per_sec,
+            total_flux: photons_per_sec,
             photon_energy,
             pulse_energy: config.pulse_energy.unwrap_or(0.0),
             energy_fwhm: config.energy_fwhm,
@@ -161,12 +161,8 @@ impl BeamGaussian {
             let hy = self.coll_y_um.unwrap_or(f64::INFINITY) / 2.0;
             (x / hx).powi(2) + (y / hy).powi(2) <= 1.0
         } else {
-            let in_x = self
-                .coll_x_um
-                .map_or(true, |h| x.abs() <= h / 2.0);
-            let in_y = self
-                .coll_y_um
-                .map_or(true, |v| y.abs() <= v / 2.0);
+            let in_x = self.coll_x_um.is_none_or(|h| x.abs() <= h / 2.0);
+            let in_y = self.coll_y_um.is_none_or(|v| y.abs() <= v / 2.0);
             in_x && in_y
         }
     }
@@ -184,7 +180,7 @@ impl super::Beam for BeamGaussian {
     fn description(&self) -> String {
         format!(
             "Gaussian beam: {:.2e} photons/s, {:.2} keV, FWHM [{:.1}, {:.1}] µm",
-            self.photons_per_sec, self.photon_energy, self.fwhm_x, self.fwhm_y
+            self.total_flux, self.photon_energy, self.fwhm_x, self.fwhm_y
         )
     }
 
@@ -202,7 +198,7 @@ impl super::Beam for BeamGaussian {
 
     fn apply_container_attenuation(&mut self, container: &dyn Container) {
         let fraction = container.attenuation_fraction();
-        self.attenuated_photons_per_sec = self.photons_per_sec * (1.0 - fraction);
+        self.attenuated_photons_per_sec = self.total_flux * (1.0 - fraction);
         self.recalc_scale_factor();
     }
 
@@ -212,9 +208,7 @@ impl super::Beam for BeamGaussian {
 
     fn beam_area(&self) -> f64 {
         match (&self.coll_x_um, &self.coll_y_um) {
-            (Some(h), Some(v)) if self.is_circular => {
-                std::f64::consts::PI * (h / 2.0) * (v / 2.0)
-            }
+            (Some(h), Some(v)) if self.is_circular => std::f64::consts::PI * (h / 2.0) * (v / 2.0),
             (Some(h), Some(v)) => h * v,
             _ => {
                 // Use FWHM as effective area

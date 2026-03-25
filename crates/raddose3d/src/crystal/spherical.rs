@@ -9,6 +9,7 @@ use crate::wedge::Wedge;
 /// Analytic sphere crystal: occupancy by radius check, depth by analytic formula.
 /// This matches Java's CrystalSpherical (no polyhedron mesh).
 #[derive(Debug)]
+#[allow(dead_code)] // phase-6 fields (photo_electron_escape, fluorescent_escape)
 pub struct CrystalSpherical {
     diameter: f64,
     pix_per_um: f64,
@@ -32,7 +33,9 @@ impl CrystalSpherical {
     const DEFAULT_RESOLUTION: f64 = 0.5;
 
     pub fn from_config(config: &CrystalConfig) -> Result<Self, String> {
-        let diameter = config.dim_x.ok_or("Spherical crystal requires DimX (diameter)")?;
+        let diameter = config
+            .dim_x
+            .ok_or("Spherical crystal requires DimX (diameter)")?;
         let radius = diameter / 2.0;
 
         let pix_per_um = config.pixels_per_micron.unwrap_or_else(|| {
@@ -69,20 +72,16 @@ impl CrystalSpherical {
             config.beta_param,
         );
 
-        let subprogram = config
-            .program
-            .as_deref()
-            .unwrap_or("RD3D")
-            .to_uppercase();
+        let subprogram = config.program.as_deref().unwrap_or("RD3D").to_uppercase();
 
         let photo_electron_escape = config
             .calculate_pe_escape
             .as_deref()
-            .map_or(false, |s| s.eq_ignore_ascii_case("true"));
+            .is_some_and(|s| s.eq_ignore_ascii_case("true"));
         let fluorescent_escape = config
             .calculate_fl_escape
             .as_deref()
-            .map_or(false, |s| s.eq_ignore_ascii_case("true"));
+            .is_some_and(|s| s.eq_ignore_ascii_case("true"));
 
         let container = container::create_container(config);
 

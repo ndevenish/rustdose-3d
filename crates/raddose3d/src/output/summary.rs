@@ -59,40 +59,86 @@ impl super::Output for OutputSummaryText {
 
         let abs_en_threshold = 0.5;
 
-        let _ = writeln!(self.writer, "{:<42}: {:.6} MGy",
-            "Average Diffraction Weighted Dose", summary.avg_diffracted_dose());
-        let _ = writeln!(self.writer, "{:<42}: {:.6} MGy",
-            "Last Diffraction Weighted Dose", summary.last_dwd());
-        let _ = writeln!(self.writer, "{:<42}: {:.2e} photons",
-            "Elastic Yield", summary.wedge_elastic());
+        let _ = writeln!(
+            self.writer,
+            "{:<42}: {:.6} MGy",
+            "Average Diffraction Weighted Dose",
+            summary.avg_diffracted_dose()
+        );
+        let _ = writeln!(
+            self.writer,
+            "{:<42}: {:.6} MGy",
+            "Last Diffraction Weighted Dose",
+            summary.last_dwd()
+        );
+        let _ = writeln!(
+            self.writer,
+            "{:<42}: {:.2e} photons",
+            "Elastic Yield",
+            summary.wedge_elastic()
+        );
 
         let dwd = summary.avg_diffracted_dose();
         if dwd > 0.0 {
-            let _ = writeln!(self.writer, "{:<42}: {:.2e} photons/MGy",
-                "Diffraction Efficiency (Elastic Yield/DWD)", summary.wedge_elastic() / dwd);
+            let _ = writeln!(
+                self.writer,
+                "{:<42}: {:.2e} photons/MGy",
+                "Diffraction Efficiency (Elastic Yield/DWD)",
+                summary.wedge_elastic() / dwd
+            );
         }
 
-        let _ = writeln!(self.writer, "{:<42}: {:.6} MGy",
-            "Average Dose (Whole Crystal)", summary.avg_dose_whole_crystal());
-        let _ = writeln!(self.writer, "{:<42}: {:.6} MGy",
-            "Average Dose (Exposed Region)", summary.avg_dose_exposed_region());
-        let _ = writeln!(self.writer, "{:<42}: {:.6} MGy",
-            "Max Dose", summary.max_dose());
+        let _ = writeln!(
+            self.writer,
+            "{:<42}: {:.6} MGy",
+            "Average Dose (Whole Crystal)",
+            summary.avg_dose_whole_crystal()
+        );
+        let _ = writeln!(
+            self.writer,
+            "{:<42}: {:.6} MGy",
+            "Average Dose (Exposed Region)",
+            summary.avg_dose_exposed_region()
+        );
+        let _ = writeln!(
+            self.writer,
+            "{:<42}: {:.6} MGy",
+            "Max Dose",
+            summary.max_dose()
+        );
 
-        let _ = writeln!(self.writer,
+        let _ = writeln!(
+            self.writer,
             "Average Dose ({:.1} % of total absorbed energy threshold ({:.2} MGy)): {:.6} MGy",
             abs_en_threshold * 100.0,
             summary.abs_dose_threshold(abs_en_threshold),
-            summary.avg_dose_threshold(abs_en_threshold));
+            summary.avg_dose_threshold(abs_en_threshold)
+        );
 
-        let _ = writeln!(self.writer, "{:<42}: {:.2}",
-            "Dose Contrast (Max/Threshold Av.)", summary.dose_contrast(abs_en_threshold));
-        let _ = writeln!(self.writer, "{:<42}: {:.1}%",
-            "Used Volume", summary.used_volume_fraction());
-        let _ = writeln!(self.writer, "{:<42}: {:.2e} J",
-            "Absorbed Energy (this Wedge)", summary.abs_energy_total());
-        let _ = writeln!(self.writer, "{:<42}: {:.1} 1/g",
-            "Dose Inefficiency (Max Dose/mJ Absorbed)", summary.dose_inefficiency());
+        let _ = writeln!(
+            self.writer,
+            "{:<42}: {:.2}",
+            "Dose Contrast (Max/Threshold Av.)",
+            summary.dose_contrast(abs_en_threshold)
+        );
+        let _ = writeln!(
+            self.writer,
+            "{:<42}: {:.1}%",
+            "Used Volume",
+            summary.used_volume_fraction()
+        );
+        let _ = writeln!(
+            self.writer,
+            "{:<42}: {:.2e} J",
+            "Absorbed Energy (this Wedge)",
+            summary.abs_energy_total()
+        );
+        let _ = writeln!(
+            self.writer,
+            "{:<42}: {:.1} 1/g",
+            "Dose Inefficiency (Max Dose/mJ Absorbed)",
+            summary.dose_inefficiency()
+        );
     }
 
     fn close(&mut self) {

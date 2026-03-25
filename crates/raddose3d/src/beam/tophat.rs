@@ -10,7 +10,7 @@ pub struct BeamTophat {
     /// Vertical extent in µm.
     beam_y_um: f64,
     /// Flux in photons/sec.
-    photons_per_sec: f64,
+    total_flux: f64,
     /// Photon energy in keV.
     photon_energy: f64,
     /// Pulse energy in mJ (optional).
@@ -47,7 +47,7 @@ impl BeamTophat {
         Ok(BeamTophat {
             beam_x_um,
             beam_y_um,
-            photons_per_sec,
+            total_flux: photons_per_sec,
             photon_energy,
             pulse_energy: config.pulse_energy.unwrap_or(0.0),
             energy_fwhm: config.energy_fwhm,
@@ -100,7 +100,7 @@ impl super::Beam for BeamTophat {
     fn description(&self) -> String {
         format!(
             "TopHat beam: {:.2e} photons/s, {:.2} keV, [{:.1} x {:.1}] µm",
-            self.photons_per_sec, self.photon_energy, self.beam_x_um, self.beam_y_um
+            self.total_flux, self.photon_energy, self.beam_x_um, self.beam_y_um
         )
     }
 
@@ -118,7 +118,7 @@ impl super::Beam for BeamTophat {
 
     fn apply_container_attenuation(&mut self, container: &dyn Container) {
         let fraction = container.attenuation_fraction();
-        self.attenuated_photons_per_sec = self.photons_per_sec * (1.0 - fraction);
+        self.attenuated_photons_per_sec = self.total_flux * (1.0 - fraction);
     }
 
     fn beam_minimum_dimension(&self) -> f64 {

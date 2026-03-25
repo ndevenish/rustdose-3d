@@ -1,24 +1,24 @@
-pub mod compute;
-pub mod from_params;
 pub mod average;
+pub mod compute;
 pub mod from_cif;
-pub mod small_molecules;
-pub mod micro_ed;
-pub mod from_sequence;
-pub mod saxs;
-pub mod from_sequence_saxs;
+pub mod from_params;
 pub mod from_pdb;
+pub mod from_sequence;
+pub mod from_sequence_saxs;
+pub mod micro_ed;
+pub mod saxs;
+pub mod small_molecules;
 
-pub use compute::CoefCalcCompute;
-pub use from_params::CoefCalcFromParams;
 pub use average::CoefCalcAverage;
+pub use compute::CoefCalcCompute;
 pub use from_cif::CoefCalcFromCIF;
-pub use small_molecules::CoefCalcSmallMolecules;
-pub use micro_ed::CoefCalcMicroED;
-pub use from_sequence::CoefCalcFromSequence;
-pub use saxs::CoefCalcSAXS;
-pub use from_sequence_saxs::CoefCalcFromSequenceSAXS;
+pub use from_params::CoefCalcFromParams;
 pub use from_pdb::CoefCalcFromPDB;
+pub use from_sequence::CoefCalcFromSequence;
+pub use from_sequence_saxs::CoefCalcFromSequenceSAXS;
+pub use micro_ed::CoefCalcMicroED;
+pub use saxs::CoefCalcSAXS;
+pub use small_molecules::CoefCalcSmallMolecules;
 
 use std::collections::HashSet;
 
@@ -50,28 +50,42 @@ pub trait CoefCalc: std::fmt::Debug + Send + Sync {
     fn fluorescent_escape_factors(&self, beam_energy: f64) -> Vec<Vec<f64>>;
 
     /// Whether a cryo-solution surrounding is defined.
-    fn is_cryo(&self) -> bool { false }
+    fn is_cryo(&self) -> bool {
+        false
+    }
 
     /// Update cryo-solution coefficients.
     fn update_cryo_coefficients(&mut self, _photon_energy: f64) {}
 
     /// Cryo-solution absorption coefficient in µm⁻¹.
-    fn cryo_absorption_coefficient(&self) -> f64 { 0.0 }
+    fn cryo_absorption_coefficient(&self) -> f64 {
+        0.0
+    }
 
     /// Cryo-solution density in g/mL.
-    fn cryo_density(&self) -> f64 { 0.0 }
+    fn cryo_density(&self) -> f64 {
+        0.0
+    }
 
     /// Cryo-solution inelastic coefficient.
-    fn cryo_inelastic_coefficient(&self) -> f64 { 0.0 }
+    fn cryo_inelastic_coefficient(&self) -> f64 {
+        0.0
+    }
 
     /// Cryo fluorescent escape factors.
-    fn cryo_fluorescent_escape_factors(&self, _beam_energy: f64) -> Vec<Vec<f64>> { vec![] }
+    fn cryo_fluorescent_escape_factors(&self, _beam_energy: f64) -> Vec<Vec<f64>> {
+        vec![]
+    }
 
     /// Present elements in crystal (or cryo solution).
-    fn present_elements(&self, _cryo: bool) -> HashSet<String> { HashSet::new() }
+    fn present_elements(&self, _cryo: bool) -> HashSet<String> {
+        HashSet::new()
+    }
 
     /// Solvent fraction.
-    fn solvent_fraction(&self) -> f64 { 0.0 }
+    fn solvent_fraction(&self) -> f64 {
+        0.0
+    }
 }
 
 /// Create a CoefCalc from parsed crystal configuration.
@@ -83,31 +97,17 @@ pub fn create_coefcalc(
     let coefcalc_type = config.coefcalc.unwrap_or(CoefCalcType::Default);
 
     match coefcalc_type {
-        CoefCalcType::Default => {
-            Ok(Box::new(CoefCalcFromParams::from_config(config)?))
-        }
-        CoefCalcType::Average => {
-            Ok(Box::new(CoefCalcAverage))
-        }
+        CoefCalcType::Default => Ok(Box::new(CoefCalcFromParams::from_config(config)?)),
+        CoefCalcType::Average => Ok(Box::new(CoefCalcAverage)),
         CoefCalcType::Cif => {
             let path = config.cif.as_deref().ok_or("CIF mode requires cif path")?;
             Ok(Box::new(CoefCalcFromCIF::from_file(path)?))
         }
-        CoefCalcType::SmallMole => {
-            Ok(Box::new(CoefCalcSmallMolecules::from_config(config)?))
-        }
-        CoefCalcType::Sequence => {
-            Ok(Box::new(CoefCalcFromSequence::from_config(config)?))
-        }
-        CoefCalcType::Saxs => {
-            Ok(Box::new(CoefCalcSAXS::from_config(config)?))
-        }
-        CoefCalcType::SaxsSeq => {
-            Ok(Box::new(CoefCalcFromSequenceSAXS::from_config(config)?))
-        }
-        CoefCalcType::Pdb => {
-            Ok(Box::new(CoefCalcFromPDB::from_config(config)?))
-        }
+        CoefCalcType::SmallMole => Ok(Box::new(CoefCalcSmallMolecules::from_config(config)?)),
+        CoefCalcType::Sequence => Ok(Box::new(CoefCalcFromSequence::from_config(config)?)),
+        CoefCalcType::Saxs => Ok(Box::new(CoefCalcSAXS::from_config(config)?)),
+        CoefCalcType::SaxsSeq => Ok(Box::new(CoefCalcFromSequenceSAXS::from_config(config)?)),
+        CoefCalcType::Pdb => Ok(Box::new(CoefCalcFromPDB::from_config(config)?)),
         // MicroED CoefCalcType not yet in the parser; map via RdFortran placeholder or leave:
         CoefCalcType::RdFortran => {
             // Legacy RD v2 subprocess not implemented; fall back to FromParams

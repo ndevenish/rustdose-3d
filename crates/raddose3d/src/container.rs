@@ -121,9 +121,7 @@ impl Container for ContainerElemental {
 }
 
 /// Create a container from CrystalConfig.
-pub fn create_container(
-    config: &crate::parser::config::CrystalConfig,
-) -> Box<dyn Container> {
+pub fn create_container(config: &crate::parser::config::CrystalConfig) -> Box<dyn Container> {
     use crate::parser::config::ContainerMaterialType;
     match config.container_material {
         Some(ContainerMaterialType::Mixture) => {

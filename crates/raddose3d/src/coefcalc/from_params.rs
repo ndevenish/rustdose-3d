@@ -13,9 +13,15 @@ impl CoefCalcFromParams {
         let mut compute = CoefCalcCompute::new();
 
         // Cell dimensions
-        let cell_a = config.cell_a.ok_or("Crystal requires unit cell dimension a")?;
-        let cell_b = config.cell_b.ok_or("Crystal requires unit cell dimension b")?;
-        let cell_c = config.cell_c.ok_or("Crystal requires unit cell dimension c")?;
+        let cell_a = config
+            .cell_a
+            .ok_or("Crystal requires unit cell dimension a")?;
+        let cell_b = config
+            .cell_b
+            .ok_or("Crystal requires unit cell dimension b")?;
+        let cell_c = config
+            .cell_c
+            .ok_or("Crystal requires unit cell dimension c")?;
         let cell_alpha = config.cell_alpha.unwrap_or(90.0);
         let cell_beta = config.cell_beta.unwrap_or(90.0);
         let cell_gamma = config.cell_gamma.unwrap_or(90.0);

@@ -1,8 +1,8 @@
 use crate::beam::{self, Beam};
 use crate::crystal::{self, Crystal};
 use crate::output::Output;
-use crate::wedge::Wedge;
 use crate::parser::config::Config;
+use crate::wedge::Wedge;
 
 /// Experiment is the central coordinating class.
 /// It receives Crystal, Beam, and Wedge objects, initiates exposure,
@@ -12,6 +12,12 @@ pub struct Experiment {
     current_crystal: Option<Box<dyn Crystal>>,
     current_beam: Option<Box<dyn Beam>>,
     observers: Vec<Box<dyn Output>>,
+}
+
+impl Default for Experiment {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Experiment {

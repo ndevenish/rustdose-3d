@@ -76,7 +76,15 @@ impl Ord for OrderedF64 {
 impl ExposureSummary {
     const ALPHA: f64 = 1.7;
     const K_CONST: f64 = 81.3;
+}
 
+impl Default for ExposureSummary {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExposureSummary {
     pub fn new() -> Self {
         let mut voxel_doses = BTreeMap::new();
         voxel_doses.insert(OrderedF64(0.0), 1);
@@ -111,8 +119,13 @@ impl ExposureSummary {
             last_dwd_tot: 0.0,
             last_dwd: 0.0,
             de: [0.0; 5],
-            q: [0.0, 2.0 * std::f64::consts::PI, std::f64::consts::PI,
-                2.0 * std::f64::consts::PI / 3.0, 0.5 * std::f64::consts::PI],
+            q: [
+                0.0,
+                2.0 * std::f64::consts::PI,
+                std::f64::consts::PI,
+                2.0 * std::f64::consts::PI / 3.0,
+                0.5 * std::f64::consts::PI,
+            ],
         }
     }
 
@@ -155,10 +168,13 @@ impl ExposureSummary {
         self.voxel_doses.insert(OrderedF64(0.0), 1);
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn exposure_observation(
         &mut self,
         wedge_image: usize,
-        _i: usize, _j: usize, _k: usize,
+        _i: usize,
+        _j: usize,
+        _k: usize,
         added_dose: f64,
         total_vox_dose: f64,
         fluence: f64,
@@ -220,7 +236,9 @@ impl ExposureSummary {
 
     pub fn summary_observation(
         &mut self,
-        _i: usize, _j: usize, _k: usize,
+        _i: usize,
+        _j: usize,
+        _k: usize,
         voxel_dose: f64,
         voxel_mass_kg: f64,
     ) {

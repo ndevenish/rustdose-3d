@@ -1,11 +1,10 @@
-use crate::parser::config::CrystalConfig;
 use super::compute::{
-    CoefCalcCompute,
-    CARBONS_PER_CARBOHYDRATE, OXYGENS_PER_CARBOHYDRATE, HYDROGENS_PER_CARBOHYDRATE,
-    AVOGADRO_NUM,
+    CoefCalcCompute, AVOGADRO_NUM, CARBONS_PER_CARBOHYDRATE, HYDROGENS_PER_CARBOHYDRATE,
+    OXYGENS_PER_CARBOHYDRATE,
 };
 use super::from_sequence::parse_sequence_file;
 use super::CoefCalc;
+use crate::parser::config::CrystalConfig;
 
 const ANGSTROM_TO_LITRE: f64 = 1e-27;
 const DEFAULT_CELL_LENGTH: f64 = 1000.0;
@@ -27,22 +26,32 @@ impl CoefCalcFromSequenceSAXS {
         let cell_b = config.cell_b.unwrap_or(DEFAULT_CELL_LENGTH);
         let cell_c = config.cell_c.unwrap_or(DEFAULT_CELL_LENGTH);
         let cell_alpha = config.cell_alpha.unwrap_or(90.0);
-        let cell_beta  = config.cell_beta.unwrap_or(90.0);
+        let cell_beta = config.cell_beta.unwrap_or(90.0);
         let cell_gamma = config.cell_gamma.unwrap_or(90.0);
-        let seq_file = config.seq_file.as_deref().ok_or("SequenceSAXS requires seq_file")?;
-        let protein_conc = config.protein_conc.ok_or("SequenceSAXS requires protein_conc")?;
+        let seq_file = config
+            .seq_file
+            .as_deref()
+            .ok_or("SequenceSAXS requires seq_file")?;
+        let protein_conc = config
+            .protein_conc
+            .ok_or("SequenceSAXS requires protein_conc")?;
         let num_carb = config.num_carb.unwrap_or(0);
 
         let mut compute = CoefCalcCompute::new();
-        let vol = compute.calculate_cell_volume_ret(cell_a, cell_b, cell_c, cell_alpha, cell_beta, cell_gamma);
+        let vol = compute
+            .calculate_cell_volume_ret(cell_a, cell_b, cell_c, cell_alpha, cell_beta, cell_gamma);
 
         // Parse sequence to get composition and molecular weight
         eprintln!("Parsing sequence file: {seq_file}");
         let mut total_mw = 0.0;
         parse_sequence_file(seq_file, &mut compute, &mut total_mw)?;
         eprintln!("Number of Amino Acids: {:.0}", compute.num_amino_acids);
-        if compute.num_dna > 0.0 { eprintln!("Number of DNA Residues: {:.0}", compute.num_dna); }
-        if compute.num_rna > 0.0 { eprintln!("Number of RNA Residues: {:.0}", compute.num_rna); }
+        if compute.num_dna > 0.0 {
+            eprintln!("Number of DNA Residues: {:.0}", compute.num_dna);
+        }
+        if compute.num_rna > 0.0 {
+            eprintln!("Number of RNA Residues: {:.0}", compute.num_rna);
+        }
         eprintln!("Total molecular weight: {:.2} g/mol", total_mw);
 
         // Calculate num_monomers from protein concentration and actual MW
@@ -55,7 +64,11 @@ impl CoefCalcFromSequenceSAXS {
         }
 
         // Solvent concentrations
-        let solv_names: Vec<String> = config.heavy_solution_conc.iter().map(|e| e.symbol.clone()).collect();
+        let solv_names: Vec<String> = config
+            .heavy_solution_conc
+            .iter()
+            .map(|e| e.symbol.clone())
+            .collect();
         let solv_concs: Vec<f64> = config.heavy_solution_conc.iter().map(|e| e.count).collect();
         if !solv_names.is_empty() {
             compute.add_solvent_concentrations(&solv_names, &solv_concs);
@@ -70,16 +83,19 @@ impl CoefCalcFromSequenceSAXS {
         compute.calculate_solvent_water(sf);
 
         // Add carbohydrates (pre-multiply)
-        compute.increment_macro("C", CARBONS_PER_CARBOHYDRATE    * num_carb as f64);
-        compute.increment_macro("O", OXYGENS_PER_CARBOHYDRATE    * num_carb as f64);
-        compute.increment_macro("H", HYDROGENS_PER_CARBOHYDRATE  * num_carb as f64);
+        compute.increment_macro("C", CARBONS_PER_CARBOHYDRATE * num_carb as f64);
+        compute.increment_macro("O", OXYGENS_PER_CARBOHYDRATE * num_carb as f64);
+        compute.increment_macro("H", HYDROGENS_PER_CARBOHYDRATE * num_carb as f64);
         compute.num_carb = num_carb as f64;
 
         // Multiply by num_monomers
         compute.multiply_atoms(num_monomers as f64);
 
         compute.calculate_density();
-        Ok(CoefCalcFromSequenceSAXS { compute, total_molecular_weight: total_mw })
+        Ok(CoefCalcFromSequenceSAXS {
+            compute,
+            total_molecular_weight: total_mw,
+        })
     }
 }
 
@@ -95,7 +111,10 @@ fn calculate_num_monomers_from_mw(
         eprintln!("WARNING: calculated monomers < 1; increase unit cell size. Using 1.");
         return 1;
     }
-    eprintln!("Calculated number of monomers in cell volume: {}", num as i32);
+    eprintln!(
+        "Calculated number of monomers in cell volume: {}",
+        num as i32
+    );
     num as i32
 }
 
@@ -111,13 +130,25 @@ impl CoefCalc for CoefCalcFromSequenceSAXS {
         self.compute.elas_coeff_macro = coh_m;
     }
 
-    fn absorption_coefficient(&self) -> f64 { self.compute.abs_coeff_photo }
-    fn attenuation_coefficient(&self) -> f64 { self.compute.att_coeff }
-    fn elastic_coefficient(&self) -> f64 { self.compute.elas_coeff }
-    fn inelastic_coefficient(&self) -> f64 { self.compute.abs_coeff_comp }
-    fn density(&self) -> f64 { self.compute.crystal_density }
+    fn absorption_coefficient(&self) -> f64 {
+        self.compute.abs_coeff_photo
+    }
+    fn attenuation_coefficient(&self) -> f64 {
+        self.compute.att_coeff
+    }
+    fn elastic_coefficient(&self) -> f64 {
+        self.compute.elas_coeff
+    }
+    fn inelastic_coefficient(&self) -> f64 {
+        self.compute.abs_coeff_comp
+    }
+    fn density(&self) -> f64 {
+        self.compute.crystal_density
+    }
     fn fluorescent_escape_factors(&self, beam_energy: f64) -> Vec<Vec<f64>> {
         self.compute.calc_fluorescent_escape_factors(beam_energy)
     }
-    fn solvent_fraction(&self) -> f64 { self.compute.sol_fraction }
+    fn solvent_fraction(&self) -> f64 {
+        self.compute.sol_fraction
+    }
 }

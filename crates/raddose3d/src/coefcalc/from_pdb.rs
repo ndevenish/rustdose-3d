@@ -1,20 +1,20 @@
-use crate::residue::get_residue_by_three_letter;
 use crate::parser::config::CrystalConfig;
+use crate::residue::get_residue_by_three_letter;
 
 use super::compute::CoefCalcCompute;
 use super::CoefCalc;
 
 // PDB column positions (0-based, Rust slicing = [start..end])
-const CRYST1_A:     (usize, usize) = (6,  15);
-const CRYST1_B:     (usize, usize) = (15, 24);
-const CRYST1_C:     (usize, usize) = (24, 33);
+const CRYST1_A: (usize, usize) = (6, 15);
+const CRYST1_B: (usize, usize) = (15, 24);
+const CRYST1_C: (usize, usize) = (24, 33);
 const CRYST1_ALPHA: (usize, usize) = (33, 40);
-const CRYST1_BETA:  (usize, usize) = (40, 47);
+const CRYST1_BETA: (usize, usize) = (40, 47);
 const CRYST1_GAMMA: (usize, usize) = (47, 54);
 
 const ATOM_RESIDUE_NAME: (usize, usize) = (17, 20);
-const OCCUPANCY:         (usize, usize) = (54, 60);
-const ELEMENT_SYMBOL:    (usize, usize) = (76, 78);
+const OCCUPANCY: (usize, usize) = (54, 60);
+const ELEMENT_SYMBOL: (usize, usize) = (76, 78);
 
 const SEQRES_START: usize = 19;
 const SEQRES_RESI_LEN: usize = 3;
@@ -33,11 +33,18 @@ pub struct CoefCalcFromPDB {
 
 impl CoefCalcFromPDB {
     pub fn from_config(config: &CrystalConfig) -> Result<Self, String> {
-        let pdb_code = config.pdb.as_deref().ok_or("PDB mode requires pdb code or path")?;
+        let pdb_code = config
+            .pdb
+            .as_deref()
+            .ok_or("PDB mode requires pdb code or path")?;
 
         // Solvent concentrations (added before parsing)
         let mut compute = CoefCalcCompute::new();
-        let solv_names: Vec<String> = config.heavy_solution_conc.iter().map(|e| e.symbol.clone()).collect();
+        let solv_names: Vec<String> = config
+            .heavy_solution_conc
+            .iter()
+            .map(|e| e.symbol.clone())
+            .collect();
         let solv_concs: Vec<f64> = config.heavy_solution_conc.iter().map(|e| e.count).collect();
         if !solv_names.is_empty() {
             compute.add_solvent_concentrations(&solv_names, &solv_concs);
@@ -57,7 +64,9 @@ impl CoefCalcFromPDB {
         let mut found_cryst1 = false;
 
         for line in content.lines() {
-            if line.len() < 6 { continue; }
+            if line.len() < 6 {
+                continue;
+            }
             let directive = &line[..6];
 
             match directive {
@@ -73,10 +82,10 @@ impl CoefCalcFromPDB {
                     parse_seqres(line, &mut compute);
                 }
                 "REMARK" => {
-                    if line.len() >= SMTRY1_POS.1 {
-                        if &line[SMTRY1_POS.0..SMTRY1_POS.1] == "SMTRY1" {
-                            cs_sym += 1;
-                        }
+                    if line.len() >= SMTRY1_POS.1
+                        && &line[SMTRY1_POS.0..SMTRY1_POS.1] == "SMTRY1"
+                    {
+                        cs_sym += 1;
                     }
                 }
                 "MTRIX1" => {
@@ -117,24 +126,45 @@ fn parse_cryst1(line: &str, compute: &mut CoefCalcCompute) -> bool {
     let a: f64 = get(CRYST1_A).and_then(|s| s.parse().ok()).unwrap_or(0.0);
     let b: f64 = get(CRYST1_B).and_then(|s| s.parse().ok()).unwrap_or(0.0);
     let c: f64 = get(CRYST1_C).and_then(|s| s.parse().ok()).unwrap_or(0.0);
-    let alpha: f64 = get(CRYST1_ALPHA).and_then(|s| s.parse().ok()).unwrap_or(90.0);
-    let beta:  f64 = get(CRYST1_BETA).and_then(|s| s.parse().ok()).unwrap_or(90.0);
-    let gamma: f64 = get(CRYST1_GAMMA).and_then(|s| s.parse().ok()).unwrap_or(90.0);
-    if a == 0.0 { return false; }
+    let alpha: f64 = get(CRYST1_ALPHA)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(90.0);
+    let beta: f64 = get(CRYST1_BETA)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(90.0);
+    let gamma: f64 = get(CRYST1_GAMMA)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(90.0);
+    if a == 0.0 {
+        return false;
+    }
     eprintln!("PDB unit cell: {a} {b} {c} {alpha} {beta} {gamma}");
     compute.calculate_cell_volume(a, b, c, alpha, beta, gamma);
     true
 }
 
 fn parse_hetatm(line: &str, compute: &mut CoefCalcCompute, warned: &mut bool) {
-    if line.len() < ELEMENT_SYMBOL.1 { return; }
-    let residue_name = line.get(ATOM_RESIDUE_NAME.0..ATOM_RESIDUE_NAME.1)
-        .map(str::trim).unwrap_or("").to_uppercase();
-    if residue_name == "HOH" { return; }
+    if line.len() < ELEMENT_SYMBOL.1 {
+        return;
+    }
+    let residue_name = line
+        .get(ATOM_RESIDUE_NAME.0..ATOM_RESIDUE_NAME.1)
+        .map(str::trim)
+        .unwrap_or("")
+        .to_uppercase();
+    if residue_name == "HOH" {
+        return;
+    }
 
-    let occ_str = line.get(OCCUPANCY.0..OCCUPANCY.1).map(str::trim).unwrap_or("");
-    let element_sym = line.get(ELEMENT_SYMBOL.0..ELEMENT_SYMBOL.1)
-        .map(str::trim).unwrap_or("").to_uppercase();
+    let occ_str = line
+        .get(OCCUPANCY.0..OCCUPANCY.1)
+        .map(str::trim)
+        .unwrap_or("");
+    let element_sym = line
+        .get(ELEMENT_SYMBOL.0..ELEMENT_SYMBOL.1)
+        .map(str::trim)
+        .unwrap_or("")
+        .to_uppercase();
 
     let occ: f64 = if occ_str.is_empty() {
         if !*warned {
@@ -146,34 +176,45 @@ fn parse_hetatm(line: &str, compute: &mut CoefCalcCompute, warned: &mut bool) {
         occ_str.parse().unwrap_or(1.0)
     };
 
-    if element_sym.is_empty() { return; }
+    if element_sym.is_empty() {
+        return;
+    }
     compute.increment_macro(&element_sym, occ);
     // Also track in hetero_atom_occurrence
-    *compute.hetero_atom_occurrence.entry(element_sym).or_insert(0.0) += occ;
+    *compute
+        .hetero_atom_occurrence
+        .entry(element_sym)
+        .or_insert(0.0) += occ;
 }
 
 fn parse_seqres(line: &str, compute: &mut CoefCalcCompute) {
-    if line.len() <= SEQRES_START { return; }
+    if line.len() <= SEQRES_START {
+        return;
+    }
     let mut seq = &line[SEQRES_START..];
     while seq.len() >= SEQRES_RESI_LEN {
         let three = seq[..SEQRES_RESI_LEN].trim();
         seq = &seq[SEQRES_RESI_LEN..];
         // skip leading space after residue
-        if seq.starts_with(' ') { seq = &seq[1..]; }
-        if three.is_empty() { continue; }
+        if seq.starts_with(' ') {
+            seq = &seq[1..];
+        }
+        if three.is_empty() {
+            continue;
+        }
         if let Some(res) = get_residue_by_three_letter(three) {
             match res.residue_type {
                 crate::residue::TYPE_PROTEIN => compute.num_amino_acids += 1.0,
-                crate::residue::TYPE_RNA     => compute.num_rna += 1.0,
-                crate::residue::TYPE_DNA     => compute.num_dna += 1.0,
+                crate::residue::TYPE_RNA => compute.num_rna += 1.0,
+                crate::residue::TYPE_DNA => compute.num_dna += 1.0,
                 _ => {}
             }
-            compute.increment_macro("H",  res.hydrogens);
-            compute.increment_macro("O",  res.oxygens);
-            compute.increment_macro("C",  res.carbons);
-            compute.increment_macro("N",  res.nitrogens);
-            compute.increment_macro("P",  res.phosphoruses);
-            compute.increment_macro("S",  res.sulphurs);
+            compute.increment_macro("H", res.hydrogens);
+            compute.increment_macro("O", res.oxygens);
+            compute.increment_macro("C", res.carbons);
+            compute.increment_macro("N", res.nitrogens);
+            compute.increment_macro("P", res.phosphoruses);
+            compute.increment_macro("S", res.sulphurs);
             if res.seleniums > 0.0 {
                 compute.increment_macro("SE", res.seleniums);
             }
@@ -196,8 +237,7 @@ fn download_pdb(code: &str) -> Result<String, String> {
     if !output.status.success() {
         return Err(format!("curl failed with status {}", output.status));
     }
-    String::from_utf8(output.stdout)
-        .map_err(|e| format!("PDB response is not valid UTF-8: {e}"))
+    String::from_utf8(output.stdout).map_err(|e| format!("PDB response is not valid UTF-8: {e}"))
 }
 
 impl CoefCalc for CoefCalcFromPDB {
@@ -212,13 +252,25 @@ impl CoefCalc for CoefCalcFromPDB {
         self.compute.elas_coeff_macro = coh_m;
     }
 
-    fn absorption_coefficient(&self) -> f64 { self.compute.abs_coeff_photo }
-    fn attenuation_coefficient(&self) -> f64 { self.compute.att_coeff }
-    fn elastic_coefficient(&self) -> f64 { self.compute.elas_coeff }
-    fn inelastic_coefficient(&self) -> f64 { self.compute.abs_coeff_comp }
-    fn density(&self) -> f64 { self.compute.crystal_density }
+    fn absorption_coefficient(&self) -> f64 {
+        self.compute.abs_coeff_photo
+    }
+    fn attenuation_coefficient(&self) -> f64 {
+        self.compute.att_coeff
+    }
+    fn elastic_coefficient(&self) -> f64 {
+        self.compute.elas_coeff
+    }
+    fn inelastic_coefficient(&self) -> f64 {
+        self.compute.abs_coeff_comp
+    }
+    fn density(&self) -> f64 {
+        self.compute.crystal_density
+    }
     fn fluorescent_escape_factors(&self, beam_energy: f64) -> Vec<Vec<f64>> {
         self.compute.calc_fluorescent_escape_factors(beam_energy)
     }
-    fn solvent_fraction(&self) -> f64 { self.compute.sol_fraction }
+    fn solvent_fraction(&self) -> f64 {
+        self.compute.sol_fraction
+    }
 }

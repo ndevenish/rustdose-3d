@@ -10,7 +10,8 @@ const LJ_1: f64 = 1.160;
 /// LJ_2 correction factor for light elements (from Fortran code).
 const LJ_2: f64 = 1.41;
 
-/// Absorption edge tolerance in keV.
+/// Absorption edge tolerance in keV (reserved for phase-6 edge-handling).
+#[allow(dead_code)]
 const ABSORPTION_EDGE_TOLERANCE: f64 = 0.001;
 
 /// Number of polynomial expansion terms.
@@ -23,77 +24,77 @@ pub const LIGHT_ATOM_MAX_NUM: i32 = 29;
 /// Each variant holds its column index (0-based).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DatabaseField {
-    EdgeK,            // 2
-    EdgeL,            // 3
-    EdgeM,            // 4
-    KCoeff0,          // 5
-    KCoeff1,          // 6
-    KCoeff2,          // 7
-    KCoeff3,          // 8
-    LCoeff0,          // 9
-    LCoeff1,          // 10
-    LCoeff2,          // 11
-    LCoeff3,          // 12
-    MCoeff0,          // 13
-    MCoeff1,          // 14
-    MCoeff2,          // 15
-    MCoeff3,          // 16
-    NCoeff0,          // 17
-    NCoeff1,          // 18
-    NCoeff2,          // 19
-    NCoeff3,          // 20
-    AtomicWeight,     // 23
-    CoherentCoeff0,   // 24
-    CoherentCoeff1,   // 25
-    CoherentCoeff2,   // 26
-    CoherentCoeff3,   // 27
-    IncoherentCoeff0, // 28
-    IncoherentCoeff1, // 29
-    IncoherentCoeff2, // 30
-    IncoherentCoeff3, // 31
-    L2,               // 36
-    L3,               // 37
-    FluorescenceYieldK,  // 39
-    FluorescenceYieldL1, // 40
-    FluorescenceYieldL2, // 41
-    FluorescenceYieldL3, // 42
-    KEdgeRatio,       // 43
-    L1EdgeRatio,      // 44
-    L2EdgeRatio,      // 45
-    L3EdgeRatio,      // 46
-    KFlAverage,       // 47
-    LFlAverage,       // 48
-    EdgeM2,           // 49
-    EdgeM3,           // 50
-    EdgeM4,           // 51
-    EdgeM5,           // 52
-    M1EdgeRatio,      // 53
-    M2EdgeRatio,      // 54
-    M3EdgeRatio,      // 55
-    M4EdgeRatio,      // 56
-    M5EdgeRatio,      // 57
-    EminLow,          // 58
-    EmaxLow,          // 59
-    BKlow,            // 60
-    CKlow,            // 61
-    EminHigh,         // 62
-    BKhigh,           // 63
-    CKhigh,           // 64
-    El50,             // 65
-    El100,            // 66
-    El150,            // 67
-    El200,            // 68
-    El250,            // 69
-    El300,            // 70
+    EdgeK,                   // 2
+    EdgeL,                   // 3
+    EdgeM,                   // 4
+    KCoeff0,                 // 5
+    KCoeff1,                 // 6
+    KCoeff2,                 // 7
+    KCoeff3,                 // 8
+    LCoeff0,                 // 9
+    LCoeff1,                 // 10
+    LCoeff2,                 // 11
+    LCoeff3,                 // 12
+    MCoeff0,                 // 13
+    MCoeff1,                 // 14
+    MCoeff2,                 // 15
+    MCoeff3,                 // 16
+    NCoeff0,                 // 17
+    NCoeff1,                 // 18
+    NCoeff2,                 // 19
+    NCoeff3,                 // 20
+    AtomicWeight,            // 23
+    CoherentCoeff0,          // 24
+    CoherentCoeff1,          // 25
+    CoherentCoeff2,          // 26
+    CoherentCoeff3,          // 27
+    IncoherentCoeff0,        // 28
+    IncoherentCoeff1,        // 29
+    IncoherentCoeff2,        // 30
+    IncoherentCoeff3,        // 31
+    L2,                      // 36
+    L3,                      // 37
+    FluorescenceYieldK,      // 39
+    FluorescenceYieldL1,     // 40
+    FluorescenceYieldL2,     // 41
+    FluorescenceYieldL3,     // 42
+    KEdgeRatio,              // 43
+    L1EdgeRatio,             // 44
+    L2EdgeRatio,             // 45
+    L3EdgeRatio,             // 46
+    KFlAverage,              // 47
+    LFlAverage,              // 48
+    EdgeM2,                  // 49
+    EdgeM3,                  // 50
+    EdgeM4,                  // 51
+    EdgeM5,                  // 52
+    M1EdgeRatio,             // 53
+    M2EdgeRatio,             // 54
+    M3EdgeRatio,             // 55
+    M4EdgeRatio,             // 56
+    M5EdgeRatio,             // 57
+    EminLow,                 // 58
+    EmaxLow,                 // 59
+    BKlow,                   // 60
+    CKlow,                   // 61
+    EminHigh,                // 62
+    BKhigh,                  // 63
+    CKhigh,                  // 64
+    El50,                    // 65
+    El100,                   // 66
+    El150,                   // 67
+    El200,                   // 68
+    El250,                   // 69
+    El300,                   // 70
     MeanIonisationPotential, // 71
-    L1,               // 72
-    M1,               // 73
-    N1,               // 74
-    FluorescenceYieldM1, // 75
-    FluorescenceYieldM2, // 76
-    FluorescenceYieldM3, // 77
-    FluorescenceYieldM4, // 78
-    FluorescenceYieldM5, // 79
+    L1,                      // 72
+    M1,                      // 73
+    N1,                      // 74
+    FluorescenceYieldM1,     // 75
+    FluorescenceYieldM2,     // 76
+    FluorescenceYieldM3,     // 77
+    FluorescenceYieldM4,     // 78
+    FluorescenceYieldM5,     // 79
 }
 
 impl DatabaseField {
@@ -176,25 +177,77 @@ impl DatabaseField {
     fn all() -> &'static [DatabaseField] {
         use DatabaseField::*;
         &[
-            EdgeK, EdgeL, EdgeM,
-            KCoeff0, KCoeff1, KCoeff2, KCoeff3,
-            LCoeff0, LCoeff1, LCoeff2, LCoeff3,
-            MCoeff0, MCoeff1, MCoeff2, MCoeff3,
-            NCoeff0, NCoeff1, NCoeff2, NCoeff3,
+            EdgeK,
+            EdgeL,
+            EdgeM,
+            KCoeff0,
+            KCoeff1,
+            KCoeff2,
+            KCoeff3,
+            LCoeff0,
+            LCoeff1,
+            LCoeff2,
+            LCoeff3,
+            MCoeff0,
+            MCoeff1,
+            MCoeff2,
+            MCoeff3,
+            NCoeff0,
+            NCoeff1,
+            NCoeff2,
+            NCoeff3,
             AtomicWeight,
-            CoherentCoeff0, CoherentCoeff1, CoherentCoeff2, CoherentCoeff3,
-            IncoherentCoeff0, IncoherentCoeff1, IncoherentCoeff2, IncoherentCoeff3,
-            L2, L3,
-            FluorescenceYieldK, FluorescenceYieldL1, FluorescenceYieldL2, FluorescenceYieldL3,
-            KEdgeRatio, L1EdgeRatio, L2EdgeRatio, L3EdgeRatio,
-            KFlAverage, LFlAverage,
-            EdgeM2, EdgeM3, EdgeM4, EdgeM5,
-            M1EdgeRatio, M2EdgeRatio, M3EdgeRatio, M4EdgeRatio, M5EdgeRatio,
-            EminLow, EmaxLow, BKlow, CKlow, EminHigh, BKhigh, CKhigh,
-            El50, El100, El150, El200, El250, El300,
-            MeanIonisationPotential, L1, M1, N1,
-            FluorescenceYieldM1, FluorescenceYieldM2, FluorescenceYieldM3,
-            FluorescenceYieldM4, FluorescenceYieldM5,
+            CoherentCoeff0,
+            CoherentCoeff1,
+            CoherentCoeff2,
+            CoherentCoeff3,
+            IncoherentCoeff0,
+            IncoherentCoeff1,
+            IncoherentCoeff2,
+            IncoherentCoeff3,
+            L2,
+            L3,
+            FluorescenceYieldK,
+            FluorescenceYieldL1,
+            FluorescenceYieldL2,
+            FluorescenceYieldL3,
+            KEdgeRatio,
+            L1EdgeRatio,
+            L2EdgeRatio,
+            L3EdgeRatio,
+            KFlAverage,
+            LFlAverage,
+            EdgeM2,
+            EdgeM3,
+            EdgeM4,
+            EdgeM5,
+            M1EdgeRatio,
+            M2EdgeRatio,
+            M3EdgeRatio,
+            M4EdgeRatio,
+            M5EdgeRatio,
+            EminLow,
+            EmaxLow,
+            BKlow,
+            CKlow,
+            EminHigh,
+            BKhigh,
+            CKhigh,
+            El50,
+            El100,
+            El150,
+            El200,
+            El250,
+            El300,
+            MeanIonisationPotential,
+            L1,
+            M1,
+            N1,
+            FluorescenceYieldM1,
+            FluorescenceYieldM2,
+            FluorescenceYieldM3,
+            FluorescenceYieldM4,
+            FluorescenceYieldM5,
         ]
     }
 }
@@ -241,11 +294,7 @@ pub struct Element {
 }
 
 impl Element {
-    fn new(
-        name: String,
-        atomic_number: i32,
-        data: HashMap<DatabaseField, Option<f64>>,
-    ) -> Self {
+    fn new(name: String, atomic_number: i32, data: HashMap<DatabaseField, Option<f64>>) -> Self {
         let coefficients = Self::build_coefficients(&data);
 
         let mut elem = Element {
@@ -272,34 +321,62 @@ impl Element {
     ) -> HashMap<AbsorptionEdge, [f64; POLYNOMIAL_EXPANSION]> {
         let mut map = HashMap::new();
 
-        let get = |f: DatabaseField| -> f64 {
-            data.get(&f).and_then(|v| *v).unwrap_or(0.0)
-        };
+        let get = |f: DatabaseField| -> f64 { data.get(&f).and_then(|v| *v).unwrap_or(0.0) };
 
-        map.insert(AbsorptionEdge::K, [
-            get(DatabaseField::KCoeff0), get(DatabaseField::KCoeff1),
-            get(DatabaseField::KCoeff2), get(DatabaseField::KCoeff3),
-        ]);
-        map.insert(AbsorptionEdge::L, [
-            get(DatabaseField::LCoeff0), get(DatabaseField::LCoeff1),
-            get(DatabaseField::LCoeff2), get(DatabaseField::LCoeff3),
-        ]);
-        map.insert(AbsorptionEdge::M, [
-            get(DatabaseField::MCoeff0), get(DatabaseField::MCoeff1),
-            get(DatabaseField::MCoeff2), get(DatabaseField::MCoeff3),
-        ]);
-        map.insert(AbsorptionEdge::N, [
-            get(DatabaseField::NCoeff0), get(DatabaseField::NCoeff1),
-            get(DatabaseField::NCoeff2), get(DatabaseField::NCoeff3),
-        ]);
-        map.insert(AbsorptionEdge::C, [
-            get(DatabaseField::CoherentCoeff0), get(DatabaseField::CoherentCoeff1),
-            get(DatabaseField::CoherentCoeff2), get(DatabaseField::CoherentCoeff3),
-        ]);
-        map.insert(AbsorptionEdge::I, [
-            get(DatabaseField::IncoherentCoeff0), get(DatabaseField::IncoherentCoeff1),
-            get(DatabaseField::IncoherentCoeff2), get(DatabaseField::IncoherentCoeff3),
-        ]);
+        map.insert(
+            AbsorptionEdge::K,
+            [
+                get(DatabaseField::KCoeff0),
+                get(DatabaseField::KCoeff1),
+                get(DatabaseField::KCoeff2),
+                get(DatabaseField::KCoeff3),
+            ],
+        );
+        map.insert(
+            AbsorptionEdge::L,
+            [
+                get(DatabaseField::LCoeff0),
+                get(DatabaseField::LCoeff1),
+                get(DatabaseField::LCoeff2),
+                get(DatabaseField::LCoeff3),
+            ],
+        );
+        map.insert(
+            AbsorptionEdge::M,
+            [
+                get(DatabaseField::MCoeff0),
+                get(DatabaseField::MCoeff1),
+                get(DatabaseField::MCoeff2),
+                get(DatabaseField::MCoeff3),
+            ],
+        );
+        map.insert(
+            AbsorptionEdge::N,
+            [
+                get(DatabaseField::NCoeff0),
+                get(DatabaseField::NCoeff1),
+                get(DatabaseField::NCoeff2),
+                get(DatabaseField::NCoeff3),
+            ],
+        );
+        map.insert(
+            AbsorptionEdge::C,
+            [
+                get(DatabaseField::CoherentCoeff0),
+                get(DatabaseField::CoherentCoeff1),
+                get(DatabaseField::CoherentCoeff2),
+                get(DatabaseField::CoherentCoeff3),
+            ],
+        );
+        map.insert(
+            AbsorptionEdge::I,
+            [
+                get(DatabaseField::IncoherentCoeff0),
+                get(DatabaseField::IncoherentCoeff1),
+                get(DatabaseField::IncoherentCoeff2),
+                get(DatabaseField::IncoherentCoeff3),
+            ],
+        );
 
         map
     }
@@ -311,7 +388,11 @@ impl Element {
             match ratio {
                 Some(r) if r != 0.0 => {
                     let p = 1.0 - 1.0 / r;
-                    if p == f64::NEG_INFINITY { 1.0 } else { p }
+                    if p == f64::NEG_INFINITY {
+                        1.0
+                    } else {
+                        p
+                    }
                 }
                 _ => 1.0,
             }
@@ -333,13 +414,13 @@ impl Element {
         let coeffs = &self.coefficients[&edge];
         let mut sum = 0.0;
 
-        for i in 0..POLYNOMIAL_EXPANSION {
+        for (i, &c) in coeffs[..POLYNOMIAL_EXPANSION].iter().enumerate() {
             if energy == 1.0 {
                 // Match Java behavior: at E=1keV, ln(1)=0, so pow(0,i)
                 // would be 0 for i>0. Java adds coeffs[i] directly.
-                sum += coeffs[i];
+                sum += c;
             } else {
-                sum += coeffs[i] * energy.ln().powi(i as i32);
+                sum += c * energy.ln().powi(i as i32);
             }
         }
 
@@ -357,7 +438,11 @@ impl Element {
             0.0
         };
 
-        let compton = if self.get_field(DatabaseField::IncoherentCoeff0).unwrap_or(0.0) != 0.0 {
+        let compton = if self
+            .get_field(DatabaseField::IncoherentCoeff0)
+            .unwrap_or(0.0)
+            != 0.0
+        {
             self.bax_for_edge(energy, AbsorptionEdge::I)
         } else {
             0.0
@@ -375,7 +460,9 @@ impl Element {
 
     /// Determine photoelectric cross-section for a given energy.
     fn get_photoelectric_xs(&self, energy: f64) -> f64 {
-        let edge_k = self.get_field(DatabaseField::EdgeK).expect("K edge undefined");
+        let edge_k = self
+            .get_field(DatabaseField::EdgeK)
+            .expect("K edge undefined");
         let edge_l = self.get_field(DatabaseField::EdgeL);
         let _edge_l2 = self.get_field(DatabaseField::L2);
         let edge_l3 = self.get_field(DatabaseField::L3);
@@ -414,8 +501,12 @@ impl Element {
         self.data.get(&field).and_then(|v| *v)
     }
 
-    pub fn name(&self) -> &str { &self.name }
-    pub fn atomic_number(&self) -> i32 { self.atomic_number }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn atomic_number(&self) -> i32 {
+        self.atomic_number
+    }
 
     pub fn atomic_weight(&self) -> f64 {
         self.get_field(DatabaseField::AtomicWeight).unwrap_or(0.0)
@@ -425,42 +516,106 @@ impl Element {
         self.atomic_weight() * ATOMIC_MASS_UNIT
     }
 
-    pub fn k_edge(&self) -> Option<f64> { self.get_field(DatabaseField::EdgeK) }
-    pub fn l1_edge(&self) -> Option<f64> { self.get_field(DatabaseField::EdgeL) }
-    pub fn l2_edge(&self) -> Option<f64> { self.get_field(DatabaseField::L2) }
-    pub fn l3_edge(&self) -> Option<f64> { self.get_field(DatabaseField::L3) }
-    pub fn l1_binding(&self) -> Option<f64> { self.get_field(DatabaseField::L1) }
-    pub fn m1_binding(&self) -> Option<f64> { self.get_field(DatabaseField::M1) }
-    pub fn n1_binding(&self) -> Option<f64> { self.get_field(DatabaseField::N1) }
+    pub fn k_edge(&self) -> Option<f64> {
+        self.get_field(DatabaseField::EdgeK)
+    }
+    pub fn l1_edge(&self) -> Option<f64> {
+        self.get_field(DatabaseField::EdgeL)
+    }
+    pub fn l2_edge(&self) -> Option<f64> {
+        self.get_field(DatabaseField::L2)
+    }
+    pub fn l3_edge(&self) -> Option<f64> {
+        self.get_field(DatabaseField::L3)
+    }
+    pub fn l1_binding(&self) -> Option<f64> {
+        self.get_field(DatabaseField::L1)
+    }
+    pub fn m1_binding(&self) -> Option<f64> {
+        self.get_field(DatabaseField::M1)
+    }
+    pub fn n1_binding(&self) -> Option<f64> {
+        self.get_field(DatabaseField::N1)
+    }
 
-    pub fn m1_edge(&self) -> f64 { self.get_field(DatabaseField::EdgeM).unwrap_or(0.0) }
-    pub fn m2_edge(&self) -> Option<f64> { self.get_field(DatabaseField::EdgeM2) }
-    pub fn m3_edge(&self) -> Option<f64> { self.get_field(DatabaseField::EdgeM3) }
-    pub fn m4_edge(&self) -> Option<f64> { self.get_field(DatabaseField::EdgeM4) }
-    pub fn m5_edge(&self) -> Option<f64> { self.get_field(DatabaseField::EdgeM5) }
+    pub fn m1_edge(&self) -> f64 {
+        self.get_field(DatabaseField::EdgeM).unwrap_or(0.0)
+    }
+    pub fn m2_edge(&self) -> Option<f64> {
+        self.get_field(DatabaseField::EdgeM2)
+    }
+    pub fn m3_edge(&self) -> Option<f64> {
+        self.get_field(DatabaseField::EdgeM3)
+    }
+    pub fn m4_edge(&self) -> Option<f64> {
+        self.get_field(DatabaseField::EdgeM4)
+    }
+    pub fn m5_edge(&self) -> Option<f64> {
+        self.get_field(DatabaseField::EdgeM5)
+    }
 
-    pub fn k_fluorescence_yield(&self) -> Option<f64> { self.get_field(DatabaseField::FluorescenceYieldK) }
-    pub fn l1_fluorescence_yield(&self) -> Option<f64> { self.get_field(DatabaseField::FluorescenceYieldL1) }
-    pub fn l2_fluorescence_yield(&self) -> Option<f64> { self.get_field(DatabaseField::FluorescenceYieldL2) }
-    pub fn l3_fluorescence_yield(&self) -> Option<f64> { self.get_field(DatabaseField::FluorescenceYieldL3) }
-    pub fn m1_fluorescence_yield(&self) -> Option<f64> { self.get_field(DatabaseField::FluorescenceYieldM1) }
-    pub fn m2_fluorescence_yield(&self) -> Option<f64> { self.get_field(DatabaseField::FluorescenceYieldM2) }
-    pub fn m3_fluorescence_yield(&self) -> Option<f64> { self.get_field(DatabaseField::FluorescenceYieldM3) }
-    pub fn m4_fluorescence_yield(&self) -> Option<f64> { self.get_field(DatabaseField::FluorescenceYieldM4) }
-    pub fn m5_fluorescence_yield(&self) -> Option<f64> { self.get_field(DatabaseField::FluorescenceYieldM5) }
+    pub fn k_fluorescence_yield(&self) -> Option<f64> {
+        self.get_field(DatabaseField::FluorescenceYieldK)
+    }
+    pub fn l1_fluorescence_yield(&self) -> Option<f64> {
+        self.get_field(DatabaseField::FluorescenceYieldL1)
+    }
+    pub fn l2_fluorescence_yield(&self) -> Option<f64> {
+        self.get_field(DatabaseField::FluorescenceYieldL2)
+    }
+    pub fn l3_fluorescence_yield(&self) -> Option<f64> {
+        self.get_field(DatabaseField::FluorescenceYieldL3)
+    }
+    pub fn m1_fluorescence_yield(&self) -> Option<f64> {
+        self.get_field(DatabaseField::FluorescenceYieldM1)
+    }
+    pub fn m2_fluorescence_yield(&self) -> Option<f64> {
+        self.get_field(DatabaseField::FluorescenceYieldM2)
+    }
+    pub fn m3_fluorescence_yield(&self) -> Option<f64> {
+        self.get_field(DatabaseField::FluorescenceYieldM3)
+    }
+    pub fn m4_fluorescence_yield(&self) -> Option<f64> {
+        self.get_field(DatabaseField::FluorescenceYieldM4)
+    }
+    pub fn m5_fluorescence_yield(&self) -> Option<f64> {
+        self.get_field(DatabaseField::FluorescenceYieldM5)
+    }
 
-    pub fn k_ionisation_prob(&self) -> f64 { self.prob_k_ionisation }
-    pub fn l1_ionisation_prob(&self) -> f64 { self.prob_l1_ionisation }
-    pub fn l2_ionisation_prob(&self) -> f64 { self.prob_l2_ionisation }
-    pub fn l3_ionisation_prob(&self) -> f64 { self.prob_l3_ionisation }
-    pub fn m1_ionisation_prob(&self) -> f64 { self.prob_m1_ionisation }
-    pub fn m2_ionisation_prob(&self) -> f64 { self.prob_m2_ionisation }
-    pub fn m3_ionisation_prob(&self) -> f64 { self.prob_m3_ionisation }
-    pub fn m4_ionisation_prob(&self) -> f64 { self.prob_m4_ionisation }
-    pub fn m5_ionisation_prob(&self) -> f64 { self.prob_m5_ionisation }
+    pub fn k_ionisation_prob(&self) -> f64 {
+        self.prob_k_ionisation
+    }
+    pub fn l1_ionisation_prob(&self) -> f64 {
+        self.prob_l1_ionisation
+    }
+    pub fn l2_ionisation_prob(&self) -> f64 {
+        self.prob_l2_ionisation
+    }
+    pub fn l3_ionisation_prob(&self) -> f64 {
+        self.prob_l3_ionisation
+    }
+    pub fn m1_ionisation_prob(&self) -> f64 {
+        self.prob_m1_ionisation
+    }
+    pub fn m2_ionisation_prob(&self) -> f64 {
+        self.prob_m2_ionisation
+    }
+    pub fn m3_ionisation_prob(&self) -> f64 {
+        self.prob_m3_ionisation
+    }
+    pub fn m4_ionisation_prob(&self) -> f64 {
+        self.prob_m4_ionisation
+    }
+    pub fn m5_ionisation_prob(&self) -> f64 {
+        self.prob_m5_ionisation
+    }
 
-    pub fn k_fl_average(&self) -> Option<f64> { self.get_field(DatabaseField::KFlAverage) }
-    pub fn l_fl_average(&self) -> Option<f64> { self.get_field(DatabaseField::LFlAverage) }
+    pub fn k_fl_average(&self) -> Option<f64> {
+        self.get_field(DatabaseField::KFlAverage)
+    }
+    pub fn l_fl_average(&self) -> Option<f64> {
+        self.get_field(DatabaseField::LFlAverage)
+    }
 
     /// ELSEPA elastic cross sections at 50, 100, 150, 200, 250, 300 keV.
     pub fn elsepa_coefficients(&self) -> [f64; 6] {
@@ -474,15 +629,30 @@ impl Element {
         ]
     }
 
-    pub fn emin_low(&self) -> Option<f64> { self.get_field(DatabaseField::EminLow) }
-    pub fn emax_low(&self) -> Option<f64> { self.get_field(DatabaseField::EmaxLow) }
-    pub fn bk_low(&self) -> Option<f64> { self.get_field(DatabaseField::BKlow) }
-    pub fn ck_low(&self) -> Option<f64> { self.get_field(DatabaseField::CKlow) }
-    pub fn emin_high(&self) -> Option<f64> { self.get_field(DatabaseField::EminHigh) }
-    pub fn bk_high(&self) -> Option<f64> { self.get_field(DatabaseField::BKhigh) }
-    pub fn ck_high(&self) -> Option<f64> { self.get_field(DatabaseField::CKhigh) }
+    pub fn emin_low(&self) -> Option<f64> {
+        self.get_field(DatabaseField::EminLow)
+    }
+    pub fn emax_low(&self) -> Option<f64> {
+        self.get_field(DatabaseField::EmaxLow)
+    }
+    pub fn bk_low(&self) -> Option<f64> {
+        self.get_field(DatabaseField::BKlow)
+    }
+    pub fn ck_low(&self) -> Option<f64> {
+        self.get_field(DatabaseField::CKlow)
+    }
+    pub fn emin_high(&self) -> Option<f64> {
+        self.get_field(DatabaseField::EminHigh)
+    }
+    pub fn bk_high(&self) -> Option<f64> {
+        self.get_field(DatabaseField::BKhigh)
+    }
+    pub fn ck_high(&self) -> Option<f64> {
+        self.get_field(DatabaseField::CKhigh)
+    }
     pub fn mean_ionisation_potential(&self) -> f64 {
-        self.get_field(DatabaseField::MeanIonisationPotential).unwrap_or(0.0)
+        self.get_field(DatabaseField::MeanIonisationPotential)
+            .unwrap_or(0.0)
     }
 }
 
@@ -569,7 +739,11 @@ mod tests {
     #[test]
     fn test_database_loads() {
         let db = ElementDatabase::instance();
-        assert!(db.len() >= 80, "Should have at least 80 elements, got {}", db.len());
+        assert!(
+            db.len() >= 80,
+            "Should have at least 80 elements, got {}",
+            db.len()
+        );
     }
 
     #[test]
@@ -629,8 +803,12 @@ mod tests {
         let pe_below = xs_below[&CrossSection::Photoelectric];
 
         // Above K-edge should have much higher photoelectric XS
-        assert!(pe_above > pe_below * 2.0,
-            "PE above K-edge ({}) should be >> below ({})", pe_above, pe_below);
+        assert!(
+            pe_above > pe_below * 2.0,
+            "PE above K-edge ({}) should be >> below ({})",
+            pe_above,
+            pe_below
+        );
     }
 
     #[test]

@@ -77,7 +77,12 @@ impl DdmModel for DdmBfactor {
 }
 
 /// Create a DDM from parsed configuration.
-pub fn create_ddm(ddm_type: Option<DdmType>, gamma: Option<f64>, b0: Option<f64>, beta: Option<f64>) -> Box<dyn DdmModel> {
+pub fn create_ddm(
+    ddm_type: Option<DdmType>,
+    gamma: Option<f64>,
+    b0: Option<f64>,
+    beta: Option<f64>,
+) -> Box<dyn DdmModel> {
     match ddm_type {
         None | Some(DdmType::Simple) => Box::new(DdmSimple),
         Some(DdmType::Linear) => Box::new(DdmLinear {

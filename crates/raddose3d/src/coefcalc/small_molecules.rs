@@ -34,7 +34,11 @@ impl CoefCalcSmallMolecules {
         }
 
         // Heavy solvent concentrations
-        let solv_names: Vec<String> = config.heavy_solution_conc.iter().map(|e| e.symbol.clone()).collect();
+        let solv_names: Vec<String> = config
+            .heavy_solution_conc
+            .iter()
+            .map(|e| e.symbol.clone())
+            .collect();
         let solv_concs: Vec<f64> = config.heavy_solution_conc.iter().map(|e| e.count).collect();
         if !solv_names.is_empty() {
             compute.add_solvent_concentrations(&solv_names, &solv_concs);
@@ -65,13 +69,25 @@ impl CoefCalc for CoefCalcSmallMolecules {
         self.compute.elas_coeff_macro = coh_m;
     }
 
-    fn absorption_coefficient(&self) -> f64 { self.compute.abs_coeff_photo }
-    fn attenuation_coefficient(&self) -> f64 { self.compute.att_coeff }
-    fn elastic_coefficient(&self) -> f64 { self.compute.elas_coeff }
-    fn inelastic_coefficient(&self) -> f64 { self.compute.abs_coeff_comp }
-    fn density(&self) -> f64 { self.compute.crystal_density }
+    fn absorption_coefficient(&self) -> f64 {
+        self.compute.abs_coeff_photo
+    }
+    fn attenuation_coefficient(&self) -> f64 {
+        self.compute.att_coeff
+    }
+    fn elastic_coefficient(&self) -> f64 {
+        self.compute.elas_coeff
+    }
+    fn inelastic_coefficient(&self) -> f64 {
+        self.compute.abs_coeff_comp
+    }
+    fn density(&self) -> f64 {
+        self.compute.crystal_density
+    }
     fn fluorescent_escape_factors(&self, beam_energy: f64) -> Vec<Vec<f64>> {
         self.compute.calc_fluorescent_escape_factors(beam_energy)
     }
-    fn solvent_fraction(&self) -> f64 { self.compute.sol_fraction }
+    fn solvent_fraction(&self) -> f64 {
+        self.compute.sol_fraction
+    }
 }

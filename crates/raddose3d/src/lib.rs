@@ -1,14 +1,14 @@
-pub mod element;
-pub mod residue;
-pub mod energy_distribution;
-pub mod wedge;
-pub mod ddm;
-pub mod container;
 pub mod beam;
 pub mod coefcalc;
+pub mod container;
 pub mod crystal;
-pub mod output;
+pub mod ddm;
+pub mod element;
+pub mod energy_distribution;
 pub mod experiment;
+pub mod output;
+pub mod residue;
+pub mod wedge;
 
 pub use raddose3d_parser as parser;
 
