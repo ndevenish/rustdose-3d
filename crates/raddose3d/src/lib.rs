@@ -1,5 +1,6 @@
 pub mod element;
 pub mod residue;
+pub mod energy_distribution;
 pub mod wedge;
 pub mod ddm;
 pub mod container;
