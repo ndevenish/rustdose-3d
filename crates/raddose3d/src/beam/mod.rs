@@ -1,8 +1,10 @@
 pub mod gaussian;
 pub mod tophat;
+pub mod experimental;
 
 pub use gaussian::BeamGaussian;
 pub use tophat::BeamTophat;
+pub use experimental::BeamExperimental;
 
 use crate::container::Container;
 use crate::parser::config::BeamConfig;
@@ -84,6 +86,7 @@ pub fn create_beam(config: &BeamConfig) -> Result<Box<dyn Beam>, String> {
     match beam_type.as_str() {
         "gaussian" => Ok(Box::new(BeamGaussian::from_config(config)?)),
         "tophat" => Ok(Box::new(BeamTophat::from_config(config)?)),
+        "experimental" => Ok(Box::new(BeamExperimental::from_config(config)?)),
         other => Err(format!("Unknown beam type: {}", other)),
     }
 }
