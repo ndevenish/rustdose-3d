@@ -69,8 +69,9 @@ impl Experiment {
 
     /// Close the experiment.
     pub fn close(&mut self) {
+        let crystal_ref: Option<&dyn Crystal> = self.current_crystal.as_deref();
         for o in &mut self.observers {
-            o.close();
+            o.close(crystal_ref);
         }
         self.observers.clear();
         self.current_beam = None;

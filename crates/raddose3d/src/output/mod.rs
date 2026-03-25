@@ -1,12 +1,47 @@
+pub mod dwds;
 pub mod exposure_summary;
+pub mod final_dose_state;
+pub mod fluence_per_dose_hist;
+pub mod progress;
+pub mod rde_csv;
 pub mod summary;
+pub mod voxel_data;
 
+pub use dwds::OutputDWDs;
 pub use exposure_summary::ExposureSummary;
+pub use final_dose_state::{OutputFinalDoseStateCSV, OutputFinalDoseStateR};
+pub use fluence_per_dose_hist::OutputFluencePerDoseHistCSV;
+pub use progress::{OutputProgressEstimate, OutputProgressIndicator};
+pub use rde_csv::OutputRDECSV;
 pub use summary::{OutputSummaryCSV, OutputSummaryText};
+pub use voxel_data::{OutputVoxelDose, OutputVoxelFluences};
 
 use crate::beam::Beam;
 use crate::crystal::Crystal;
 use crate::wedge::Wedge;
+
+/// Newtype wrapper around `Write` that implements `Debug`.
+/// Used by all output modules that hold a boxed writer.
+pub(crate) struct DebugWriter(pub(crate) Box<dyn std::io::Write + Send + Sync>);
+
+impl std::fmt::Debug for DebugWriter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Writer")
+    }
+}
+
+impl std::ops::Deref for DebugWriter {
+    type Target = dyn std::io::Write;
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+impl std::ops::DerefMut for DebugWriter {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.0
+    }
+}
 
 /// Output observer trait: receives notifications about experiment events.
 pub trait Output: std::fmt::Debug + Send + Sync {
@@ -17,7 +52,11 @@ pub trait Output: std::fmt::Debug + Send + Sync {
     /// A wedge exposure has completed.
     fn publish_wedge(&mut self, wedge: &Wedge, summary: &ExposureSummary);
     /// Clean up and close.
-    fn close(&mut self);
+    /// `crystal` is the last seen crystal (still alive at this point), if any.
+    /// Default implementation ignores the crystal and just flushes.
+    fn close(&mut self, crystal: Option<&dyn Crystal>) {
+        let _ = crystal;
+    }
 }
 
 /// Extended output that also receives warnings and references.

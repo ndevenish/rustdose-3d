@@ -2,30 +2,8 @@ use std::io::Write;
 
 use crate::beam::Beam;
 use crate::crystal::Crystal;
-use crate::output::ExposureSummary;
+use crate::output::{DebugWriter, ExposureSummary};
 use crate::wedge::Wedge;
-
-/// Newtype wrapper around Write that implements Debug.
-struct DebugWriter(Box<dyn Write + Send + Sync>);
-
-impl std::fmt::Debug for DebugWriter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Writer")
-    }
-}
-
-impl std::ops::Deref for DebugWriter {
-    type Target = dyn Write;
-    fn deref(&self) -> &Self::Target {
-        &*self.0
-    }
-}
-
-impl std::ops::DerefMut for DebugWriter {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.0
-    }
-}
 
 /// OutputSummaryText: produces human-readable dose summary.
 #[derive(Debug)]
@@ -141,7 +119,7 @@ impl super::Output for OutputSummaryText {
         );
     }
 
-    fn close(&mut self) {
+    fn close(&mut self, _crystal: Option<&dyn Crystal>) {
         let _ = self.writer.flush();
     }
 }
@@ -192,7 +170,7 @@ impl super::Output for OutputSummaryCSV {
         );
     }
 
-    fn close(&mut self) {
+    fn close(&mut self, _crystal: Option<&dyn Crystal>) {
         let _ = self.writer.flush();
     }
 }

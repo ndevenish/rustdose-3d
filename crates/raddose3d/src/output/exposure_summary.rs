@@ -43,6 +43,12 @@ pub struct ExposureSummary {
     image_dwd: Vec<f64>,
     angle_dwd: Vec<f64>,
     image_vol: Vec<f64>,
+    /// Per-image RDE at 5 resolution shells (max-res, 1Å, 2Å, 3Å, 4Å).
+    image_rde: Vec<[f64; 5]>,
+    /// Per-image [angle_rad, fluence-weighted avg RDE].
+    fluence_weighted_rde_array: Vec<[f64; 2]>,
+    /// Per-image [angle_rad, min RDE].
+    min_rde_array: Vec<[f64; 2]>,
 
     // Last DWD tracking
     last_dwd_num: f64,
@@ -53,6 +59,18 @@ pub struct ExposureSummary {
     // Max resolution-related
     de: [f64; 5],
     q: [f64; 5],
+
+    // Per-image voxel dose/fluence snapshots (populated during exposure_observation).
+    // crystal_size is set at exposure_start; None means no tracking.
+    crystal_size: Option<[usize; 3]>,
+    /// image_doses[i][flat_vox_idx] = cumulative dose at end of image i.
+    pub vox_dose_image: Vec<Vec<f64>>,
+    /// image_fluences[i][flat_vox_idx] = cumulative fluence at end of image i.
+    pub vox_fluence_image: Vec<Vec<f64>>,
+    /// Scratch buffer for current-image doses, flushed into vox_dose_image on image_complete.
+    current_image_doses: Vec<f64>,
+    /// Scratch buffer for current-image fluences.
+    current_image_fluences: Vec<f64>,
 }
 
 /// Wrapper for f64 that implements Ord for use in BTreeMap.
@@ -114,6 +132,9 @@ impl ExposureSummary {
             image_dwd: Vec::new(),
             angle_dwd: Vec::new(),
             image_vol: Vec::new(),
+            image_rde: Vec::new(),
+            fluence_weighted_rde_array: Vec::new(),
+            min_rde_array: Vec::new(),
             last_dwd_num: 0.0,
             last_dwd_denom: 0.0,
             last_dwd_tot: 0.0,
@@ -126,10 +147,15 @@ impl ExposureSummary {
                 2.0 * std::f64::consts::PI / 3.0,
                 0.5 * std::f64::consts::PI,
             ],
+            crystal_size: None,
+            vox_dose_image: Vec::new(),
+            vox_fluence_image: Vec::new(),
+            current_image_doses: Vec::new(),
+            current_image_fluences: Vec::new(),
         }
     }
 
-    pub fn exposure_start(&mut self, image_count: usize, wedge: &Wedge, _crystal_size: [usize; 3]) {
+    pub fn exposure_start(&mut self, image_count: usize, wedge: &Wedge, crystal_size: [usize; 3]) {
         self.total_absorbed_energy = 0.0;
         self.diff_num = 0.0;
         self.diff_denom = 0.0;
@@ -151,6 +177,9 @@ impl ExposureSummary {
         self.images = 0;
         self.image_dwd = vec![0.0; image_count];
         self.angle_dwd = vec![0.0; image_count];
+        self.image_rde = vec![[0.0; 5]; image_count];
+        self.fluence_weighted_rde_array = vec![[0.0; 2]; image_count];
+        self.min_rde_array = vec![[0.0; 2]; image_count];
 
         // Resolution-dependent De values
         let max_res = wedge.max_resolution;
@@ -166,15 +195,23 @@ impl ExposureSummary {
 
         self.voxel_doses.clear();
         self.voxel_doses.insert(OrderedF64(0.0), 1);
+
+        // Per-image voxel dose/fluence snapshots
+        let nvox = crystal_size[0] * crystal_size[1] * crystal_size[2];
+        self.crystal_size = Some(crystal_size);
+        self.vox_dose_image = Vec::with_capacity(image_count);
+        self.vox_fluence_image = Vec::with_capacity(image_count);
+        self.current_image_doses = vec![0.0; nvox];
+        self.current_image_fluences = vec![0.0; nvox];
     }
 
     #[allow(clippy::too_many_arguments)]
     pub fn exposure_observation(
         &mut self,
         wedge_image: usize,
-        _i: usize,
-        _j: usize,
-        _k: usize,
+        i: usize,
+        j: usize,
+        k: usize,
         added_dose: f64,
         total_vox_dose: f64,
         fluence: f64,
@@ -203,6 +240,15 @@ impl ExposureSummary {
 
         self.total_absorbed_energy += absorbed_energy;
         self.wedge_elastic += elastic;
+
+        // Track per-voxel dose/fluence for this image
+        if let Some(size) = self.crystal_size {
+            let idx = i * size[1] * size[2] + j * size[2] + k;
+            if idx < self.current_image_doses.len() {
+                self.current_image_doses[idx] = total_vox_dose + added_dose;
+                self.current_image_fluences[idx] = fluence;
+            }
+        }
     }
 
     pub fn image_complete(&mut self, image: usize, angle: f64, _last_angle: f64, vox_vol: f64) {
@@ -210,6 +256,10 @@ impl ExposureSummary {
             self.running_sum_diff_dose += self.diff_num / self.diff_denom;
             if image < self.image_dwd.len() {
                 self.image_dwd[image] = self.diff_num / self.diff_denom;
+                // Compute RDE at 5 resolution shells: exp(-DWD / De[i])
+                for idx in 0..5 {
+                    self.image_rde[image][idx] = (-self.image_dwd[image] / self.de[idx]).exp();
+                }
             }
         }
 
@@ -224,13 +274,42 @@ impl ExposureSummary {
             self.last_dwd_tot += self.last_dwd_num / self.last_dwd_denom;
         }
 
+        // Fluence-weighted and min RDE per image
+        if self.fluence_sum > 0.0 {
+            let fw_rde = self.fluence_weighted_running_sum_rde / self.fluence_sum;
+            if image < self.fluence_weighted_rde_array.len() {
+                self.fluence_weighted_rde_array[image] = [angle, fw_rde];
+            }
+            if image < self.min_rde_array.len() {
+                self.min_rde_array[image] = [angle, self.min_rde];
+            }
+        }
+
+        // Save per-voxel snapshot for this image
+        if self.crystal_size.is_some() {
+            let snap_dose = self.current_image_doses.clone();
+            let snap_fluence = self.current_image_fluences.clone();
+            self.vox_dose_image.push(snap_dose);
+            self.vox_fluence_image.push(snap_fluence);
+            // Reset scratch buffers (clear, keeping allocation)
+            for v in &mut self.current_image_doses {
+                *v = 0.0;
+            }
+            for v in &mut self.current_image_fluences {
+                *v = 0.0;
+            }
+        }
+
         // Reset per-image state
         self.running_sum_rde = 0.0;
         self.fluence_weighted_running_sum_rde = 0.0;
         self.image_exposed_voxels = 0;
         self.fluence_sum = 0.0;
+        self.min_rde = 1.0;
         self.diff_num = 0.0;
         self.diff_denom = 0.0;
+        self.last_dwd_num = 0.0;
+        self.last_dwd_denom = 0.0;
         self.images += 1;
     }
 
@@ -379,5 +458,40 @@ impl ExposureSummary {
 
     pub fn exposed_voxels(&self) -> usize {
         self.exposed_voxels
+    }
+
+    /// Per-image DWD values (one per image).
+    pub fn image_dwd_array(&self) -> &[[f64; 5]] {
+        &self.image_rde
+    }
+
+    /// Per-image angle in radians.
+    pub fn angle_dwd_array(&self) -> &[f64] {
+        &self.angle_dwd
+    }
+
+    /// Per-image exposed volume (µm³).
+    pub fn image_vol_array(&self) -> &[f64] {
+        &self.image_vol
+    }
+
+    /// Per-image RDE at 5 resolution shells: [max_res, 1Å, 2Å, 3Å, 4Å].
+    pub fn image_rde_array(&self) -> &[[f64; 5]] {
+        &self.image_rde
+    }
+
+    /// Per-image [angle_rad, fluence-weighted avg RDE].
+    pub fn fluence_weighted_rde_array(&self) -> &[[f64; 2]] {
+        &self.fluence_weighted_rde_array
+    }
+
+    /// Per-image [angle_rad, min RDE].
+    pub fn min_rde_array(&self) -> &[[f64; 2]] {
+        &self.min_rde_array
+    }
+
+    /// Crystal size set at last exposure_start, or None.
+    pub fn crystal_size(&self) -> Option<[usize; 3]> {
+        self.crystal_size
     }
 }
