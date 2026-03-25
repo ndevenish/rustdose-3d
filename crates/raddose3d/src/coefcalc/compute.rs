@@ -165,6 +165,16 @@ impl CoefCalcCompute {
             .unwrap_or(0.0)
     }
 
+    /// Calculate unit cell volume and return the value.
+    pub fn calculate_cell_volume_ret(
+        &mut self,
+        a: f64, b: f64, c: f64,
+        alpha_deg: f64, beta_deg: f64, gamma_deg: f64,
+    ) -> f64 {
+        self.calculate_cell_volume(a, b, c, alpha_deg, beta_deg, gamma_deg);
+        self.cell_volume
+    }
+
     /// Calculate unit cell volume from dimensions and angles.
     pub fn calculate_cell_volume(
         &mut self,

@@ -1,8 +1,24 @@
 pub mod compute;
 pub mod from_params;
+pub mod average;
+pub mod from_cif;
+pub mod small_molecules;
+pub mod micro_ed;
+pub mod from_sequence;
+pub mod saxs;
+pub mod from_sequence_saxs;
+pub mod from_pdb;
 
 pub use compute::CoefCalcCompute;
 pub use from_params::CoefCalcFromParams;
+pub use average::CoefCalcAverage;
+pub use from_cif::CoefCalcFromCIF;
+pub use small_molecules::CoefCalcSmallMolecules;
+pub use micro_ed::CoefCalcMicroED;
+pub use from_sequence::CoefCalcFromSequence;
+pub use saxs::CoefCalcSAXS;
+pub use from_sequence_saxs::CoefCalcFromSequenceSAXS;
+pub use from_pdb::CoefCalcFromPDB;
 
 use std::collections::HashSet;
 
@@ -31,16 +47,6 @@ pub trait CoefCalc: std::fmt::Debug + Send + Sync {
 
     /// Fluorescent escape factors for the current beam energy.
     /// Returns a 2D array: [element_index][factor_index].
-    /// Factor layout per element (28 values):
-    ///   [0]  mu_ratio (uj/upe)
-    ///   [1]  K-shell ionization fraction
-    ///   [2]  K fluorescence yield
-    ///   [3]  K edge energy (keV)
-    ///   [4]  K escape factor
-    ///   [5..8]  L1 ionization, yield, energy, escape
-    ///   [9..12]  L2 ...
-    ///   [13..16] L3 ...
-    ///   [17..27] M1-M5 ionization, binding energy pairs
     fn fluorescent_escape_factors(&self, beam_energy: f64) -> Vec<Vec<f64>>;
 
     /// Whether a cryo-solution surrounding is defined.
@@ -77,9 +83,36 @@ pub fn create_coefcalc(
     let coefcalc_type = config.coefcalc.unwrap_or(CoefCalcType::Default);
 
     match coefcalc_type {
-        CoefCalcType::Default | CoefCalcType::Average => {
+        CoefCalcType::Default => {
             Ok(Box::new(CoefCalcFromParams::from_config(config)?))
         }
-        other => Err(format!("CoefCalc type {:?} not yet implemented", other)),
+        CoefCalcType::Average => {
+            Ok(Box::new(CoefCalcAverage))
+        }
+        CoefCalcType::Cif => {
+            let path = config.cif.as_deref().ok_or("CIF mode requires cif path")?;
+            Ok(Box::new(CoefCalcFromCIF::from_file(path)?))
+        }
+        CoefCalcType::SmallMole => {
+            Ok(Box::new(CoefCalcSmallMolecules::from_config(config)?))
+        }
+        CoefCalcType::Sequence => {
+            Ok(Box::new(CoefCalcFromSequence::from_config(config)?))
+        }
+        CoefCalcType::Saxs => {
+            Ok(Box::new(CoefCalcSAXS::from_config(config)?))
+        }
+        CoefCalcType::SaxsSeq => {
+            Ok(Box::new(CoefCalcFromSequenceSAXS::from_config(config)?))
+        }
+        CoefCalcType::Pdb => {
+            Ok(Box::new(CoefCalcFromPDB::from_config(config)?))
+        }
+        // MicroED CoefCalcType not yet in the parser; map via RdFortran placeholder or leave:
+        CoefCalcType::RdFortran => {
+            // Legacy RD v2 subprocess not implemented; fall back to FromParams
+            eprintln!("Warning: RDFortran/RDv2 CoefCalc not implemented, using Default mode.");
+            Ok(Box::new(CoefCalcFromParams::from_config(config)?))
+        }
     }
 }
