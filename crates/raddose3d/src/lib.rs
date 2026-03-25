@@ -1,4 +1,5 @@
 pub mod element;
+pub mod residue;
 pub mod wedge;
 pub mod ddm;
 pub mod container;

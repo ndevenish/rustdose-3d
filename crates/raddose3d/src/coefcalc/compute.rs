@@ -359,6 +359,49 @@ impl CoefCalcCompute {
         )
     }
 
+    /// Multiply all macromolecular atom occurrences by a factor (used by PDB/Sequence).
+    pub fn multiply_atoms(&mut self, factor: f64) {
+        for val in self.macromolecular_occurrence.values_mut() {
+            *val *= factor;
+        }
+    }
+
+    /// Set macromolecular occurrence (absolute, not increment).
+    pub fn set_macro(&mut self, element_name: &str, count: f64) {
+        self.macromolecular_occurrence
+            .insert(element_name.to_string(), count);
+    }
+
+    /// Get macromolecular occurrence.
+    pub fn get_macro(&self, element_name: &str) -> f64 {
+        self.macromolecular_occurrence
+            .get(element_name)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    /// Add cryo-solution concentrations (stub — populates cryo_occurrence for density calc).
+    pub fn add_cryo_concentrations(
+        &mut self,
+        cryo_names: &[String],
+        cryo_concs: &[f64],
+    ) {
+        for (name, &conc) in cryo_names.iter().zip(cryo_concs.iter()) {
+            *self
+                .cryo_concentration
+                .entry(name.clone())
+                .or_insert(0.0) += conc;
+        }
+        // Populate cryo_occurrence for density calculation
+        let vol = self.cell_volume;
+        let sf = self.sol_fraction.max(0.0);
+        for (name, &conc) in self.cryo_concentration.clone().iter() {
+            let count = conc * AVOGADRO_NUM * vol * sf * 1e-3 * 1e-27;
+            *self.cryo_occurrence.entry(name.clone()).or_insert(0.0) += count;
+            self.cryo_elements.insert(name.clone());
+        }
+    }
+
     /// Calculate fluorescent escape factors for present elements.
     pub fn calc_fluorescent_escape_factors(&self, beam_energy: f64) -> Vec<Vec<f64>> {
         let db = ElementDatabase::instance();
