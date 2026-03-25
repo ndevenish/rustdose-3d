@@ -120,7 +120,7 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 | 1 | Skeleton + Parser + Element Database | **Done** |
 | 2 | Core Types + Factories + Cuboid Simulation | **Done** |
 | 3 | Remaining Crystal Geometries (Polyhedron, Cylinder, Spherical) | **Done** |
-| 4 | Remaining CoefCalc Modes + Beam Types | Not started |
+| 4 | Remaining CoefCalc Modes + Beam Types | **Done** |
 | 5 | DDM + All Output Modules | Not started |
 | 6 | Monte Carlo, XFEL, MicroED | Not started |
 | 7 | CLI + WASM + Polish | Not started |
@@ -136,6 +136,17 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - ContainerMixture + ContainerElemental stubs (structure present, NIST lookup not yet implemented)
 - CrystalCuboid with polyhedron ray-casting
 - BeamGaussian + BeamTophat (rectangular/circular collimation)
+- BeamExperimental (2D intensity grid, bilinear interpolation)
+- EnergyDistribution (truncated normal sampler for pink beam)
+- CoefCalcAverage (hardcoded Holton 2010 constants)
+- CoefCalcFromCIF (CIF _chemical_formula_sum parser)
+- CoefCalcSmallMolecules (small-molecule crystals, no water fill)
+- CoefCalcMicroED (electron diffraction, same composition as FromParams)
+- CoefCalcFromSequence (FASTA sequence → H/C/N/O/S/P/Se composition)
+- CoefCalcSAXS (protein concentration → num_monomers)
+- CoefCalcFromSequenceSAXS (SAXS + sequence file)
+- CoefCalcFromPDB (PDB file or RCSB download → SEQRES + HETATM composition)
+- Residue database (20 amino acids + RNA/DNA nucleotides, 1-letter and 3-letter lookup)
 - DDM: Simple, Linear, Leal, Bfactor
 - ContainerTransparent
 - Experiment orchestrator
@@ -144,8 +155,8 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - Full pipeline: parse → construct → expose → output
 
 ### What's Not Yet Ported
-- CoefCalc: FromPDB, FromCIF, FromSequence, SAXS, SmallMolecules, MicroED, Average, Raddose (legacy)
-- Beam: Experimental (2D grid), EnergyDistribution (pink beam)
+- CoefCalc: Raddose (legacy v2 subprocess — stubs to Default)
+- Beam: EnergyDistribution integration with Experimental beam for pink beam multi-energy loop
 - Output: VoxelDose, DWDs, DoseStateCSV/R, RDECSV, Progress, FluencePerDoseHist
 - Container: Mixture/Elemental NIST mass-attenuation lookup (structure done, lookup not implemented)
 - PE/FL escape code paths in expose loop
