@@ -9,6 +9,7 @@ pub mod experiment;
 pub mod output;
 pub mod residue;
 pub mod wedge;
+pub mod writer;
 
 pub use raddose3d_parser as parser;
 
