@@ -32,6 +32,8 @@ pub struct ExposureSummary {
     avg_dose_exposed_region: f64,
     used_volume_fraction: f64,
     dose_inefficiency: f64,
+    /// Dose inefficiency computed from deposited energy (dose×mass per voxel).
+    dose_inefficiency_pe: f64,
 
     // RDE tracking
     running_sum_rde: f64,
@@ -59,6 +61,11 @@ pub struct ExposureSummary {
     // Max resolution-related
     de: [f64; 5],
     q: [f64; 5],
+
+    // Dose histogram for final-state reporting (10 bins, 0→30 MGy + overflow).
+    /// counts[0] = underflow, counts[1..9] = 0.1…30 MGy, counts[10] = overflow (10+2 = 12 total)
+    dose_hist_counts: [u32; 11],
+    dose_hist_total: u32,
 
     // Per-image voxel dose/fluence snapshots (populated during exposure_observation).
     // crystal_size is set at exposure_start; None means no tracking.
@@ -125,6 +132,7 @@ impl ExposureSummary {
             avg_dose_exposed_region: 0.0,
             used_volume_fraction: 0.0,
             dose_inefficiency: 0.0,
+            dose_inefficiency_pe: 0.0,
             running_sum_rde: 0.0,
             fluence_weighted_running_sum_rde: 0.0,
             fluence_sum: 0.0,
@@ -147,6 +155,8 @@ impl ExposureSummary {
                 2.0 * std::f64::consts::PI / 3.0,
                 0.5 * std::f64::consts::PI,
             ],
+            dose_hist_counts: [0; 11],
+            dose_hist_total: 0,
             crystal_size: None,
             vox_dose_image: Vec::new(),
             vox_fluence_image: Vec::new(),
@@ -195,6 +205,10 @@ impl ExposureSummary {
 
         self.voxel_doses.clear();
         self.voxel_doses.insert(OrderedF64(0.0), 1);
+
+        // Reset dose histogram
+        self.dose_hist_counts = [0; 11];
+        self.dose_hist_total = 0;
 
         // Per-image voxel dose/fluence snapshots
         let nvox = crystal_size[0] * crystal_size[1] * crystal_size[2];
@@ -330,6 +344,23 @@ impl ExposureSummary {
             self.total_dose += voxel_dose;
             self.total_energy += (voxel_dose * 1e6) * voxel_mass_kg;
             self.exposed_voxels += 1;
+
+            // Accumulate dose histogram (9 bins from 0.1 to 30.0 MGy)
+            const HIST_MIN: f64 = 0.1;
+            const HIST_MAX: f64 = 30.0;
+            const HIST_BINS: usize = 9;
+            const HIST_STEP: f64 = (HIST_MAX - HIST_MIN) / HIST_BINS as f64;
+            let bucket = if voxel_dose < HIST_MIN {
+                0usize
+            } else if voxel_dose >= HIST_MAX {
+                HIST_BINS + 1
+            } else {
+                1 + ((voxel_dose - HIST_MIN) / HIST_STEP) as usize
+            };
+            if bucket < self.dose_hist_counts.len() {
+                self.dose_hist_counts[bucket] += 1;
+            }
+            self.dose_hist_total += 1;
         }
     }
 
@@ -351,6 +382,10 @@ impl ExposureSummary {
         if self.total_absorbed_energy > 0.0 {
             self.dose_inefficiency =
                 (self.max_dose() * 1e6) / (1000.0 * self.total_absorbed_energy);
+        }
+
+        if self.total_energy > 0.0 {
+            self.dose_inefficiency_pe = (self.max_dose() * 1e6) / (1000.0 * self.total_energy);
         }
 
         if self.images > 0 {
@@ -402,6 +437,10 @@ impl ExposureSummary {
 
     pub fn dose_inefficiency(&self) -> f64 {
         self.dose_inefficiency
+    }
+
+    pub fn dose_inefficiency_pe(&self) -> f64 {
+        self.dose_inefficiency_pe
     }
 
     pub fn image_dwds(&self) -> &[f64] {
@@ -493,5 +532,25 @@ impl ExposureSummary {
     /// Crystal size set at last exposure_start, or None.
     pub fn crystal_size(&self) -> Option<[usize; 3]> {
         self.crystal_size
+    }
+
+    /// Normalised dose histogram fractions (underflow, 9 bins, overflow = 11 entries).
+    /// Bins span 0.1 → 30.0 MGy in equal steps.
+    pub fn dose_hist_normalised(&self) -> [f64; 11] {
+        let mut out = [0.0f64; 11];
+        if self.dose_hist_total > 0 {
+            let total = self.dose_hist_total as f64;
+            for (i, &c) in self.dose_hist_counts.iter().enumerate() {
+                out[i] = c as f64 / total;
+            }
+        }
+        out
+    }
+
+    /// Dose histogram bin boundary for index i (1-based; i=0 is -∞, i=9 is 30.0).
+    pub fn dose_hist_break(i: usize) -> f64 {
+        const HIST_MIN: f64 = 0.1;
+        const HIST_STEP: f64 = (30.0 - HIST_MIN) / 9.0;
+        HIST_MIN + i as f64 * HIST_STEP
     }
 }

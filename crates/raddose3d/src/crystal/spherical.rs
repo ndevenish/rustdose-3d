@@ -149,7 +149,7 @@ impl super::Crystal for CrystalSpherical {
             } else {
                 1.0
             };
-            (sign * (wedge.end_ang - wedge.start_ang) / wedge.ang_res) as usize
+            (sign * (wedge.end_ang - wedge.start_ang) / wedge.ang_res + 1.0) as usize
         }
     }
 

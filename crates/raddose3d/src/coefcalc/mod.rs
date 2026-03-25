@@ -27,6 +27,24 @@ use std::collections::HashSet;
 /// Implements the calculation of X-ray absorption, attenuation, and scattering
 /// coefficients for a crystal composition at a given photon energy.
 pub trait CoefCalc: std::fmt::Debug + Send + Sync {
+    /// Human-readable description of the coefficient source and values.
+    /// Matches Java's `CoefCalcCompute.toString()`.
+    fn description(&self) -> String {
+        format!(
+            "\nCrystal coefficients calculated with RADDOSE-3D. \n\
+             Photelectric Coefficient: {:.2e} /um.\n\
+             Inelastic Coefficient: {:.2e} /um.\n\
+             Elastic Coefficient: {:.2e} /um.\n\
+             Attenuation Coefficient: {:.2e} /um.\n\
+             Density: {:.2} g/ml.\n",
+            self.absorption_coefficient(),
+            self.inelastic_coefficient(),
+            self.elastic_coefficient(),
+            self.attenuation_coefficient(),
+            self.density(),
+        )
+    }
+
     /// Update coefficients for a given photon energy (keV).
     fn update_coefficients(&mut self, photon_energy: f64);
 
