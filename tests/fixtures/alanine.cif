@@ -1,0 +1,3 @@
+data_alanine
+_chemical_formula_sum 'C3 H7 N O2'
+_cell_volume 538.08
