@@ -1,1 +1,4 @@
 target/
+output-*.csv
+output-*.txt
+output-*.R
