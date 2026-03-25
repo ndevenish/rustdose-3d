@@ -985,6 +985,202 @@ mod tests {
         );
     }
 
+    // ── Helpers for polyhedron OBJ tests ─────────────────────────────────────────
+
+    fn make_polyhedron_config(obj_path: &str) -> CrystalConfig {
+        CrystalConfig {
+            crystal_type: Some("polyhedron".to_string()),
+            model_file: Some(obj_path.to_string()),
+            pixels_per_micron: Some(0.5),
+            angle_p: Some(0.0),
+            angle_l: Some(0.0),
+            // Minimal unit cell for CoefCalcFromParams
+            cell_a: Some(78.0),
+            cell_b: Some(78.0),
+            cell_c: Some(37.0),
+            num_residues: Some(60),
+            ..Default::default()
+        }
+    }
+
+    fn zero_wedge() -> crate::wedge::Wedge {
+        crate::wedge::Wedge {
+            start_ang: 0.0,
+            end_ang: 0.0,
+            ang_res: 2.0_f64.to_radians(),
+            exposure_time: 100.0,
+            start_x: 0.0,
+            start_y: 0.0,
+            start_z: 0.0,
+            trans_x: 0.0,
+            trans_y: 0.0,
+            trans_z: 0.0,
+            off_axis_um: 0.0,
+            max_resolution: 2.0,
+        }
+    }
+
+    /// Port of Java CrystalPolyhedronTests.testFindDepthSimple:
+    /// Verify get_cryst_coord and find_depth for a cuboid OBJ at angles 0° and 90°.
+    #[test]
+    fn test_polyhedron_cryst_coord_and_depth_simple() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let obj_path = format!(
+            "{}/../../tests/fixtures/CrystalPolyhedron-cuboid-30-20-10.obj",
+            manifest
+        );
+        let config = make_polyhedron_config(&obj_path);
+
+        let mut crystal =
+            CrystalPolyhedron::from_config(&config).expect("Cuboid OBJ polyhedron should build");
+
+        let wedge = zero_wedge();
+
+        // Crystal dims from OBJ (≈60×20×40 µm); resolution = pix_per_um = 0.5
+        let xdim = 60.0f64;
+        let ydim = 20.0f64;
+        let zdim = 40.0f64;
+        let resolution = 0.5f64; // pixels per µm
+
+        // Inner voxel range: 1..(dim*resolution - 1), matching Java loop
+        let x_max = (xdim * resolution) as usize - 1; // 29
+        let y_max = (ydim * resolution) as usize - 1; // 9
+        let z_max = (zdim * resolution) as usize - 1; // 19
+
+        // --- Test get_cryst_coord ---
+        for x in 1..x_max {
+            for y in 1..y_max {
+                for z in 1..z_max {
+                    let coord = crystal.get_cryst_coord(x, y, z);
+                    let ex = -(xdim / 2.0) + x as f64 / resolution;
+                    let ey = -(ydim / 2.0) + y as f64 / resolution;
+                    let ez = -(zdim / 2.0) + z as f64 / resolution;
+                    assert!(
+                        (coord[0] - ex).abs() < 0.1,
+                        "cryst_coord[0] for ({},{},{}): got {:.4}, expected {:.4}",
+                        x,
+                        y,
+                        z,
+                        coord[0],
+                        ex
+                    );
+                    assert!(
+                        (coord[1] - ey).abs() < 0.1,
+                        "cryst_coord[1] for ({},{},{}): got {:.4}, expected {:.4}",
+                        x,
+                        y,
+                        z,
+                        coord[1],
+                        ey
+                    );
+                    assert!(
+                        (coord[2] - ez).abs() < 0.1,
+                        "cryst_coord[2] for ({},{},{}): got {:.4}, expected {:.4}",
+                        x,
+                        y,
+                        z,
+                        coord[2],
+                        ez
+                    );
+                }
+            }
+        }
+
+        // --- Test find_depth at angle = 0° ---
+        crystal.setup_depth_finding(0.0, &wedge);
+        for x in 1..x_max {
+            for y in 1..y_max {
+                for z in 1..z_max {
+                    let coord = crystal.get_cryst_coord(x, y, z);
+                    let depth = crystal.find_depth(&coord, 0.0, &wedge);
+                    let true_depth = z as f64 / resolution;
+                    assert!(
+                        (depth - true_depth).abs() < 2.0,
+                        "find_depth angle=0 for ({},{},{}): got {:.4}, expected {:.4}",
+                        x,
+                        y,
+                        z,
+                        depth,
+                        true_depth
+                    );
+                }
+            }
+        }
+
+        // --- Test find_depth at angle = 90° ---
+        // Java swaps crystCoords[0] and crystCoords[2] before calling findDepth(90°).
+        // This mirrors what exposeAngle does when rotating the crystal in the beam.
+        crystal.setup_depth_finding(std::f64::consts::FRAC_PI_2, &wedge);
+        for x in 1..x_max {
+            for y in 1..y_max {
+                for z in 1..z_max {
+                    let orig = crystal.get_cryst_coord(x, y, z);
+                    // Swap x and z as Java does
+                    let rotated_coord = [orig[2], orig[1], orig[0]];
+                    let depth = crystal.find_depth(&rotated_coord, 0.0, &wedge);
+                    let true_depth = x as f64 / resolution;
+                    assert!(
+                        (depth - true_depth).abs() < 2.0,
+                        "find_depth angle=90 for ({},{},{}): got {:.4}, expected {:.4}",
+                        x,
+                        y,
+                        z,
+                        depth,
+                        true_depth
+                    );
+                }
+            }
+        }
+    }
+
+    /// Port of Java CrystalPolyhedronTests.testFindDepthConcave:
+    /// Verify find_depth for a horseshoe-shaped concave crystal — thick region
+    /// should return ≈60 µm and gap region ≈40 µm (skipping the hollow interior).
+    #[test]
+    fn test_polyhedron_find_depth_concave() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let obj_path = format!(
+            "{}/../../tests/fixtures/CrystalPolyhedron-concave_cuboid-30-20-10.obj",
+            manifest
+        );
+
+        let config = CrystalConfig {
+            crystal_type: Some("polyhedron".to_string()),
+            model_file: Some(obj_path),
+            angle_p: Some(0.0),
+            angle_l: Some(0.0),
+            cell_a: Some(78.0),
+            cell_b: Some(78.0),
+            cell_c: Some(37.0),
+            num_residues: Some(60),
+            ..Default::default()
+        };
+
+        let mut crystal =
+            CrystalPolyhedron::from_config(&config).expect("Concave OBJ polyhedron should build");
+
+        let wedge = zero_wedge();
+        crystal.setup_depth_finding(0.0, &wedge);
+
+        // Thick region: beam traverses a solid arm (~60 µm)
+        let thick_coord = [3.5f64, -8.65, 29.9];
+        let thick_depth = crystal.find_depth(&thick_coord, 0.0, &wedge);
+        assert!(
+            (thick_depth - 60.0).abs() < 1.0,
+            "Concave crystal thick depth: got {:.4}, expected 60.0 ± 1.0",
+            thick_depth
+        );
+
+        // Gap region: beam skips the hollow interior, total crystal ~40 µm
+        let thin_coord = [5.0f64, 6.0, 30.0];
+        let thin_depth = crystal.find_depth(&thin_coord, 0.0, &wedge);
+        assert!(
+            (thin_depth - 40.0).abs() < 1.0,
+            "Concave crystal thin depth: got {:.4}, expected 40.0 ± 1.0",
+            thin_depth
+        );
+    }
+
     #[test]
     fn test_spherical_new_occupancy() {
         let diameter = 100.0f64;
