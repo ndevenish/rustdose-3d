@@ -133,7 +133,12 @@ struct ResultsCollector(Arc<Mutex<Option<RunResults>>>);
 impl output::Output for ResultsCollector {
     fn publish_crystal(&mut self, _crystal: &dyn crystal::Crystal) {}
     fn publish_beam(&mut self, _beam: &dyn beam::Beam) {}
-    fn publish_wedge(&mut self, _wedge: &wedge::Wedge, summary: &output::ExposureSummary) {
+    fn publish_wedge(
+        &mut self,
+        _wedge: &wedge::Wedge,
+        summary: &output::ExposureSummary,
+        _crystal: Option<&dyn crystal::Crystal>,
+    ) {
         *self.0.lock().unwrap() = Some(RunResults {
             average_dwd: summary.avg_diffracted_dose(),
             last_dwd: summary.last_dwd(),

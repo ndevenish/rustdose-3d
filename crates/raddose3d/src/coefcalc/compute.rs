@@ -260,7 +260,19 @@ impl CoefCalcCompute {
             ATOMIC_MASS_UNIT * CARBOHYDRATE_AVE_MASS * self.num_carb * self.num_monomers as f64
                 / (self.cell_volume * CARBOHYDRATE_DENSITY * ANGSTROMS_TO_ML);
 
-        let sf = 1.0 - protein_mass - rna_mass - dna_mass - carb_mass;
+        // Hetatm mass: light atoms (atomic number < 29) only, matching Java behaviour.
+        let db = ElementDatabase::instance();
+        let mut hetatm_total_mass = 0.0;
+        for (sym, count) in &self.hetero_atom_occurrence {
+            if let Some(elem) = db.get(sym) {
+                if elem.atomic_number() < 29 {
+                    hetatm_total_mass += count * elem.atomic_weight_in_grams();
+                }
+            }
+        }
+        let hetatm_mass = hetatm_total_mass / (self.cell_volume * HETATM_DENSITY * ANGSTROMS_TO_ML);
+
+        let sf = 1.0 - protein_mass - rna_mass - dna_mass - carb_mass - hetatm_mass;
 
         if sf < 0.0 {
             eprintln!("Warning: Solvent mass calculated as a negative number...");
@@ -388,6 +400,9 @@ impl CoefCalcCompute {
     /// Multiply all macromolecular atom occurrences by a factor (used by PDB/Sequence).
     pub fn multiply_atoms(&mut self, factor: f64) {
         for val in self.macromolecular_occurrence.values_mut() {
+            *val *= factor;
+        }
+        for val in self.hetero_atom_occurrence.values_mut() {
             *val *= factor;
         }
     }

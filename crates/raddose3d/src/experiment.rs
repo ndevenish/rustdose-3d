@@ -62,7 +62,7 @@ impl Experiment {
             crystal.expose(&mut **beam, wedge);
             let summary = crystal.exposure_summary();
             for o in &mut self.observers {
-                o.publish_wedge(wedge, summary);
+                o.publish_wedge(wedge, summary, Some(crystal.as_ref()));
             }
         }
     }

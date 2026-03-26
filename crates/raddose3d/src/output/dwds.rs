@@ -29,7 +29,12 @@ impl super::Output for OutputDWDs {
 
     fn publish_beam(&mut self, _beam: &dyn Beam) {}
 
-    fn publish_wedge(&mut self, _wedge: &Wedge, summary: &ExposureSummary) {
+    fn publish_wedge(
+        &mut self,
+        _wedge: &Wedge,
+        summary: &ExposureSummary,
+        _crystal: Option<&dyn Crystal>,
+    ) {
         let image_dwd = summary.image_dwds();
         let angle_dwd = summary.angle_dwd_array();
         let image_vol = summary.image_vol_array();

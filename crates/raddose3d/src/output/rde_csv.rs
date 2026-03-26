@@ -27,7 +27,12 @@ impl super::Output for OutputRDECSV {
 
     fn publish_beam(&mut self, _beam: &dyn Beam) {}
 
-    fn publish_wedge(&mut self, _wedge: &Wedge, summary: &ExposureSummary) {
+    fn publish_wedge(
+        &mut self,
+        _wedge: &Wedge,
+        summary: &ExposureSummary,
+        _crystal: Option<&dyn Crystal>,
+    ) {
         let weighted = summary.fluence_weighted_rde_array();
         let min_arr = summary.min_rde_array();
 

@@ -32,14 +32,22 @@ impl super::Output for OutputSummaryText {
     fn publish_crystal(&mut self, crystal: &dyn Crystal) {
         let _ = writeln!(self.writer, "{}", crystal.crystal_info());
         let _ = writeln!(self.writer, "{}", crystal.ddm().name());
-        self.coefcalc_desc = Some(crystal.coefcalc().description());
     }
 
     fn publish_beam(&mut self, beam: &dyn Beam) {
         let _ = write!(self.writer, "{}", beam.description());
     }
 
-    fn publish_wedge(&mut self, wedge: &Wedge, summary: &ExposureSummary) {
+    fn publish_wedge(
+        &mut self,
+        wedge: &Wedge,
+        summary: &ExposureSummary,
+        crystal: Option<&dyn Crystal>,
+    ) {
+        // Capture coefcalc description now (after expose, so coefficients are non-zero).
+        if let Some(c) = crystal {
+            self.coefcalc_desc = Some(c.coefcalc().description());
+        }
         self.wedge_num += 1;
         let _ = writeln!(self.writer, "Wedge {}:", self.wedge_num);
         let _ = write!(self.writer, "{}", wedge.description());
@@ -214,7 +222,12 @@ impl super::Output for OutputSummaryCSV {
 
     fn publish_beam(&mut self, _beam: &dyn Beam) {}
 
-    fn publish_wedge(&mut self, _wedge: &Wedge, summary: &ExposureSummary) {
+    fn publish_wedge(
+        &mut self,
+        _wedge: &Wedge,
+        summary: &ExposureSummary,
+        _crystal: Option<&dyn Crystal>,
+    ) {
         self.wedge_num += 1;
         let dwd = summary.avg_diffracted_dose();
         let diff_eff = if dwd > 0.0 {

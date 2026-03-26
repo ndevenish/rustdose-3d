@@ -30,7 +30,12 @@ impl super::Output for OutputVoxelDose {
 
     fn publish_beam(&mut self, _beam: &dyn Beam) {}
 
-    fn publish_wedge(&mut self, wedge: &Wedge, _summary: &ExposureSummary) {
+    fn publish_wedge(
+        &mut self,
+        wedge: &Wedge,
+        _summary: &ExposureSummary,
+        _crystal: Option<&dyn Crystal>,
+    ) {
         self.wedge = Some(wedge.clone());
     }
 
@@ -126,7 +131,12 @@ impl super::Output for OutputVoxelFluences {
 
     fn publish_beam(&mut self, _beam: &dyn Beam) {}
 
-    fn publish_wedge(&mut self, wedge: &Wedge, _summary: &ExposureSummary) {
+    fn publish_wedge(
+        &mut self,
+        wedge: &Wedge,
+        _summary: &ExposureSummary,
+        _crystal: Option<&dyn Crystal>,
+    ) {
         self.wedge = Some(wedge.clone());
     }
 

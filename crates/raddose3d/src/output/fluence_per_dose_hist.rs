@@ -139,7 +139,12 @@ impl super::Output for OutputFluencePerDoseHistCSV {
 
     fn publish_beam(&mut self, _beam: &dyn Beam) {}
 
-    fn publish_wedge(&mut self, _wedge: &Wedge, _summary: &ExposureSummary) {
+    fn publish_wedge(
+        &mut self,
+        _wedge: &Wedge,
+        _summary: &ExposureSummary,
+        _crystal: Option<&dyn Crystal>,
+    ) {
         self.wedge_counter += 1;
         self.hist.0.reset();
         self.diff_intensity_num = 0.0;

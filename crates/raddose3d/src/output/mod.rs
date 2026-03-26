@@ -50,7 +50,13 @@ pub trait Output: std::fmt::Debug + Send + Sync {
     /// A new beam has been set up.
     fn publish_beam(&mut self, beam: &dyn Beam);
     /// A wedge exposure has completed.
-    fn publish_wedge(&mut self, wedge: &Wedge, summary: &ExposureSummary);
+    /// `crystal` is the crystal after exposure (coefficients already updated).
+    fn publish_wedge(
+        &mut self,
+        wedge: &Wedge,
+        summary: &ExposureSummary,
+        crystal: Option<&dyn Crystal>,
+    );
     /// Clean up and close.
     /// `crystal` is the last seen crystal (still alive at this point), if any.
     /// Default implementation ignores the crystal and just flushes.

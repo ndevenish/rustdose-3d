@@ -33,7 +33,13 @@ impl super::Output for OutputProgressIndicator {
 
     fn publish_beam(&mut self, _beam: &dyn Beam) {}
 
-    fn publish_wedge(&mut self, _wedge: &Wedge, _summary: &ExposureSummary) {}
+    fn publish_wedge(
+        &mut self,
+        _wedge: &Wedge,
+        _summary: &ExposureSummary,
+        _crystal: Option<&dyn Crystal>,
+    ) {
+    }
 
     fn close(&mut self, _crystal: Option<&dyn Crystal>) {
         let _ = self.writer.flush();
@@ -178,7 +184,12 @@ impl super::Output for OutputProgressEstimate {
 
     fn publish_beam(&mut self, _beam: &dyn Beam) {}
 
-    fn publish_wedge(&mut self, wedge: &Wedge, _summary: &ExposureSummary) {
+    fn publish_wedge(
+        &mut self,
+        wedge: &Wedge,
+        _summary: &ExposureSummary,
+        _crystal: Option<&dyn Crystal>,
+    ) {
         let diff = (wedge.start_ang - wedge.end_ang).abs();
         if diff < wedge.ang_res {
             self.sum_wedge_slices += crate::constants::STATIC_EXPOSURE as u64;
