@@ -122,7 +122,7 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 | 3 | Remaining Crystal Geometries (Polyhedron, Cylinder, Spherical) | **Done** |
 | 4 | Remaining CoefCalc Modes + Beam Types | **Done** |
 | 5 | DDM + All Output Modules | **Done** |
-| 6 | Monte Carlo, XFEL, MicroED | Not started |
+| 6 | Monte Carlo, XFEL, MicroED | **Done** |
 | 7 | CLI + WASM + Polish | Not started |
 
 ### What's Implemented
@@ -158,6 +158,10 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - writer module: file_writer, stdout_writer, StringWriter, TeeWriter, NullWriter
 - ExposureSummary (DWD, dose quantiles, dose contrast, per-image RDE, voxel snapshots)
 - Full pipeline: parse → construct → expose → output
+- JavaRandom (Java LCG, bit-identical to java.util.Random for seeded MC)
+- MonteCarloSimulation (mc.rs, ~2400 lines): Auger cascade (19 elements), ionization shells (K/L/M), ELSEPA elastic angles, GOS inelastic scattering, photoelectron/Compton/Auger electron tracking
+- XfelSimulation (xfel.rs, ~2500 lines): time-resolved dosimetry, 4D voxel arrays (spatial + time bins), PULSE_LENGTH/PULSE_BIN_LENGTH parameters, same physics as MC
+- MicroEdSimulation (micro_ed.rs, ~1400 lines): electron diffraction, stopping-power slice simulation, CSDA range, optimal voltage/thickness search
 
 ### What's Not Yet Ported
 - CoefCalc: Raddose (legacy v2 subprocess — stubs to Default)
@@ -165,6 +169,6 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - Container: Mixture/Elemental NIST mass-attenuation lookup (structure done, lookup not implemented)
 - PE/FL escape code paths in expose loop
 - Cryo-surrounding voxel lattice
-- Monte Carlo, XFEL, MicroED simulation engines
+- Crystal dispatch for MONTECARLO/GOS/XFEL/EMSP/EMED subprograms (wiring MC/XFEL/MicroED into expose())
 - CLI flags: `-o`, `-p`, `-r`, `-V`, `-t` (only `-i` works)
 - WASM bindings
