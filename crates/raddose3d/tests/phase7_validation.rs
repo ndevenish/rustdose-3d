@@ -393,11 +393,21 @@ fn wasm_run_from_json_matches_text_input() {
     let r1 = run(&config_from_text).expect("run from text failed");
     let r2 = run(&config_from_json).expect("run from json failed");
 
-    assert_eq!(
-        r1.average_dwd, r2.average_dwd,
-        "JSON and text configs must give identical simulation results"
+    // serde_json serialisation does not guarantee bit-exact f64 round-trips;
+    // allow up to 1 ULP of difference (< 1e-12 relative for these values).
+    let tol = 1e-12;
+    assert!(
+        (r1.average_dwd - r2.average_dwd).abs() < tol,
+        "JSON round-trip average_dwd mismatch: {} vs {}",
+        r1.average_dwd,
+        r2.average_dwd
     );
-    assert_eq!(r1.max_dose, r2.max_dose);
+    assert!(
+        (r1.max_dose - r2.max_dose).abs() < tol,
+        "JSON round-trip max_dose mismatch: {} vs {}",
+        r1.max_dose,
+        r2.max_dose
+    );
 }
 
 // ── Temp-directory helper ─────────────────────────────────────────────────────
