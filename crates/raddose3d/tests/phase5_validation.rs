@@ -16,6 +16,10 @@ use raddose3d::{
 
 const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
 const GOLDEN_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/golden/phase5");
+/// Large golden files that are too big for git; stored outside the repo.
+const NON_COMMIT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../non_commit_test_files");
+/// Java jar used to regenerate large golden files when missing.
+const JAVA_JAR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../raddose3d.jar");
 
 fn run_insulin() -> std::collections::HashMap<&'static str, String> {
     let path = format!("{}/insulin_test.txt", FIXTURES_DIR);
@@ -76,6 +80,44 @@ fn run_insulin() -> std::collections::HashMap<&'static str, String> {
 fn golden(name: &str) -> String {
     let path = format!("{}/insulin_{}", GOLDEN_DIR, name);
     std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("golden file missing: {}", path))
+}
+
+/// Read a large golden file from `non_commit_test_files/`.
+///
+/// If the file is absent, this function attempts to regenerate it by running the
+/// Java jar (`raddose3d.jar` at the project root) against the insulin fixture.
+/// Tests that call this should be marked `#[ignore]` so they are skipped in
+/// normal CI and only run when the developer explicitly passes `--ignored`.
+fn large_golden(name: &str) -> String {
+    let path = format!("{}/insulin_{}", NON_COMMIT_DIR, name);
+    if !std::path::Path::new(&path).exists() {
+        // Attempt regeneration via Java jar.
+        let jar = std::path::Path::new(JAVA_JAR);
+        if jar.exists() {
+            let fixture = format!("{}/insulin_test.txt", FIXTURES_DIR);
+            let prefix = format!("{}/insulin_", NON_COMMIT_DIR);
+            let status = std::process::Command::new("java")
+                .args(["-jar", JAVA_JAR, "-i", &fixture, "-p", &prefix])
+                .status();
+            match status {
+                Ok(s) if s.success() => {}
+                other => panic!(
+                    "Java regeneration failed ({:?}); place the file manually at: {}",
+                    other, path
+                ),
+            }
+        } else {
+            panic!(
+                "Large golden file missing and Java jar not found.\n\
+                 Expected file : {}\n\
+                 Expected jar  : {}\n\
+                 Run the Java jar manually: java -jar raddose3d.jar -i <fixture> -p non_commit_test_files/insulin_",
+                path, JAVA_JAR
+            );
+        }
+    }
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("could not read large golden file {}: {}", path, e))
 }
 
 // ── Summary.txt ───────────────────────────────────────────────────────────────
@@ -289,10 +331,11 @@ fn phase5_rde_csv_row_count() {
 // ── DoseState.csv ─────────────────────────────────────────────────────────────
 
 #[test]
+#[ignore = "large golden file not in git; run with --ignored (auto-regenerates if jar present)"]
 fn phase5_dose_state_csv_row_count() {
     let out = run_insulin();
     let rust = &out["DoseState.csv"];
-    let java = golden("DoseState.csv");
+    let java = large_golden("DoseState.csv");
 
     let rust_rows = rust.lines().count();
     let java_rows = java.lines().count();
@@ -339,10 +382,11 @@ fn phase5_dose_state_r_structure() {
 // ── VoxelDose.csv / VoxelFluences.csv ────────────────────────────────────────
 
 #[test]
+#[ignore = "large golden file not in git; run with --ignored (auto-regenerates if jar present)"]
 fn phase5_voxel_dose_row_count() {
     let out = run_insulin();
     let rust = &out["VoxelDose.csv"];
-    let java = golden("VoxelDose.csv");
+    let java = large_golden("VoxelDose.csv");
 
     let rust_rows = rust.lines().count();
     let java_rows = java.lines().count();
@@ -353,10 +397,11 @@ fn phase5_voxel_dose_row_count() {
 }
 
 #[test]
+#[ignore = "large golden file not in git; run with --ignored (auto-regenerates if jar present)"]
 fn phase5_voxel_fluences_row_count() {
     let out = run_insulin();
     let rust = &out["VoxelFluences.csv"];
-    let java = golden("VoxelFluences.csv");
+    let java = large_golden("VoxelFluences.csv");
 
     let rust_rows = rust.lines().count();
     let java_rows = java.lines().count();
