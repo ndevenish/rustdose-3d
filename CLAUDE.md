@@ -123,7 +123,7 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 | 4 | Remaining CoefCalc Modes + Beam Types | **Done** |
 | 5 | DDM + All Output Modules | **Done** |
 | 6 | Monte Carlo, XFEL, MicroED | **Done** |
-| 7 | CLI + WASM + Polish | Not started |
+| 7 | CLI + WASM + Polish | **Done** |
 
 ### What's Implemented
 - Input parsing (all keywords from Java grammar)
@@ -158,6 +158,10 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - writer module: file_writer, stdout_writer, StringWriter, TeeWriter, NullWriter
 - ExposureSummary (DWD, dose quantiles, dose contrast, per-image RDE, voxel snapshots)
 - Full pipeline: parse → construct → expose → output
+- Public library API: `parse_input()`, `parse_input_json()`, `run()` → `RunResults`
+- CLI: full Java-compatible flags (`-i`/`--in`, `-p`/`--prefix`, `-r`/`--raddose`, `-t`/`--test`, `-V`/`--version`, `-?`/`--help`); stdin support (`-i -`); default output observers writing all 8 files; progress → stderr
+- WASM crate (`raddose3d-wasm`): `wasm-bindgen` API with `run()` (text), `runStructured()` (JsValue), `runFromJson()` (JSON input)
+- JSON input support via `parse_input_json()` and `serde_json`
 - JavaRandom (Java LCG, bit-identical to java.util.Random for seeded MC)
 - MonteCarloSimulation (mc.rs, ~2400 lines): Auger cascade (19 elements), ionization shells (K/L/M), ELSEPA elastic angles, GOS inelastic scattering, photoelectron/Compton/Auger electron tracking
 - XfelSimulation (xfel.rs, ~2500 lines): time-resolved dosimetry, 4D voxel arrays (spatial + time bins), PULSE_LENGTH/PULSE_BIN_LENGTH parameters, same physics as MC
@@ -170,5 +174,5 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - PE/FL escape code paths in expose loop
 - Cryo-surrounding voxel lattice
 - Crystal dispatch for MONTECARLO/GOS/XFEL/EMSP/EMED subprograms (wiring MC/XFEL/MicroED into expose())
-- CLI flags: `-o`, `-p`, `-r`, `-V`, `-t` (only `-i` works)
-- WASM bindings
+- CLI flags: `-o` (custom output module routing — Java's `module:dest` syntax not implemented)
+- WASM: `wasm-pack` toolchain must be installed separately; WASM target not in default `cargo build`

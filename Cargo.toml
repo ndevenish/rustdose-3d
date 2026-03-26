@@ -4,4 +4,5 @@ members = [
     "crates/raddose3d",
     "crates/raddose3d-parser",
     "crates/raddose3d-cli",
+    "crates/raddose3d-wasm",
 ]
