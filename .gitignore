@@ -2,3 +2,4 @@ target/
 output-*.csv
 output-*.txt
 output-*.R
+non_commit_test_files/
