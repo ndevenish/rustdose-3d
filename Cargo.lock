@@ -434,6 +434,7 @@ dependencies = [
  "ndarray",
  "once_cell",
  "raddose3d-parser",
+ "rand",
  "serde",
  "serde_json",
  "statrs",

@@ -8,6 +8,7 @@ pub mod energy_distribution;
 pub mod experiment;
 pub mod output;
 pub mod residue;
+pub mod simulation;
 pub mod wedge;
 pub mod writer;
 

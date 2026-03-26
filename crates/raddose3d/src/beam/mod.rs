@@ -89,6 +89,30 @@ pub trait Beam: std::fmt::Debug + Send + Sync {
 
     /// Sigma Y of the beam profile.
     fn sy(&self) -> f64;
+
+    /// Returns beam size X (collimation) in µm (alias for beam_x).
+    fn beam_size_x(&self) -> f64 {
+        self.beam_x()
+            .unwrap_or(self.sx() * 2.0 * (2.0 * std::f64::consts::LN_2).sqrt() * 3.0)
+    }
+
+    /// Returns beam size Y (collimation) in µm (alias for beam_y).
+    fn beam_size_y(&self) -> f64 {
+        self.beam_y()
+            .unwrap_or(self.sy() * 2.0 * (2.0 * std::f64::consts::LN_2).sqrt() * 3.0)
+    }
+
+    /// Returns collimation type string ("Rectangular" or "Circular").
+    fn collimation_type(&self) -> &str {
+        if self.is_circular() {
+            "Circular"
+        } else {
+            "Rectangular"
+        }
+    }
+
+    /// Set photons per femtosecond (for XFEL timing).
+    fn set_photons_per_fs(&mut self, _photons_per_fs: f64) {}
 }
 
 /// Create a Beam from parsed configuration.
