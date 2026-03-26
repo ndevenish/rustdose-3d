@@ -1,0 +1,22 @@
+Crystal
+Type Cuboid
+Dimensions 10 10 10
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 24
+NumResidues 51
+Subprogram XFEL
+Runs 1
+
+Beam
+Type Tophat
+Flux 2e12
+FWHM 10 10
+Energy 9.0
+Collimation Rectangular 10 10
+PulseEnergy 2e-6
+
+Wedge 0 0
+ExposureTime 1
+AngularResolution 1

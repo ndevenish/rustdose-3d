@@ -118,6 +118,7 @@ fn parse_crystal(pair: Pairs<'_>) -> Result<CrystalConfig, ParseError> {
                     "saxsseq" => CoefCalcType::SaxsSeq,
                     "smallmole" => CoefCalcType::SmallMole,
                     "expsm" | "cif" => CoefCalcType::Cif,
+                    "microed" => CoefCalcType::MicroED,
                     _ => CoefCalcType::Default,
                 });
             }

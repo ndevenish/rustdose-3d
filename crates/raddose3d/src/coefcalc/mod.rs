@@ -334,9 +334,9 @@ pub fn create_coefcalc(
         CoefCalcType::Saxs => Ok(Box::new(CoefCalcSAXS::from_config(config)?)),
         CoefCalcType::SaxsSeq => Ok(Box::new(CoefCalcFromSequenceSAXS::from_config(config)?)),
         CoefCalcType::Pdb => Ok(Box::new(CoefCalcFromPDB::from_config(config)?)),
-        // MicroED CoefCalcType not yet in the parser; map via RdFortran placeholder or leave:
+        CoefCalcType::MicroED => Ok(Box::new(CoefCalcMicroED::from_config(config)?)),
+        // Legacy RD v2 subprocess not implemented; fall back to FromParams
         CoefCalcType::RdFortran => {
-            // Legacy RD v2 subprocess not implemented; fall back to FromParams
             eprintln!("Warning: RDFortran/RDv2 CoefCalc not implemented, using Default mode.");
             Ok(Box::new(CoefCalcFromParams::from_config(config)?))
         }

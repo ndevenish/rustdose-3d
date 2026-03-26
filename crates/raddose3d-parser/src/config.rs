@@ -20,6 +20,7 @@ pub enum CoefCalcType {
     SaxsSeq,   // 7: SAXSSEQ
     SmallMole, // 8: SMALLMOLE
     Cif,       // 9: EXPSM / CIF
+    MicroED,   // 10: MICROED (electron diffraction)
 }
 
 /// Diffraction decay model.
