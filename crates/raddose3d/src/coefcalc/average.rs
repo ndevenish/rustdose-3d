@@ -41,7 +41,7 @@ impl super::CoefCalc for CoefCalcAverage {
     }
 
     fn fluorescent_escape_factors(&self, _beam_energy: f64) -> Vec<Vec<f64>> {
-        eprintln!(
+        println!(
             "WARNING: No X-ray fluorescent escape correction is implemented \
              for the Average/Dummy crystal composition. No correction applied."
         );

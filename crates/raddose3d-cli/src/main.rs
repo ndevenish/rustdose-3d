@@ -71,7 +71,7 @@ fn main() {
     }
 
     if let Some(path) = &cli.raddose_exe {
-        eprintln!("raddose executable set to {}", path);
+        println!("raddose executable set to {}", path);
     }
 
     let input_path = match cli.input {
@@ -85,7 +85,7 @@ fn main() {
 
     // Read input text from file or stdin.
     let input = if input_path == "-" {
-        eprintln!("Read from console");
+        println!("Read from console");
         let mut buf = String::new();
         io::stdin().read_to_string(&mut buf).unwrap_or_else(|e| {
             eprintln!("Error reading from stdin: {}", e);
@@ -93,7 +93,7 @@ fn main() {
         });
         buf
     } else {
-        eprintln!("Load File: {}", input_path);
+        println!("Load File: {}", input_path);
         std::fs::read_to_string(&input_path).unwrap_or_else(|e| {
             eprintln!("Error reading input file '{}': {}", input_path, e);
             std::process::exit(1);
@@ -109,7 +109,7 @@ fn main() {
     };
 
     let prefix = &cli.prefix;
-    eprintln!("No output specifications given. Using defaults.");
+    println!("No output specifications given. Using defaults.");
 
     let mut experiment = Experiment::new();
     add_default_observers(&mut experiment, prefix);

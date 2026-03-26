@@ -55,14 +55,14 @@ impl CoefCalcFromSequence {
 
         let mut total_mw = 0.0;
         // Parse sequence file
-        eprintln!("Parsing sequence file: {seq_file}");
+        println!("Parsing sequence file: {seq_file}");
         parse_sequence_file(seq_file, &mut compute, &mut total_mw)?;
-        eprintln!("Number of Amino Acids: {:.0}", compute.num_amino_acids);
+        println!("Number of Amino Acids: {:.0}", compute.num_amino_acids);
         if compute.num_dna > 0.0 {
-            eprintln!("Number of DNA Residues: {:.0}", compute.num_dna);
+            println!("Number of DNA Residues: {:.0}", compute.num_dna);
         }
         if compute.num_rna > 0.0 {
-            eprintln!("Number of RNA Residues: {:.0}", compute.num_rna);
+            println!("Number of RNA Residues: {:.0}", compute.num_rna);
         }
 
         let mut sf = config.solvent_fraction.unwrap_or(-1.0);
@@ -135,7 +135,7 @@ pub fn parse_sequence_file(
                         compute.increment_macro("SE", res.seleniums);
                     }
                 } else {
-                    eprintln!("Warning: unrecognised residue '{ch}'");
+                    println!("Warning: unrecognised residue '{ch}'");
                 }
             }
         }

@@ -51,7 +51,7 @@ impl ContainerMixture {
 
 impl Container for ContainerMixture {
     fn calculate_attenuation(&mut self, _beam_energy: f64) {
-        eprintln!(
+        println!(
             "ContainerMixture: NIST attenuation lookup not yet implemented, using 0 attenuation"
         );
     }
@@ -92,7 +92,7 @@ impl ContainerElemental {
 
 impl Container for ContainerElemental {
     fn calculate_attenuation(&mut self, _beam_energy: f64) {
-        eprintln!(
+        println!(
             "ContainerElemental: attenuation calculation not yet implemented, using 0 attenuation"
         );
     }

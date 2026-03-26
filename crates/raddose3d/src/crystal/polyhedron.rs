@@ -825,7 +825,7 @@ impl super::Crystal for CrystalPolyhedron {
     }
 
     fn expose(&mut self, beam: &mut dyn Beam, wedge: &Wedge) {
-        eprintln!("{}", self.crystal_info());
+        println!("{}", self.crystal_info());
 
         match self.subprogram.as_str() {
             "RD3D" | "" => {
@@ -835,7 +835,7 @@ impl super::Crystal for CrystalPolyhedron {
                 self.container = container;
             }
             other => {
-                eprintln!("Subprogram '{}' not yet implemented, using RD3D", other);
+                println!("Subprogram '{}' not yet implemented, using RD3D", other);
                 let mut container: Box<dyn Container> =
                     std::mem::replace(&mut self.container, Box::new(ContainerTransparent));
                 super::expose_rd3d(self, beam, wedge, &mut *container);

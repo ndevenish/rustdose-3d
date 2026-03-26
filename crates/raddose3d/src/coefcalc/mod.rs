@@ -337,7 +337,7 @@ pub fn create_coefcalc(
         CoefCalcType::MicroED => Ok(Box::new(CoefCalcMicroED::from_config(config)?)),
         // Legacy RD v2 subprocess not implemented; fall back to FromParams
         CoefCalcType::RdFortran => {
-            eprintln!("Warning: RDFortran/RDv2 CoefCalc not implemented, using Default mode.");
+            println!("Warning: RDFortran/RDv2 CoefCalc not implemented, using Default mode.");
             Ok(Box::new(CoefCalcFromParams::from_config(config)?))
         }
     }

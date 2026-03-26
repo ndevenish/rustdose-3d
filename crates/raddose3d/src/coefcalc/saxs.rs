@@ -132,10 +132,10 @@ pub fn calculate_num_monomers_saxs(
     let volume_litres = ANGSTROM_TO_LITRE * cell_volume_angstrom3;
     let num = (molarity * volume_litres * AVOGADRO_NUM).round();
     if num < 1.0 {
-        eprintln!("WARNING: calculated monomers < 1; increase unit cell size. Using 1.");
+        println!("WARNING: calculated monomers < 1; increase unit cell size. Using 1.");
         return 1;
     }
-    eprintln!(
+    println!(
         "Calculated number of monomers in cell volume: {}",
         num as i32
     );

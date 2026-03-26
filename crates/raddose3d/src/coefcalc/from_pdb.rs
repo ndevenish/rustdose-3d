@@ -100,16 +100,16 @@ impl CoefCalcFromPDB {
         }
 
         if !found_cryst1 {
-            eprintln!("Warning: no CRYST1 line found in PDB.");
+            println!("Warning: no CRYST1 line found in PDB.");
         }
 
-        eprintln!("Crystallographic symmetry operators: {cs_sym}");
-        eprintln!("Non-crystallographic symmetry operators: {ncs_sym}");
+        println!("Crystallographic symmetry operators: {cs_sym}");
+        println!("Non-crystallographic symmetry operators: {ncs_sym}");
 
         let num_monomers = cs_sym * ncs_sym;
         compute.num_monomers = num_monomers as i32;
         compute.multiply_atoms(num_monomers as f64);
-        eprintln!("Number of monomers: {num_monomers}");
+        println!("Number of monomers: {num_monomers}");
 
         let sf = compute.calculate_solvent_fraction_from_nums();
         compute.calculate_solvent_water(sf);
@@ -136,7 +136,7 @@ fn parse_cryst1(line: &str, compute: &mut CoefCalcCompute) -> bool {
     if a == 0.0 {
         return false;
     }
-    eprintln!("PDB unit cell: {a} {b} {c} {alpha} {beta} {gamma}");
+    println!("PDB unit cell: {a} {b} {c} {alpha} {beta} {gamma}");
     compute.calculate_cell_volume(a, b, c, alpha, beta, gamma);
     true
 }
@@ -166,7 +166,7 @@ fn parse_hetatm(line: &str, compute: &mut CoefCalcCompute, warned: &mut bool) {
 
     let occ: f64 = if occ_str.is_empty() {
         if !*warned {
-            eprintln!("Warning: occupancy missing, assuming 1.0");
+            println!("Warning: occupancy missing, assuming 1.0");
             *warned = true;
         }
         1.0
@@ -217,14 +217,14 @@ fn parse_seqres(line: &str, compute: &mut CoefCalcCompute) {
                 compute.increment_macro("SE", res.seleniums);
             }
         } else {
-            eprintln!("Warning: could not decipher PDB 3-letter code: '{three}'");
+            println!("Warning: could not decipher PDB 3-letter code: '{three}'");
         }
     }
 }
 
 fn download_pdb(code: &str) -> Result<String, String> {
     let url = format!("https://files.rcsb.org/view/{code}.pdb");
-    eprintln!("Downloading PDB from {url}");
+    println!("Downloading PDB from {url}");
     // Use reqwest if available, otherwise fall back to a curl-like approach.
     // For now we use std::process::Command to call curl as a lightweight fallback.
     // In a production build this should use reqwest or ureq.

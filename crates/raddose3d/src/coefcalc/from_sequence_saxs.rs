@@ -42,17 +42,17 @@ impl CoefCalcFromSequenceSAXS {
             .calculate_cell_volume_ret(cell_a, cell_b, cell_c, cell_alpha, cell_beta, cell_gamma);
 
         // Parse sequence to get composition and molecular weight
-        eprintln!("Parsing sequence file: {seq_file}");
+        println!("Parsing sequence file: {seq_file}");
         let mut total_mw = 0.0;
         parse_sequence_file(seq_file, &mut compute, &mut total_mw)?;
-        eprintln!("Number of Amino Acids: {:.0}", compute.num_amino_acids);
+        println!("Number of Amino Acids: {:.0}", compute.num_amino_acids);
         if compute.num_dna > 0.0 {
-            eprintln!("Number of DNA Residues: {:.0}", compute.num_dna);
+            println!("Number of DNA Residues: {:.0}", compute.num_dna);
         }
         if compute.num_rna > 0.0 {
-            eprintln!("Number of RNA Residues: {:.0}", compute.num_rna);
+            println!("Number of RNA Residues: {:.0}", compute.num_rna);
         }
-        eprintln!("Total molecular weight: {:.2} g/mol", total_mw);
+        println!("Total molecular weight: {:.2} g/mol", total_mw);
 
         // Calculate num_monomers from protein concentration and actual MW
         let num_monomers = calculate_num_monomers_from_mw(protein_conc, total_mw, vol);
@@ -108,10 +108,10 @@ fn calculate_num_monomers_from_mw(
     let volume_litres = ANGSTROM_TO_LITRE * cell_volume_angstrom3;
     let num = (molarity * volume_litres * AVOGADRO_NUM).round();
     if num < 1.0 {
-        eprintln!("WARNING: calculated monomers < 1; increase unit cell size. Using 1.");
+        println!("WARNING: calculated monomers < 1; increase unit cell size. Using 1.");
         return 1;
     }
-    eprintln!(
+    println!(
         "Calculated number of monomers in cell volume: {}",
         num as i32
     );

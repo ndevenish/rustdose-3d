@@ -205,11 +205,11 @@ impl CoefCalcCompute {
             - gamma.cos().powi(2);
 
         if ult < 0.0 {
-            eprintln!("Warning: error calculating unit cell volume - please check inputs.");
+            println!("Warning: error calculating unit cell volume - please check inputs.");
         }
 
         self.cell_volume = a * b * c * ult.abs().sqrt();
-        eprintln!("Cell volume: {:.2} Angstroms cubed.", self.cell_volume);
+        println!("Cell volume: {:.2} Angstroms cubed.", self.cell_volume);
     }
 
     /// Calculate crystal density from composition.
@@ -275,10 +275,10 @@ impl CoefCalcCompute {
         let sf = 1.0 - protein_mass - rna_mass - dna_mass - carb_mass - hetatm_mass;
 
         if sf < 0.0 {
-            eprintln!("Warning: Solvent mass calculated as a negative number...");
+            println!("Warning: Solvent mass calculated as a negative number...");
         }
 
-        eprintln!("Solvent fraction determined as {:.2}%.", sf * 100.0);
+        println!("Solvent fraction determined as {:.2}%.", sf * 100.0);
         self.sol_fraction = sf;
         sf
     }

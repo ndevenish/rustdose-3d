@@ -1378,7 +1378,7 @@ impl MonteCarloSimulation {
                 miss_count += 1;
             }
         }
-        eprintln!();
+        println!();
 
         self.last_time = (1.0 / C) * (self.z_dimension / 1.0e9) * 1.0e15 + self.pulse_length;
         for k in 0..self.last_time_vox.len() {
@@ -2340,7 +2340,7 @@ impl MonteCarloSimulation {
         let start = std::time::Instant::now();
         self.start_monte_carlo_xfel(beam, wedge, coef_calc);
         self.process_dose(beam, coef_calc);
-        eprintln!(
+        println!(
             "Monte Carlo simulation complete, runtime in seconds was: {:.8e}",
             start.elapsed().as_secs_f64()
         );
@@ -2450,7 +2450,7 @@ impl MonteCarloSimulation {
         };
 
         // Print summary
-        eprintln!();
+        println!();
         println!(
             "RADDOSE-3D style average dose whole crystal: {:.3}",
             tot_raddose
@@ -2483,7 +2483,7 @@ impl MonteCarloSimulation {
         if let Err(e) =
             self.write_output_csv("outputXFEL.CSV", tot_raddose, rd_exposed, vdvr_mgy, vde_mgy)
         {
-            eprintln!("Could not write outputXFEL.CSV: {}", e);
+            println!("Could not write outputXFEL.CSV: {}", e);
         }
     }
 

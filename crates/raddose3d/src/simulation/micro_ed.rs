@@ -454,7 +454,7 @@ impl MicroEdSimulation {
     pub fn calculate_em(&mut self, beam: &dyn Beam, wedge: &Wedge, coef_calc: &mut dyn CoefCalc) {
         let csda_distance = self.get_csda_range(coef_calc, beam);
 
-        eprintln!("The density is: {:.2e}", coef_calc.density());
+        println!("The density is: {:.2e}", coef_calc.density());
 
         let _wavelength = self.get_wavelength(beam);
         let _res_rough = get_resolution_rough(_wavelength);
@@ -467,40 +467,40 @@ impl MicroEdSimulation {
         let dose3_results = self.em_stopping_power_way(beam, wedge, coef_calc);
         let dose3 = dose3_results[0];
 
-        eprintln!(
+        println!(
             "\nThe Dose in the exposed area by stopping power: {:.4e} MGy",
             dose3
         );
-        eprintln!("The CSDA range is: {:.2} nm", csda_distance);
+        println!("The CSDA range is: {:.2} nm", csda_distance);
 
         // Monte Carlo is commented out in Java — stub only.
         // self.start_monte_carlo(coef_calc, beam);
 
-        eprintln!("\nNumber elastic events: {:.2}", self.number_elastic);
-        eprintln!(
+        println!("\nNumber elastic events: {:.2}", self.number_elastic);
+        println!(
             "Number single elastic events: {:.2}",
             self.number_single_elastic
         );
-        eprintln!("Number Inelastic events: {:.2}", self.number_inelastic);
-        eprintln!("Number productive events: {:.2}", self.number_productive);
+        println!("Number Inelastic events: {:.2}", self.number_inelastic);
+        println!("Number productive events: {:.2}", self.number_productive);
 
         let information_coef = if dose3 != 0.0 {
             self.number_productive / dose3
         } else {
             0.0
         };
-        eprintln!(
+        println!(
             "Information Coefficient (productive/MGy): {:.2}",
             information_coef
         );
 
         let optimal_en = self.get_optimal_energy(beam, wedge, coef_calc);
-        eprintln!(
+        println!(
             "\nThe optimal accelerating voltage is: {:.0} kV",
             optimal_en
         );
         let optimal_t = self.get_optimal_thickness(beam, wedge, coef_calc);
-        eprintln!("The optimal thickness is: {:.0} nm\n", optimal_t);
+        println!("The optimal thickness is: {:.0} nm\n", optimal_t);
 
         // Store primary dose result.
         self.dose_output = dose3;
@@ -509,10 +509,10 @@ impl MicroEdSimulation {
         self.all_doses = dose3_results[1..].to_vec();
 
         // Print slice data (equivalent to the commented-out Java CSV writer).
-        eprintln!("Slice Number,Slice Depth (nm),Slice Dose (MGy)");
+        println!("Slice Number,Slice Depth (nm),Slice Dose (MGy)");
         for (i, &sd) in self.all_doses.iter().enumerate() {
             let depth = i as f64 * self.slice_thickness;
-            eprintln!("{},{:.4},{:.8e}", i + 1, depth, sd);
+            println!("{},{:.4},{:.8e}", i + 1, depth, sd);
         }
     }
 
@@ -653,7 +653,7 @@ impl MicroEdSimulation {
 
         // Elastic
         let elastic_lambda = coef_calc.electron_elastic_mfpl(avg_energy, false); // nm
-        eprintln!("Elastic Lambda: {}", elastic_lambda);
+        println!("Elastic Lambda: {}", elastic_lambda);
         let elastic_prob = if elastic_lambda > 0.0 {
             1.0 - (-self.sample_thickness / elastic_lambda).exp()
         } else {
@@ -670,7 +670,7 @@ impl MicroEdSimulation {
 
         // GOS inelastic
         let gos_inelastic_lambda = coef_calc.gos_inel(false, avg_energy); // nm
-        eprintln!("GOS Inelastic Lambda: {}", gos_inelastic_lambda);
+        println!("GOS Inelastic Lambda: {}", gos_inelastic_lambda);
         let inel_prob = if gos_inelastic_lambda > 0.0 {
             1.0 - (-self.sample_thickness / gos_inelastic_lambda).exp()
         } else {

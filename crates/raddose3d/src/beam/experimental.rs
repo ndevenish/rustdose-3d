@@ -205,7 +205,7 @@ impl super::Beam for BeamExperimental {
         let frac = container.attenuation_fraction();
         self.attenuated_flux = self.total_flux * (1.0 - frac);
         if container.material_name().is_some() {
-            eprintln!(
+            println!(
                 "Beam photons per second after container attenuation is {:.2e} photons per second",
                 self.attenuated_flux
             );
