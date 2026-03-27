@@ -109,6 +109,8 @@ pub fn expose_rd3d(
     wedge: &Wedge,
     container: &mut dyn Container,
 ) {
+    use std::io::Write;
+
     // Update coefficients for beam energy
     crystal
         .coefcalc_mut()
@@ -130,6 +132,16 @@ pub fn expose_rd3d(
     crystal
         .exposure_summary_mut()
         .exposure_start(angles.len(), wedge, crystal_size);
+
+    // Progress indicator (matches Java OutputProgressIndicator)
+    let image_count = angles.len();
+    let mut wedge_progress: usize = 0;
+    let stdout = std::io::stdout();
+    {
+        let mut out = stdout.lock();
+        let _ = write!(out, "Exposing wedge: [ 0%");
+        let _ = out.flush();
+    }
 
     // Energy sampling (monochromatic for now)
     let energies = vec![beam.photon_energy()];
@@ -159,7 +171,30 @@ pub fn expose_rd3d(
         crystal
             .exposure_summary_mut()
             .image_complete(n, angle, last_angle, vox_vol);
+
+        // Update progress bar
+        if image_count > 0 {
+            let mut out = stdout.lock();
+            while 100 * (n + 1) / image_count > wedge_progress {
+                wedge_progress += 1;
+                if wedge_progress % 4 == 0 {
+                    let _ = write!(out, ".");
+                }
+                match wedge_progress {
+                    20 => { let _ = write!(out, "20%"); }
+                    40 => { let _ = write!(out, "40%"); }
+                    60 => { let _ = write!(out, "60%"); }
+                    80 => { let _ = write!(out, "80%"); }
+                    100 => { let _ = write!(out, "100%"); }
+                    _ => {}
+                }
+            }
+            let _ = out.flush();
+        }
     }
+
+    // Close progress bar
+    println!(" ]");
 
     // Summary observations
     let voxel_mass_kg =

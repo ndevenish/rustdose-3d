@@ -5,11 +5,11 @@ use raddose3d::beam;
 use raddose3d::crystal;
 use raddose3d::experiment::Experiment;
 use raddose3d::output::{
-    OutputDWDs, OutputFinalDoseStateCSV, OutputFinalDoseStateR, OutputProgressIndicator,
-    OutputRDECSV, OutputSummaryCSV, OutputSummaryText, OutputVoxelDose, OutputVoxelFluences,
+    OutputDWDs, OutputFinalDoseStateCSV, OutputFinalDoseStateR, OutputRDECSV, OutputSummaryCSV,
+    OutputSummaryText, OutputVoxelDose, OutputVoxelFluences,
 };
 use raddose3d::wedge::Wedge;
-use raddose3d::writer::{file_writer, stderr_writer, stdout_writer, TeeWriter};
+use raddose3d::writer::{file_writer, stdout_writer, TeeWriter};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -207,6 +207,5 @@ fn add_default_observers(experiment: &mut Experiment, prefix: &str) {
         Err(e) => eprintln!("Could not initialize OutputVoxelFluences: {}", e),
     }
 
-    // Progress indicator → stderr
-    experiment.add_observer(Box::new(OutputProgressIndicator::new(stderr_writer())));
+    // Progress indicator is now printed inline by expose_rd3d().
 }
