@@ -225,17 +225,12 @@ fn parse_seqres(line: &str, compute: &mut CoefCalcCompute) {
 fn download_pdb(code: &str) -> Result<String, String> {
     let url = format!("https://files.rcsb.org/view/{code}.pdb");
     println!("Downloading PDB from {url}");
-    // Use reqwest if available, otherwise fall back to a curl-like approach.
-    // For now we use std::process::Command to call curl as a lightweight fallback.
-    // In a production build this should use reqwest or ureq.
-    let output = std::process::Command::new("curl")
-        .args(["-s", "--max-time", "30", &url])
-        .output()
-        .map_err(|e| format!("Failed to run curl to download PDB: {e}"))?;
-    if !output.status.success() {
-        return Err(format!("curl failed with status {}", output.status));
-    }
-    String::from_utf8(output.stdout).map_err(|e| format!("PDB response is not valid UTF-8: {e}"))
+    ureq::get(&url)
+        .call()
+        .map_err(|e| format!("Failed to download PDB '{code}': {e}"))?
+        .body_mut()
+        .read_to_string()
+        .map_err(|e| format!("Failed to read PDB response: {e}"))
 }
 
 impl CoefCalc for CoefCalcFromPDB {
