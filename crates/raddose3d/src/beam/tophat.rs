@@ -99,8 +99,8 @@ impl super::Beam for BeamTophat {
 
     fn description(&self) -> String {
         format!(
-            "TopHat beam: {:.2e} photons/s, {:.2} keV, [{:.1} x {:.1}] µm",
-            self.total_flux, self.photon_energy, self.beam_x_um, self.beam_y_um
+            "Top hat beam, {:.1} by {:.1} (x by y) um with {:.2e} photons per second at {:.2}keV.",
+            self.beam_x_um, self.beam_y_um, self.total_flux, self.photon_energy
         )
     }
 

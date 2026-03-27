@@ -447,7 +447,7 @@ impl super::Crystal for CrystalCuboid {
 
     fn crystal_info(&self) -> String {
         format!(
-            "Cuboid crystal of size [{:.0}, {:.0}, {:.0}] um [x, y, z] at a resolution of {:.2} microns per voxel edge.",
+            "Cuboid (Polyhedron) crystal of size [{:.0}, {:.0}, {:.0}] um [x, y, z] at a resolution of {:.2} microns per voxel edge.",
             self.cryst_size_um[0],
             self.cryst_size_um[1],
             self.cryst_size_um[2],
