@@ -114,23 +114,6 @@ pub fn expose_rd3d(
         .coefcalc_mut()
         .update_coefficients(beam.photon_energy());
 
-    // Print coefficient info
-    let cc = crystal.coefcalc();
-    println!(
-        "Photoelectric Coefficient: {:.2e} /um.",
-        cc.absorption_coefficient()
-    );
-    println!(
-        "Inelastic Coefficient: {:.2e} /um.",
-        cc.inelastic_coefficient()
-    );
-    println!("Elastic Coefficient: {:.2e} /um.", cc.elastic_coefficient());
-    println!(
-        "Attenuation Coefficient: {:.2e} /um.",
-        cc.attenuation_coefficient()
-    );
-    println!("Density: {:.2} g/ml.", cc.density());
-
     // Apply container attenuation
     container.calculate_attenuation(beam.photon_energy());
     println!("{}", container.info());

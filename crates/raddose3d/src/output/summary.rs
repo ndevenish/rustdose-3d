@@ -35,7 +35,7 @@ impl super::Output for OutputSummaryText {
     }
 
     fn publish_beam(&mut self, beam: &dyn Beam) {
-        let _ = write!(self.writer, "{}", beam.description());
+        let _ = writeln!(self.writer, "{}", beam.description());
     }
 
     fn publish_wedge(

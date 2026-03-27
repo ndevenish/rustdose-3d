@@ -466,11 +466,13 @@ impl ExposureSummary {
     }
 
     /// Average dose within a dose quantile volume.
+    /// Matches Java: counts voxels in entries strictly above the threshold entry
+    /// (i.e. entries encountered after the threshold is found during ascending iteration).
     pub fn avg_dose_threshold(&self, dose_quantile: f64) -> f64 {
         let threshold = self.abs_dose_threshold(dose_quantile);
         let mut voxels_above = 0u32;
         for (dose_val, &count) in &self.voxel_doses {
-            if dose_val.0 >= threshold {
+            if dose_val.0 > threshold {
                 voxels_above += count;
             }
         }
@@ -547,10 +549,11 @@ impl ExposureSummary {
         out
     }
 
-    /// Dose histogram bin boundary for index i (1-based; i=0 is -∞, i=9 is 30.0).
+    /// Dose histogram bin boundary for index i (1-based; i=1 is HIST_MIN, i=10 is 30.0).
+    /// Matches Java's `Histogram.getHistogramBreaks()` where breaks[i] = minValue + (i-1)*step.
     pub fn dose_hist_break(i: usize) -> f64 {
         const HIST_MIN: f64 = 0.1;
         const HIST_STEP: f64 = (30.0 - HIST_MIN) / 9.0;
-        HIST_MIN + i as f64 * HIST_STEP
+        HIST_MIN + (i as f64 - 1.0) * HIST_STEP
     }
 }

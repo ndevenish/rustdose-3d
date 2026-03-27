@@ -504,8 +504,6 @@ impl super::Crystal for CrystalCuboid {
     }
 
     fn expose(&mut self, beam: &mut dyn Beam, wedge: &Wedge) {
-        println!("{}", self.crystal_info());
-
         match self.subprogram.as_str() {
             "RD3D" | "" => {
                 // We need to take container out temporarily to avoid borrow issues

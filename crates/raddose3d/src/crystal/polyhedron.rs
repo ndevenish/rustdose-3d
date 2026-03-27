@@ -825,8 +825,6 @@ impl super::Crystal for CrystalPolyhedron {
     }
 
     fn expose(&mut self, beam: &mut dyn Beam, wedge: &Wedge) {
-        println!("{}", self.crystal_info());
-
         match self.subprogram.as_str() {
             "RD3D" | "" => {
                 let mut container: Box<dyn Container> =
