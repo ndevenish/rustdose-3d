@@ -98,20 +98,21 @@ impl BeamExperimental {
             .map_err(|e| format!("Failed to read PGM magic: {}", e))?;
         let magic = magic.trim().to_uppercase();
 
-        // Skip comment line
-        let mut _comment = String::new();
-        reader
-            .read_line(&mut _comment)
-            .map_err(|e| format!("Failed to read PGM comment: {}", e))?;
-
-        // Read width, height, max value from header lines
+        // Read remaining header: skip comment lines (starting with #),
+        // then read width, height, max value.
+        // Note: unlike the Java version which unconditionally skips one line
+        // as a "comment", we properly handle PGM files with or without comments.
         let mut header_tokens: Vec<String> = Vec::new();
         while header_tokens.len() < 3 {
             let mut line = String::new();
             reader
                 .read_line(&mut line)
                 .map_err(|e| format!("Failed to read PGM header: {}", e))?;
-            header_tokens.extend(line.split_whitespace().map(String::from));
+            let trimmed = line.trim();
+            if trimmed.starts_with('#') {
+                continue; // skip comment lines
+            }
+            header_tokens.extend(trimmed.split_whitespace().map(String::from));
         }
 
         let pic_width: usize = header_tokens[0]
