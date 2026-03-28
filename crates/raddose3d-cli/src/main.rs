@@ -100,13 +100,36 @@ fn main() {
         })
     };
 
-    let config = match raddose3d_parser::parse(&input) {
+    let mut config = match raddose3d_parser::parse(&input) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Parse error: {}", e);
             std::process::exit(1);
         }
     };
+
+    // Resolve relative file paths in the config relative to the input file's directory.
+    if input_path != "-" {
+        if let Some(base) = std::path::Path::new(&input_path).parent() {
+            let resolve = |p: &mut Option<String>| {
+                if let Some(s) = p {
+                    let path = std::path::Path::new(s.as_str());
+                    if path.is_relative() {
+                        *s = base.join(path).to_string_lossy().into_owned();
+                    }
+                }
+            };
+            for cc in &mut config.crystals {
+                resolve(&mut cc.seq_file);
+                resolve(&mut cc.pdb);
+                resolve(&mut cc.cif);
+                resolve(&mut cc.model_file);
+            }
+            for bc in &mut config.beams {
+                resolve(&mut bc.file);
+            }
+        }
+    }
 
     let prefix = &cli.prefix;
     println!("No output specifications given. Using defaults.");
