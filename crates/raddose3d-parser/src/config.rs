@@ -25,9 +25,22 @@ impl Config {
                 }
             }
         };
+        // Like resolve, but only acts when the value looks like a file path
+        // (contains a separator or a dot). Bare codes like "1KMT" are left as-is
+        // so they can be downloaded from RCSB.
+        let resolve_if_path = |p: &mut Option<String>| {
+            if let Some(s) = p {
+                if s.contains(std::path::MAIN_SEPARATOR) || s.contains('.') {
+                    let path = Path::new(s.as_str());
+                    if path.is_relative() {
+                        *s = base.join(path).to_string_lossy().into_owned();
+                    }
+                }
+            }
+        };
         for cc in &mut self.crystals {
             resolve(&mut cc.seq_file);
-            resolve(&mut cc.pdb);
+            resolve_if_path(&mut cc.pdb);
             resolve(&mut cc.cif);
             resolve(&mut cc.model_file);
         }
@@ -204,4 +217,55 @@ pub struct WedgeConfig {
     pub translate_z: Option<f64>,
     pub rot_ax_beam_offset: Option<f64>,
     pub max_resolution: Option<f64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn resolve_paths_leaves_pdb_code_unchanged() {
+        let mut config = Config {
+            crystals: vec![CrystalConfig {
+                pdb: Some("1KMT".into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        config.resolve_paths(&PathBuf::from("/some/base/dir"));
+        assert_eq!(config.crystals[0].pdb.as_deref(), Some("1KMT"));
+    }
+
+    #[test]
+    fn resolve_paths_resolves_pdb_file_path() {
+        let mut config = Config {
+            crystals: vec![CrystalConfig {
+                pdb: Some("data/model.pdb".into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        config.resolve_paths(&PathBuf::from("/some/base/dir"));
+        assert_eq!(
+            config.crystals[0].pdb.as_deref(),
+            Some("/some/base/dir/data/model.pdb")
+        );
+    }
+
+    #[test]
+    fn resolve_paths_resolves_cif_path() {
+        let mut config = Config {
+            crystals: vec![CrystalConfig {
+                cif: Some("molecule.cif".into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        config.resolve_paths(&PathBuf::from("/base"));
+        assert_eq!(
+            config.crystals[0].cif.as_deref(),
+            Some("/base/molecule.cif")
+        );
+    }
 }
