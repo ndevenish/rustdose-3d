@@ -204,6 +204,12 @@ impl super::Beam for BeamGaussian {
     fn apply_container_attenuation(&mut self, container: &dyn Container) {
         let fraction = container.attenuation_fraction();
         self.attenuated_photons_per_sec = self.total_flux * (1.0 - fraction);
+        if fraction > 0.0 {
+            println!(
+                "Beam photons per second after container attenuation is {:.2e} photons per second",
+                self.attenuated_photons_per_sec
+            );
+        }
         self.recalc_scale_factor();
     }
 
