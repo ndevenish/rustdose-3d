@@ -752,14 +752,23 @@ impl super::Crystal for CrystalPolyhedron {
     }
 
     fn crystal_info(&self) -> String {
-        let base = format!(
-            "{} crystal of size [{:.0}, {:.0}, {:.0}] um [x, y, z] at a resolution of {:.2} microns per voxel edge.",
-            self.crystal_name,
-            self.cryst_size_um[0],
-            self.cryst_size_um[1],
-            self.cryst_size_um[2],
-            1.0 / self.pix_per_um
-        );
+        let base = if self.crystal_name == "Cylinder" {
+            format!(
+                "Cylinder (Polyhedron) crystal of diameter {:.2} mm and height {:.2} mm at a resolution of {:.2} microns per voxel edge.",
+                self.cryst_size_um[0] / 1000.0,
+                self.cryst_size_um[1] / 1000.0,
+                1.0 / self.pix_per_um
+            )
+        } else {
+            format!(
+                "{} crystal of size [{:.0}, {:.0}, {:.0}] um [x, y, z] at a resolution of {:.2} microns per voxel edge.",
+                self.crystal_name,
+                self.cryst_size_um[0],
+                self.cryst_size_um[1],
+                self.cryst_size_um[2],
+                1.0 / self.pix_per_um
+            )
+        };
         if self.angle_p != 0.0 || self.angle_l != 0.0 {
             format!(
                 "{} P={:.2} deg, L={:.2} deg.",

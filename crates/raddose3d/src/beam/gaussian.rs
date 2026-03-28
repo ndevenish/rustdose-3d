@@ -178,9 +178,14 @@ impl super::Beam for BeamGaussian {
     }
 
     fn description(&self) -> String {
+        let collimation = if let (Some(cx), Some(cy)) = (self.coll_x_um, self.coll_y_um) {
+            format!("{:.1}x{:.1} um ", cx, cy)
+        } else {
+            String::new()
+        };
         format!(
-            "Gaussian beam: {:.2e} photons/s, {:.2} keV, FWHM [{:.1}, {:.1}] µm",
-            self.total_flux, self.photon_energy, self.fwhm_x, self.fwhm_y
+            "Gaussian beam, {}with {:.2} by {:.2} FWHM (x by y) and {:.1e} photons per second at {:.2} keV.",
+            collimation, self.fwhm_x, self.fwhm_y, self.total_flux, self.photon_energy
         )
     }
 
