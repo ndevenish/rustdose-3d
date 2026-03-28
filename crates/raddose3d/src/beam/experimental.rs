@@ -75,6 +75,120 @@ impl BeamExperimental {
         })
     }
 
+    /// Parse a PGM file (P2 ASCII or P5 binary) into a 2D intensity grid.
+    ///
+    /// Matches the Java `BeamExperimentalpgm.getXYIntensityList` behaviour:
+    /// - Skip magic number line (P2/P5)
+    /// - Skip one comment line
+    /// - Read width, height, max value
+    /// - Read pixel data bottom-up, right-to-left so that the lab-frame
+    ///   orientation matches RADDOSE-3D axes.
+    ///
+    /// Returns `data[col][row]` (width × height), matching Java's Double[][].
+    pub fn load_pgm(filename: &str) -> Result<Vec<Vec<f64>>, String> {
+        use std::io::{BufRead, Read};
+        let file = std::fs::File::open(filename)
+            .map_err(|e| format!("Could not open PGM file '{}': {}", filename, e))?;
+        let mut reader = std::io::BufReader::new(file);
+
+        // Read magic number line
+        let mut magic = String::new();
+        reader
+            .read_line(&mut magic)
+            .map_err(|e| format!("Failed to read PGM magic: {}", e))?;
+        let magic = magic.trim().to_uppercase();
+
+        // Skip comment line
+        let mut _comment = String::new();
+        reader
+            .read_line(&mut _comment)
+            .map_err(|e| format!("Failed to read PGM comment: {}", e))?;
+
+        // Read width, height, max value from header lines
+        let mut header_tokens: Vec<String> = Vec::new();
+        while header_tokens.len() < 3 {
+            let mut line = String::new();
+            reader
+                .read_line(&mut line)
+                .map_err(|e| format!("Failed to read PGM header: {}", e))?;
+            header_tokens.extend(line.split_whitespace().map(String::from));
+        }
+
+        let pic_width: usize = header_tokens[0]
+            .parse()
+            .map_err(|_| format!("Invalid PGM width: {}", header_tokens[0]))?;
+        let pic_height: usize = header_tokens[1]
+            .parse()
+            .map_err(|_| format!("Invalid PGM height: {}", header_tokens[1]))?;
+        let max_val: usize = header_tokens[2]
+            .parse()
+            .map_err(|_| format!("Invalid PGM max value: {}", header_tokens[2]))?;
+
+        let expected = pic_width * pic_height;
+
+        // Read pixel data depending on format
+        let pixel_values: Vec<f64> = if magic == "P5" {
+            // Binary format: one byte per pixel (if max_val <= 255), else two bytes big-endian
+            let bytes_per_pixel = if max_val <= 255 { 1 } else { 2 };
+            let mut raw = vec![0u8; expected * bytes_per_pixel];
+            reader
+                .read_exact(&mut raw)
+                .map_err(|e| format!("Failed to read PGM binary data: {}", e))?;
+            if bytes_per_pixel == 1 {
+                raw.iter().map(|&b| b as f64).collect()
+            } else {
+                raw.chunks_exact(2)
+                    .map(|c| ((c[0] as u16) << 8 | c[1] as u16) as f64)
+                    .collect()
+            }
+        } else {
+            // P2 ASCII format: whitespace-separated values
+            let mut rest = String::new();
+            reader
+                .read_to_string(&mut rest)
+                .map_err(|e| format!("Failed to read PGM ASCII data: {}", e))?;
+            // Include any leftover header tokens beyond the first 3
+            let mut vals: Vec<f64> = header_tokens[3..]
+                .iter()
+                .map(|t| {
+                    t.parse::<f64>()
+                        .map_err(|_| format!("Invalid PGM pixel value: {}", t))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            vals.extend(
+                rest.split_whitespace()
+                    .map(|t| {
+                        t.parse::<f64>()
+                            .map_err(|_| format!("Invalid PGM pixel value: {}", t))
+                    })
+                    .collect::<Result<Vec<f64>, _>>()?,
+            );
+            vals
+        };
+
+        if pixel_values.len() < expected {
+            return Err(format!(
+                "PGM file has {} data values, expected {}",
+                pixel_values.len(),
+                expected
+            ));
+        }
+
+        // Build pgmData[col][row] matching Java's layout:
+        // Java iterates row = picHeight-1 downto 0, col = picWidth-1 downto 0
+        // and reads sequentially, so the first value goes to [picWidth-1][picHeight-1].
+        let mut pgm_data = vec![vec![0.0f64; pic_height]; pic_width];
+        let mut idx = 0;
+        for row in (0..pic_height).rev() {
+            for col in (0..pic_width).rev() {
+                pgm_data[col][row] = pixel_values[idx];
+                idx += 1;
+            }
+        }
+
+        Ok(pgm_data)
+    }
+
     /// Set the raw intensity grid (rows = vertical, cols = horizontal).
     pub fn set_data(&mut self, data: Vec<Vec<f64>>) {
         let ncols = data.first().map(|r| r.len()).unwrap_or(0);

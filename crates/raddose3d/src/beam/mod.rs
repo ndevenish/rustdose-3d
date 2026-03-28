@@ -127,6 +127,16 @@ pub fn create_beam(config: &BeamConfig) -> Result<Box<dyn Beam>, String> {
         "gaussian" => Ok(Box::new(BeamGaussian::from_config(config)?)),
         "tophat" => Ok(Box::new(BeamTophat::from_config(config)?)),
         "experimental" => Ok(Box::new(BeamExperimental::from_config(config)?)),
+        "experimentalpgm" => {
+            let file_path = config
+                .file
+                .as_deref()
+                .ok_or("ExperimentalPGM beam requires a File")?;
+            let data = BeamExperimental::load_pgm(file_path)?;
+            let mut beam = BeamExperimental::from_config(config)?;
+            beam.set_data(data);
+            Ok(Box::new(beam))
+        }
         other => Err(format!("Unknown beam type: {}", other)),
     }
 }
