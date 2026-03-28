@@ -196,13 +196,9 @@ impl CrystalPolyhedron {
 
         let (vertices, indices) = load_obj(model_file)?;
 
-        // Scale by diameter if given (dim_x used as overall scale)
-        let scale = config.dim_x.unwrap_or(1.0);
-        let vertices: Vec<[f64; 3]> = vertices
-            .iter()
-            .map(|v| [v[0] * scale, v[1] * scale, v[2] * scale])
-            .collect();
-
+        // OBJ vertices are in absolute µm coordinates (matching Java behavior).
+        // No scaling by dim_x — dimensions are derived from vertex bounding box
+        // in from_geometry_and_config.
         Self::from_geometry_and_config(vertices, indices, config, "Polyhedron")
     }
 
@@ -1240,10 +1236,10 @@ mod tests {
         let resolution = 0.5;
 
         // OBJ file has vertices at ±30,±10,±20 — already 60×20×40 µm.
-        // Use dim_x=1.0 so the scale factor doesn't blow up the coordinates.
+        // dim_x is not used for OBJ scaling (matches Java behavior).
         let mut poly = make_polyhedron_from_obj(
             "CrystalPolyhedron-cuboid-30-20-10.obj",
-            1.0,
+            xdim,
             ydim,
             zdim,
             resolution,
