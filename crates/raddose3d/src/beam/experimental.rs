@@ -242,3 +242,133 @@ impl super::Beam for BeamExperimental {
         self.beam_y_size / (2.0 * std::f64::consts::SQRT_2)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TOLERANCE: f64 = 1e-10;
+
+    /// Helper to build a BeamExperimental from a data grid.
+    fn make_experimental_beam(data: Vec<Vec<f64>>) -> BeamExperimental {
+        let flux = 1e12;
+        let energy = 10.0;
+        let pix_x = 5.0;
+        let pix_y = 5.0;
+        let mut beam = BeamExperimental {
+            photon_energy: energy,
+            total_flux: flux,
+            attenuated_flux: flux,
+            pix_x,
+            pix_y,
+            beam_x_size: 0.0,
+            beam_y_size: 0.0,
+            pulse_energy: 0.0,
+            energy_fwhm: None,
+            is_circular: false,
+            data: Vec::new(),
+            beam_array: Vec::new(),
+            array_ready: false,
+        };
+        beam.set_data(data);
+        use crate::beam::Beam;
+        beam.generate_beam_array();
+        beam
+    }
+
+    #[test]
+    fn bilinear_interpolation_corners() {
+        assert!(
+            (BeamExperimental::bilinear_interpolate(0.0, 1.0, 2.0, 3.0, 0.0, 0.0) - 0.0).abs()
+                < TOLERANCE
+        );
+        assert!(
+            (BeamExperimental::bilinear_interpolate(0.0, 1.0, 2.0, 3.0, 1.0, 0.0) - 1.0).abs()
+                < TOLERANCE
+        );
+        assert!(
+            (BeamExperimental::bilinear_interpolate(0.0, 1.0, 2.0, 3.0, 0.0, 1.0) - 2.0).abs()
+                < TOLERANCE
+        );
+        assert!(
+            (BeamExperimental::bilinear_interpolate(0.0, 1.0, 2.0, 3.0, 1.0, 1.0) - 3.0).abs()
+                < TOLERANCE
+        );
+    }
+
+    #[test]
+    fn bilinear_interpolation_midpoints() {
+        assert!(
+            (BeamExperimental::bilinear_interpolate(0.0, 1.0, 2.0, 3.0, 0.3, 0.5) - 1.3).abs()
+                < TOLERANCE
+        );
+        assert!(
+            (BeamExperimental::bilinear_interpolate(0.0, 1.0, 2.0, 3.0, 0.7, 0.5) - 1.7).abs()
+                < TOLERANCE
+        );
+        assert!(
+            (BeamExperimental::bilinear_interpolate(0.0, 1.0, 2.0, 3.0, 0.7, 0.9) - 2.5).abs()
+                < TOLERANCE
+        );
+        assert!(
+            (BeamExperimental::bilinear_interpolate(0.0, 1.0, 2.0, 3.0, 0.9, 0.9) - 2.7).abs()
+                < TOLERANCE
+        );
+    }
+
+    #[test]
+    #[allow(clippy::needless_range_loop)]
+    fn experimental_beam_horizontal_variation() {
+        // Grid where values change vertically (row = i+1), constant across columns
+        let mut data = vec![vec![0.0; 4]; 4];
+        for i in 0..4 {
+            for j in 0..4 {
+                data[i][j] = (i + 1) as f64;
+            }
+        }
+        let beam = make_experimental_beam(data);
+        use crate::beam::Beam;
+
+        // Beam should be generated and intensity > 0 at center
+        let center = beam.beam_intensity(0.0, 0.0, 0.0);
+        assert!(center > 0.0, "Center intensity should be positive");
+    }
+
+    #[test]
+    #[allow(clippy::needless_range_loop)]
+    fn experimental_beam_vertical_variation() {
+        // Grid where values change horizontally (col = j+1), constant across rows
+        let mut data = vec![vec![0.0; 4]; 4];
+        for i in 0..4 {
+            for j in 0..4 {
+                data[i][j] = (j + 1) as f64;
+            }
+        }
+        let beam = make_experimental_beam(data);
+        use crate::beam::Beam;
+
+        let center = beam.beam_intensity(0.0, 0.0, 0.0);
+        assert!(center > 0.0, "Center intensity should be positive");
+    }
+
+    #[test]
+    #[allow(clippy::needless_range_loop)]
+    fn experimental_beam_combined_variation() {
+        // Grid where values = i + j + 2
+        let mut data = vec![vec![0.0; 4]; 4];
+        for i in 0..4 {
+            for j in 0..4 {
+                data[i][j] = (i + j + 2) as f64;
+            }
+        }
+        let beam = make_experimental_beam(data);
+        use crate::beam::Beam;
+
+        let center = beam.beam_intensity(0.0, 0.0, 0.0);
+        assert!(center > 0.0, "Center intensity should be positive");
+
+        // Off-center should also work
+        let off = beam.beam_intensity(2.5, 0.0, 0.0);
+        assert!(off > 0.0, "Off-center intensity should be positive");
+    }
+}

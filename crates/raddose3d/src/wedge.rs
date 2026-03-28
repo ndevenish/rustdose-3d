@@ -89,7 +89,9 @@ impl Wedge {
     pub fn total_sec(&self) -> f64 {
         self.exposure_time
     }
+}
 
+impl Wedge {
     /// Returns a human-readable description of the wedge.
     pub fn description(&self) -> String {
         let mut s = format!(
@@ -119,5 +121,71 @@ impl Wedge {
         }
 
         s
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::config::WedgeConfig;
+
+    #[test]
+    fn wedge_defaults_with_optional_params_missing() {
+        let config = WedgeConfig {
+            start_ang: 0.0,
+            end_ang: 90.0,
+            exposure_time: Some(120.0),
+            angular_resolution: None,
+            start_offset_x: None,
+            start_offset_y: None,
+            start_offset_z: None,
+            translate_x: None,
+            translate_y: None,
+            translate_z: None,
+            rot_ax_beam_offset: None,
+            max_resolution: None,
+        };
+        let w = Wedge::from_config(&config);
+
+        // Angular resolution should default to 2 degrees
+        assert!(w.ang_res > 0.0, "angular resolution should be set");
+        assert!(
+            (w.start_ang - 0.0_f64.to_radians()).abs() < 1e-10,
+            "start angle"
+        );
+        assert!(
+            (w.end_ang - 90.0_f64.to_radians()).abs() < 1e-10,
+            "end angle"
+        );
+        assert!((w.exposure_time - 120.0).abs() < 1e-10, "exposure time");
+        // Offsets/translations should default to 0
+        assert!((w.start_x).abs() < 1e-10, "start X");
+        assert!((w.start_y).abs() < 1e-10, "start Y");
+        assert!((w.start_z).abs() < 1e-10, "start Z");
+        assert!((w.trans_x).abs() < 1e-10, "trans X");
+        assert!((w.trans_y).abs() < 1e-10, "trans Y");
+        assert!((w.trans_z).abs() < 1e-10, "trans Z");
+        assert!((w.off_axis_um).abs() < 1e-10, "off axis");
+    }
+
+    #[test]
+    fn wedge_required_parameters() {
+        // A wedge with start_ang, end_ang, and exposure_time should work
+        let config = WedgeConfig {
+            start_ang: 0.0,
+            end_ang: 90.0,
+            exposure_time: Some(100.0),
+            angular_resolution: None,
+            start_offset_x: None,
+            start_offset_y: None,
+            start_offset_z: None,
+            translate_x: None,
+            translate_y: None,
+            translate_z: None,
+            rot_ax_beam_offset: None,
+            max_resolution: None,
+        };
+        let w = Wedge::from_config(&config);
+        assert!((w.total_sec() - 100.0).abs() < 1e-10);
     }
 }

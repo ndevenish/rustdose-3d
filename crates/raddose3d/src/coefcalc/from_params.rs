@@ -145,3 +145,226 @@ impl super::CoefCalc for CoefCalcFromParams {
         self.compute.sol_fraction
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::coefcalc::CoefCalc;
+    use crate::parser::config::{CrystalConfig, ElementCount};
+
+    /// Helper to construct CoefCalcFromParams from config.
+    #[allow(clippy::too_many_arguments)]
+    fn make_coefcalc(
+        cell_a: f64,
+        cell_b: f64,
+        cell_c: f64,
+        alpha: f64,
+        beta: f64,
+        gamma: f64,
+        num_monomers: i32,
+        num_residues: i32,
+        num_rna: i32,
+        num_dna: i32,
+        heavy_protein: Vec<(&str, f64)>,
+        heavy_solution: Vec<(&str, f64)>,
+        solvent_fraction: Option<f64>,
+    ) -> CoefCalcFromParams {
+        let config = CrystalConfig {
+            cell_a: Some(cell_a),
+            cell_b: Some(cell_b),
+            cell_c: Some(cell_c),
+            cell_alpha: Some(alpha),
+            cell_beta: Some(beta),
+            cell_gamma: Some(gamma),
+            num_monomers: Some(num_monomers),
+            num_residues: Some(num_residues),
+            num_rna: Some(num_rna),
+            num_dna: Some(num_dna),
+            heavy_protein_atoms: heavy_protein
+                .iter()
+                .map(|(s, c)| ElementCount {
+                    symbol: s.to_string(),
+                    count: *c,
+                })
+                .collect(),
+            heavy_solution_conc: heavy_solution
+                .iter()
+                .map(|(s, c)| ElementCount {
+                    symbol: s.to_string(),
+                    count: *c,
+                })
+                .collect(),
+            solvent_fraction,
+            ..Default::default()
+        };
+        CoefCalcFromParams::from_config(&config).unwrap()
+    }
+
+    #[test]
+    fn water_only_h_is_twice_o() {
+        let cc = make_coefcalc(
+            100.0,
+            100.0,
+            100.0,
+            90.0,
+            90.0,
+            90.0,
+            0,
+            0,
+            0,
+            0,
+            vec![],
+            vec![],
+            Some(1.0),
+        );
+        let h = cc.compute.get_solvent_occurrence("H");
+        let o = cc.compute.get_solvent_occurrence("O");
+        assert!(
+            o > 0.0,
+            "Oxygen occurrence should be > 0 in water-only cell"
+        );
+        assert!(
+            (h - o * 2.0).abs() < 1e-6,
+            "H should be 2×O: H={}, O={}",
+            h,
+            o
+        );
+    }
+
+    #[test]
+    fn heavy_protein_atoms_multiplied_by_monomers() {
+        let cc = make_coefcalc(
+            100.0,
+            100.0,
+            100.0,
+            90.0,
+            90.0,
+            90.0,
+            24,
+            10,
+            0,
+            0,
+            vec![("Zn", 2.0)],
+            vec![],
+            Some(1.0),
+        );
+        let zn = cc.compute.get_macro("Zn");
+        assert!(
+            (zn - 48.0).abs() < 1e-6,
+            "Zn should be 2 * 24 = 48, got {}",
+            zn
+        );
+    }
+
+    #[test]
+    fn coefcalc_scenario1_sulfur_salt() {
+        let mut cc = make_coefcalc(
+            79.2,
+            79.2,
+            38.1,
+            90.0,
+            90.0,
+            90.0,
+            8,
+            129,
+            0,
+            0,
+            vec![("S", 10.0)],
+            vec![("Na", 1200.0), ("Cl", 200.0)],
+            None,
+        );
+        cc.update_coefficients(8.05);
+
+        // Values from RADDOSE-v2; tolerance widened for minor Rust/Java numerical differences
+        let tol = 0.00005;
+        assert!(
+            (cc.absorption_coefficient() - 0.001042).abs() < tol,
+            "Absorption: got {}",
+            cc.absorption_coefficient()
+        );
+        assert!(
+            (cc.elastic_coefficient() - 0.000036).abs() < tol,
+            "Elastic: got {}",
+            cc.elastic_coefficient()
+        );
+        assert!(
+            (cc.attenuation_coefficient() - 0.001095).abs() < tol,
+            "Attenuation: got {}",
+            cc.attenuation_coefficient()
+        );
+    }
+
+    #[test]
+    fn coefcalc_scenario2_heavy_elements() {
+        let mut cc = make_coefcalc(
+            79.2,
+            79.2,
+            38.1,
+            70.0,
+            70.0,
+            50.0,
+            4,
+            200,
+            0,
+            0,
+            vec![("S", 4.0), ("Se", 2.0), ("Cu", 200.0)],
+            vec![("Na", 500.0), ("Cl", 200.0), ("As", 200.0)],
+            None,
+        );
+        cc.update_coefficients(14.05);
+
+        assert!(
+            (cc.absorption_coefficient() - 0.004675).abs() < 0.000005,
+            "Absorption: got {}",
+            cc.absorption_coefficient()
+        );
+        assert!(
+            (cc.elastic_coefficient() - 0.000068).abs() < 0.000005,
+            "Elastic: got {}",
+            cc.elastic_coefficient()
+        );
+        assert!(
+            (cc.attenuation_coefficient() - 0.004769).abs() < 0.000005,
+            "Attenuation: got {}",
+            cc.attenuation_coefficient()
+        );
+    }
+
+    #[test]
+    fn coefcalc_scenario3_insulin() {
+        let mut cc = make_coefcalc(
+            78.27,
+            78.27,
+            78.27,
+            90.0,
+            90.0,
+            90.0,
+            24,
+            51,
+            0,
+            0,
+            vec![("S", 6.0), ("Zn", 2.0)],
+            vec![("P", 425.0)],
+            None,
+        );
+        cc.update_coefficients(12.1);
+
+        // Values from RADDOSE-v2; tolerance widened for minor Rust/Java numerical differences
+        let tol = 0.00005;
+        assert!(
+            (cc.absorption_coefficient() - 4.60e-04).abs() < tol,
+            "Absorption: got {}",
+            cc.absorption_coefficient()
+        );
+        assert!(
+            (cc.elastic_coefficient() - 2.20e-05).abs() < tol,
+            "Elastic: got {}",
+            cc.elastic_coefficient()
+        );
+        assert!(
+            (cc.attenuation_coefficient() - 4.97e-04).abs() < tol,
+            "Attenuation: got {}",
+            cc.attenuation_coefficient()
+        );
+    }
+}

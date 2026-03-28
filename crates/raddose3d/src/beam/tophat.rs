@@ -178,3 +178,66 @@ impl super::Beam for BeamTophat {
         self.beam_y_um / 12.0_f64.sqrt()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::beam::Beam;
+    use crate::parser::config::{BeamConfig, Collimation};
+
+    fn make_tophat(coll_h: f64, coll_v: f64, circular: bool) -> BeamTophat {
+        let collimation = if circular {
+            Collimation::Circular {
+                h: coll_h,
+                v: coll_v,
+            }
+        } else {
+            Collimation::Rectangular {
+                h: coll_h,
+                v: coll_v,
+            }
+        };
+        let config = BeamConfig {
+            beam_type: Some("tophat".to_string()),
+            energy: Some(12.0),
+            flux: Some(1e10),
+            collimation: Some(collimation),
+            ..Default::default()
+        };
+        BeamTophat::from_config(&config).unwrap()
+    }
+
+    #[test]
+    fn tophat_uniform_inside_aperture() {
+        let b = make_tophat(80.0, 80.0, false);
+        let center = b.beam_intensity(0.0, 0.0, 0.0);
+        assert!(center > 0.0, "Intensity at center should be positive");
+
+        // Check a few points inside the aperture - should all be equal
+        let corner = b.beam_intensity(30.0, 30.0, 0.0);
+        assert!(
+            (center - corner).abs() < 1e-20,
+            "TopHat should be uniform inside aperture"
+        );
+    }
+
+    #[test]
+    fn tophat_zero_outside_aperture() {
+        let b = make_tophat(80.0, 80.0, false);
+        // Well outside the 80x80 µm aperture
+        assert_eq!(b.beam_intensity(50.0, 0.0, 0.0), 0.0);
+        assert_eq!(b.beam_intensity(0.0, 50.0, 0.0), 0.0);
+        assert_eq!(b.beam_intensity(50.0, 50.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn tophat_circular_collimation() {
+        let b = make_tophat(80.0, 80.0, true);
+        // Center should have intensity
+        assert!(b.beam_intensity(0.0, 0.0, 0.0) > 0.0);
+        // Corner of bounding box is outside circle
+        assert_eq!(b.beam_intensity(39.9, 39.9, 0.0), 0.0);
+        // On axis should be inside
+        assert!(b.beam_intensity(39.0, 0.0, 0.0) > 0.0);
+    }
+}

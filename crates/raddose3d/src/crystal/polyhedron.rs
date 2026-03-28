@@ -671,20 +671,20 @@ impl super::Crystal for CrystalPolyhedron {
     }
 
     fn find_depth(&self, vox_coord: &[f64; 3], _delta_phi: f64, _wedge: &Wedge) -> f64 {
-        let dir_z = 1.0f64; // Ray direction [0,0,1]
+        let dir_z = -1.0f64; // Ray direction [0,0,-1] (towards beam source)
         let mut distances = Vec::new();
 
         for (t, _tri) in self.indices.iter().enumerate() {
             let n = &self.rotated_normals[t];
             let d = self.rotated_origin_distances[t];
 
-            let denom = n[2]; // n · [0,0,1]
+            let denom = n[2] * dir_z; // n · [0,0,-1]
             if denom.abs() < 1e-12 {
                 continue;
             }
 
             let t_val =
-                (n[0] * vox_coord[0] + n[1] * vox_coord[1] + n[2] * vox_coord[2] + d) / denom;
+                -(n[0] * vox_coord[0] + n[1] * vox_coord[1] + n[2] * vox_coord[2] + d) / denom;
             if t_val <= 0.0 || t_val.is_nan() || t_val.is_infinite() {
                 continue;
             }
@@ -1200,6 +1200,165 @@ mod tests {
         assert!(
             !crystal.is_crystal_at(0, 0, 0),
             "Corner voxel (0,0,0) should be outside SphericalNew"
+        );
+    }
+
+    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
+
+    fn make_polyhedron_from_obj(
+        obj_file: &str,
+        dim_x: f64,
+        dim_y: f64,
+        dim_z: f64,
+        resolution: f64,
+    ) -> CrystalPolyhedron {
+        let config = CrystalConfig {
+            crystal_type: Some("polyhedron".to_string()),
+            coefcalc: Some(crate::parser::config::CoefCalcType::Average),
+            dim_x: Some(dim_x),
+            dim_y: Some(dim_y),
+            dim_z: Some(dim_z),
+            pixels_per_micron: Some(resolution),
+            angle_p: Some(0.0),
+            angle_l: Some(0.0),
+            model_file: Some(format!("{}/{}", FIXTURES_DIR, obj_file)),
+            cell_a: Some(100.0),
+            cell_b: Some(100.0),
+            cell_c: Some(100.0),
+            ..Default::default()
+        };
+        CrystalPolyhedron::from_config(&config).unwrap()
+    }
+
+    #[test]
+    fn polyhedron_depth_matches_cuboid_for_box_obj() {
+        use crate::crystal::cuboid::CrystalCuboid;
+
+        let xdim = 60.0;
+        let ydim = 20.0;
+        let zdim = 40.0;
+        let resolution = 0.5;
+
+        // OBJ file has vertices at ±30,±10,±20 — already 60×20×40 µm.
+        // Use dim_x=1.0 so the scale factor doesn't blow up the coordinates.
+        let mut poly = make_polyhedron_from_obj(
+            "CrystalPolyhedron-cuboid-30-20-10.obj",
+            1.0,
+            ydim,
+            zdim,
+            resolution,
+        );
+
+        let cub_config = CrystalConfig {
+            crystal_type: Some("cuboid".to_string()),
+            coefcalc: Some(crate::parser::config::CoefCalcType::Average),
+            dim_x: Some(xdim),
+            dim_y: Some(ydim),
+            dim_z: Some(zdim),
+            pixels_per_micron: Some(resolution),
+            angle_p: Some(0.0),
+            angle_l: Some(0.0),
+            cell_a: Some(100.0),
+            cell_b: Some(100.0),
+            cell_c: Some(100.0),
+            ..Default::default()
+        };
+        let mut cub = CrystalCuboid::from_config(&cub_config).unwrap();
+
+        let w = crate::wedge::Wedge::from_config(&crate::parser::config::WedgeConfig {
+            start_ang: 0.0,
+            end_ang: 0.0,
+            exposure_time: Some(100.0),
+            angular_resolution: None,
+            start_offset_x: None,
+            start_offset_y: None,
+            start_offset_z: None,
+            translate_x: None,
+            translate_y: None,
+            translate_z: None,
+            rot_ax_beam_offset: None,
+            max_resolution: Some(2.0),
+        });
+
+        let [nx, ny, nz] = poly.cryst_size_voxels();
+
+        // Check interior voxels (skip edges due to rounding)
+        poly.setup_depth_finding(0.0, &w);
+        cub.setup_depth_finding(0.0, &w);
+
+        for x in 1..(nx - 1) {
+            for y in 1..(ny - 1) {
+                for z in 1..(nz - 1) {
+                    let pc = poly.get_cryst_coord(x, y, z);
+                    let cc = cub.get_cryst_coord(x, y, z);
+
+                    let depth_poly = poly.find_depth(&pc, 0.0, &w);
+                    let depth_cub = cub.find_depth(&cc, 0.0, &w);
+
+                    let expected = z as f64 / resolution;
+                    assert!(
+                        (depth_poly - expected).abs() < 2.0,
+                        "Polyhedron depth at z={}: got {}, expected {}",
+                        z,
+                        depth_poly,
+                        expected
+                    );
+                    assert!(
+                        (depth_cub - expected).abs() < 2.0,
+                        "Cuboid depth at z={}: got {}, expected {}",
+                        z,
+                        depth_cub,
+                        expected
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn polyhedron_concave_depth() {
+        let resolution = 0.5;
+        let mut poly = make_polyhedron_from_obj(
+            "CrystalPolyhedron-concave_cuboid-30-20-10.obj",
+            1.0, // scale = 1.0 (OBJ coordinates used directly)
+            1.0,
+            1.0,
+            resolution,
+        );
+
+        let w = crate::wedge::Wedge::from_config(&crate::parser::config::WedgeConfig {
+            start_ang: 0.0,
+            end_ang: 0.0,
+            exposure_time: Some(100.0),
+            angular_resolution: None,
+            start_offset_x: None,
+            start_offset_y: None,
+            start_offset_z: None,
+            translate_x: None,
+            translate_y: None,
+            translate_z: None,
+            rot_ax_beam_offset: None,
+            max_resolution: Some(2.0),
+        });
+
+        poly.setup_depth_finding(0.0, &w);
+
+        // Thick part of crystal
+        let thick_coord = [3.5, -8.65, 29.9];
+        let thick_depth = poly.find_depth(&thick_coord, 0.0, &w);
+        assert!(
+            (thick_depth - 60.0).abs() < 2.0,
+            "Thick part depth: got {}, expected ~60",
+            thick_depth
+        );
+
+        // Thin part (through horseshoe gap)
+        let thin_coord = [5.0, 6.0, 30.0];
+        let thin_depth = poly.find_depth(&thin_coord, 0.0, &w);
+        assert!(
+            (thin_depth - 40.0).abs() < 2.0,
+            "Thin part depth: got {}, expected ~40",
+            thin_depth
         );
     }
 }

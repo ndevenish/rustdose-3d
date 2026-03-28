@@ -177,15 +177,25 @@ pub fn expose_rd3d(
             let mut out = stdout.lock();
             while 100 * (n + 1) / image_count > wedge_progress {
                 wedge_progress += 1;
-                if wedge_progress % 4 == 0 {
+                if wedge_progress.is_multiple_of(4) {
                     let _ = write!(out, ".");
                 }
                 match wedge_progress {
-                    20 => { let _ = write!(out, "20%"); }
-                    40 => { let _ = write!(out, "40%"); }
-                    60 => { let _ = write!(out, "60%"); }
-                    80 => { let _ = write!(out, "80%"); }
-                    100 => { let _ = write!(out, "100%"); }
+                    20 => {
+                        let _ = write!(out, "20%");
+                    }
+                    40 => {
+                        let _ = write!(out, "40%");
+                    }
+                    60 => {
+                        let _ = write!(out, "60%");
+                    }
+                    80 => {
+                        let _ = write!(out, "80%");
+                    }
+                    100 => {
+                        let _ = write!(out, "100%");
+                    }
                     _ => {}
                 }
             }
@@ -399,5 +409,60 @@ pub fn create_crystal(
         )?)),
         "spherical" => Ok(Box::new(CrystalSpherical::from_config(config)?)),
         other => Err(format!("Crystal type '{}' not yet implemented", other)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::config::{CoefCalcType, CrystalConfig};
+
+    const CRYSTAL_RESOLUTION_MARKER: f64 = 0.533743110;
+
+    fn default_crystal_config(crystal_type: &str) -> CrystalConfig {
+        CrystalConfig {
+            crystal_type: Some(crystal_type.to_string()),
+            coefcalc: Some(CoefCalcType::Average),
+            dim_x: Some(10.0),
+            dim_y: Some(10.0),
+            dim_z: Some(10.0),
+            pixels_per_micron: Some(CRYSTAL_RESOLUTION_MARKER),
+            angle_p: Some(0.0),
+            angle_l: Some(0.0),
+            cell_a: Some(100.0),
+            cell_b: Some(100.0),
+            cell_c: Some(100.0),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn create_crystal_cuboid() {
+        let c = create_crystal(&default_crystal_config("cuboid")).unwrap();
+        assert!(
+            (c.crystal_pix_per_um() - CRYSTAL_RESOLUTION_MARKER).abs() < 1e-6,
+            "Resolution mismatch"
+        );
+    }
+
+    #[test]
+    fn create_crystal_spherical() {
+        let c = create_crystal(&default_crystal_config("spherical")).unwrap();
+        assert!(
+            (c.crystal_pix_per_um() - CRYSTAL_RESOLUTION_MARKER).abs() < 1e-6,
+            "Resolution mismatch"
+        );
+    }
+
+    #[test]
+    fn create_crystal_fails_on_invalid_type() {
+        let result = create_crystal(&default_crystal_config("invalid"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn create_crystal_fails_on_empty_type() {
+        let result = create_crystal(&default_crystal_config(""));
+        assert!(result.is_err());
     }
 }

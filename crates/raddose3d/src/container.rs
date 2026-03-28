@@ -143,3 +143,41 @@ pub fn create_container(config: &crate::parser::config::CrystalConfig) -> Box<dy
         _ => Box::new(ContainerTransparent),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transparent_container_zero_attenuation() {
+        let mut c = ContainerTransparent;
+        c.calculate_attenuation(8.05);
+        assert!(
+            c.attenuation_fraction() < 1e-6,
+            "Transparent container should have zero attenuation"
+        );
+    }
+
+    #[test]
+    fn zero_thickness_containers_no_attenuation() {
+        // ContainerMixture with zero thickness
+        let mut cm = ContainerMixture::new(0.0, 2.23, "pyrex".to_string());
+        cm.calculate_attenuation(8.05);
+        assert!(
+            cm.attenuation_fraction() < 1e-6,
+            "Zero-thickness mixture container should not attenuate"
+        );
+
+        // ContainerElemental with zero thickness
+        let mut ce = ContainerElemental::new(
+            0.0,
+            2.65,
+            vec![("S".to_string(), 1.0), ("O".to_string(), 2.0)],
+        );
+        ce.calculate_attenuation(8.05);
+        assert!(
+            ce.attenuation_fraction() < 1e-6,
+            "Zero-thickness elemental container should not attenuate"
+        );
+    }
+}

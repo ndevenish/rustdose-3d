@@ -245,3 +245,71 @@ impl super::Beam for BeamGaussian {
         self.fwhm_y / Self::FWHM_TO_SIGMA
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::beam::Beam;
+    use crate::parser::config::{BeamConfig, Collimation};
+
+    fn make_gaussian() -> BeamGaussian {
+        let config = BeamConfig {
+            beam_type: Some("gaussian".to_string()),
+            energy: Some(12.0),
+            flux: Some(1e10),
+            fwhm_x: Some(20.0),
+            fwhm_y: Some(20.0),
+            collimation: Some(Collimation::Rectangular { h: 80.0, v: 80.0 }),
+            ..Default::default()
+        };
+        BeamGaussian::from_config(&config).unwrap()
+    }
+
+    #[test]
+    fn gaussian_peak_at_centre() {
+        let b = make_gaussian();
+        let center = b.beam_intensity(0.0, 0.0, 0.0);
+        assert!(center > 0.0, "Gaussian center should be positive");
+
+        // Off-center should be lower
+        let off = b.beam_intensity(10.0, 0.0, 0.0);
+        assert!(
+            off < center,
+            "Gaussian should fall off from center: center={}, off={}",
+            center,
+            off
+        );
+    }
+
+    #[test]
+    fn gaussian_falls_off_with_distance() {
+        let b = make_gaussian();
+        let mut prev = b.beam_intensity(0.0, 0.0, 0.0);
+        for x in [5.0, 10.0, 15.0, 20.0] {
+            let v = b.beam_intensity(x, 0.0, 0.0);
+            assert!(v < prev, "Gaussian should decrease at x={}", x);
+            prev = v;
+        }
+    }
+
+    #[test]
+    fn gaussian_circular_clips_correctly() {
+        let config = BeamConfig {
+            beam_type: Some("gaussian".to_string()),
+            energy: Some(12.0),
+            flux: Some(1e10),
+            fwhm_x: Some(20.0),
+            fwhm_y: Some(20.0),
+            collimation: Some(Collimation::Circular { h: 40.0, v: 40.0 }),
+            ..Default::default()
+        };
+        let b = BeamGaussian::from_config(&config).unwrap();
+
+        // Center should have intensity
+        assert!(b.beam_intensity(0.0, 0.0, 0.0) > 0.0);
+        // Corner of bounding box is outside circle
+        assert_eq!(b.beam_intensity(19.9, 19.9, 0.0), 0.0);
+        // On-axis within radius should work
+        assert!(b.beam_intensity(19.0, 0.0, 0.0) > 0.0);
+    }
+}

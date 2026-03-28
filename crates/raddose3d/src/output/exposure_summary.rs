@@ -557,3 +557,56 @@ impl ExposureSummary {
         HIST_MIN + (i as f64 - 1.0) * HIST_STEP
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dose_hist_break_boundaries() {
+        // First break should be HIST_MIN = 0.1
+        let tol = 1e-10;
+        assert!((ExposureSummary::dose_hist_break(1) - 0.1).abs() < tol);
+        // Last break (i=10) should be 30.0
+        assert!((ExposureSummary::dose_hist_break(10) - 30.0).abs() < tol);
+        // Breaks should be monotonically increasing
+        for i in 1..10 {
+            assert!(ExposureSummary::dose_hist_break(i + 1) > ExposureSummary::dose_hist_break(i));
+        }
+    }
+
+    #[test]
+    fn summary_observation_bins_values_correctly() {
+        let mut es = ExposureSummary::new();
+        // Add voxels with known doses to exercise the histogram
+        // Bin 0: dose < 0.1 (underflow)
+        es.summary_observation(0, 0, 0, 0.05, 1e-15);
+        // Bin 1: 0.1 <= dose < ~3.42
+        es.summary_observation(0, 0, 1, 1.0, 1e-15);
+        es.summary_observation(0, 0, 2, 2.0, 1e-15);
+        // Bin 5: somewhere in the middle range
+        es.summary_observation(0, 1, 0, 15.0, 1e-15);
+        // Bin 10: dose >= 30.0 (overflow)
+        es.summary_observation(0, 1, 1, 35.0, 1e-15);
+
+        assert_eq!(es.exposed_voxels(), 5);
+    }
+
+    #[test]
+    fn dose_hist_normalised_sums_to_one() {
+        let mut es = ExposureSummary::new();
+        // Add several voxels at various doses
+        let doses = [0.05, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 29.0, 35.0];
+        for (i, &d) in doses.iter().enumerate() {
+            es.summary_observation(0, 0, i, d, 1e-15);
+        }
+
+        let hist = es.dose_hist_normalised();
+        let sum: f64 = hist.iter().sum();
+        assert!(
+            (sum - 1.0).abs() < 1e-10,
+            "Normalised histogram should sum to 1.0, got {}",
+            sum
+        );
+    }
+}

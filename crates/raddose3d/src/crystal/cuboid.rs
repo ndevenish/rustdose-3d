@@ -348,8 +348,8 @@ impl super::Crystal for CrystalCuboid {
     }
 
     fn find_depth(&self, vox_coord: &[f64; 3], _delta_phi: f64, _wedge: &Wedge) -> f64 {
-        // Cast ray in Z direction, find intersections with polyhedron surface
-        let dir = [0.0, 0.0, 1.0];
+        // Cast ray in -Z direction (towards beam source) to measure depth from entry face
+        let dir = [0.0, 0.0, -1.0];
         let mut distances = Vec::new();
 
         for (t, tri) in self.indices.iter().enumerate() {
@@ -362,7 +362,7 @@ impl super::Crystal for CrystalCuboid {
             }
 
             let t_val =
-                (n[0] * vox_coord[0] + n[1] * vox_coord[1] + n[2] * vox_coord[2] + d) / denom;
+                -(n[0] * vox_coord[0] + n[1] * vox_coord[1] + n[2] * vox_coord[2] + d) / denom;
             if t_val <= 0.0 || t_val.is_nan() || t_val.is_infinite() {
                 continue;
             }
@@ -656,3 +656,208 @@ fn point_in_triangle(p: &[f64; 3], a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> 
 
 // For the 8-vertex cuboid, note that occupancy checking using the polyhedron approach
 // with 12 triangles is equivalent to checking if a point is within the rotated bounding box.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crystal::Crystal;
+    use crate::parser::config::{CoefCalcType, CrystalConfig, WedgeConfig};
+
+    fn make_cuboid_crystal(
+        dim_x: f64,
+        dim_y: f64,
+        dim_z: f64,
+        resolution: f64,
+        angle_p: f64,
+        angle_l: f64,
+    ) -> CrystalCuboid {
+        let config = CrystalConfig {
+            crystal_type: Some("cuboid".to_string()),
+            coefcalc: Some(CoefCalcType::Average),
+            dim_x: Some(dim_x),
+            dim_y: Some(dim_y),
+            dim_z: Some(dim_z),
+            pixels_per_micron: Some(resolution),
+            angle_p: Some(angle_p),
+            angle_l: Some(angle_l),
+            cell_a: Some(100.0),
+            cell_b: Some(100.0),
+            cell_c: Some(100.0),
+            ..Default::default()
+        };
+        CrystalCuboid::from_config(&config).unwrap()
+    }
+
+    fn make_wedge() -> Wedge {
+        Wedge::from_config(&WedgeConfig {
+            start_ang: 0.0,
+            end_ang: 0.0,
+            exposure_time: Some(100.0),
+            angular_resolution: None,
+            start_offset_x: None,
+            start_offset_y: None,
+            start_offset_z: None,
+            translate_x: None,
+            translate_y: None,
+            translate_z: None,
+            rot_ax_beam_offset: None,
+            max_resolution: Some(2.0),
+        })
+    }
+
+    #[test]
+    fn cuboid_360_rotation_invariance() {
+        let tol = 1e-10;
+        let c = make_cuboid_crystal(100.0, 100.0, 100.0, 0.5, 0.0, 0.0);
+        let c360p = make_cuboid_crystal(100.0, 100.0, 100.0, 0.5, 360.0, 0.0);
+        let c360l = make_cuboid_crystal(100.0, 100.0, 100.0, 0.5, 0.0, 360.0);
+
+        let [nx, ny, nz] = c.cryst_size_voxels();
+        for i in 0..nx {
+            for j in 0..ny {
+                for k in 0..nz {
+                    let id = c.get_cryst_coord(i, j, k);
+                    let p360 = c360p.get_cryst_coord(i, j, k);
+                    let l360 = c360l.get_cryst_coord(i, j, k);
+                    for d in 0..3 {
+                        assert!(
+                            (id[d] - p360[d]).abs() < tol,
+                            "P360 mismatch at [{},{},{}] dim {}",
+                            i,
+                            j,
+                            k,
+                            d
+                        );
+                        assert!(
+                            (id[d] - l360[d]).abs() < tol,
+                            "L360 mismatch at [{},{},{}] dim {}",
+                            i,
+                            j,
+                            k,
+                            d
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cuboid_find_depth_unrotated() {
+        let xdim = 90.0;
+        let ydim = 74.0;
+        let zdim = 40.0;
+        let resolution = 0.5;
+        let mut c = make_cuboid_crystal(xdim, ydim, zdim, resolution, 0.0, 0.0);
+        let w = make_wedge();
+
+        let [nx, ny, nz] = c.cryst_size_voxels();
+        let tol = 1e-6;
+
+        c.setup_depth_finding(0.0, &w);
+        // For an unrotated cuboid, depth = z / resolution (distance from front face).
+        // Skip boundary voxels (x/y at 0 or max) because those sit exactly on mesh
+        // edges/vertices where the 2D ray-casting point-in-triangle test is undefined.
+        for x in 1..(nx - 1) {
+            for y in 1..(ny - 1) {
+                for z in 0..nz {
+                    let coords = c.get_cryst_coord(x, y, z);
+
+                    // Verify crystal coordinates
+                    let expected_x = -(xdim / 2.0) + x as f64 / resolution;
+                    let expected_y = -(ydim / 2.0) + y as f64 / resolution;
+                    let expected_z = -(zdim / 2.0) + z as f64 / resolution;
+                    assert!(
+                        (coords[0] - expected_x).abs() < tol,
+                        "coord x mismatch at [{},{},{}]",
+                        x,
+                        y,
+                        z
+                    );
+                    assert!(
+                        (coords[1] - expected_y).abs() < tol,
+                        "coord y mismatch at [{},{},{}]",
+                        x,
+                        y,
+                        z
+                    );
+                    assert!(
+                        (coords[2] - expected_z).abs() < tol,
+                        "coord z mismatch at [{},{},{}]",
+                        x,
+                        y,
+                        z
+                    );
+
+                    let depth = c.find_depth(&coords, 0.0, &w);
+                    let expected_depth = z as f64 / resolution;
+                    assert!(
+                        (depth - expected_depth).abs() < tol,
+                        "depth mismatch at [{},{},{}]: got {}, expected {}",
+                        x,
+                        y,
+                        z,
+                        depth,
+                        expected_depth
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cuboid_find_depth_symmetry_under_180_rotation() {
+        let mut c = make_cuboid_crystal(100.0, 100.0, 100.0, 1.0, 0.0, 0.0);
+        let w = Wedge::from_config(&WedgeConfig {
+            start_ang: 0.0,
+            end_ang: 90.0,
+            exposure_time: Some(100.0),
+            angular_resolution: Some(2.0),
+            start_offset_x: None,
+            start_offset_y: None,
+            start_offset_z: None,
+            translate_x: None,
+            translate_y: None,
+            translate_z: None,
+            rot_ax_beam_offset: None,
+            max_resolution: Some(2.0),
+        });
+
+        let test_coords = [0.0, 0.0, 0.0];
+        let test_inv_coords = [0.0, 0.0, 0.0]; // symmetric point
+
+        let mut angle = 0.0_f64;
+        while angle < 500.0_f64.to_radians() {
+            // Rotate both coordinate sets
+            let cos_a = angle.cos();
+            let sin_a = angle.sin();
+            let temp = [
+                test_coords[0] * cos_a - test_coords[2] * sin_a,
+                test_coords[1],
+                test_coords[0] * sin_a + test_coords[2] * cos_a,
+            ];
+            let temp_inv = [
+                test_inv_coords[0] * cos_a - test_inv_coords[2] * sin_a,
+                test_inv_coords[1],
+                test_inv_coords[0] * sin_a + test_inv_coords[2] * cos_a,
+            ];
+
+            c.setup_depth_finding(angle, &w);
+            let sum1 = c.find_depth(&temp, angle, &w) + c.find_depth(&temp_inv, angle, &w);
+
+            c.setup_depth_finding(angle + std::f64::consts::PI, &w);
+            let sum2 = c.find_depth(&temp, angle + std::f64::consts::PI, &w)
+                + c.find_depth(&temp_inv, angle + std::f64::consts::PI, &w);
+
+            assert!(
+                (sum1 - sum2).abs() < 1e-10,
+                "Depth symmetry failed at angle {:.3}: sum1={}, sum2={}",
+                angle,
+                sum1,
+                sum2
+            );
+
+            angle += 18.8_f64.to_radians();
+        }
+    }
+}

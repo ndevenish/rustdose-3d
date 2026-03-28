@@ -130,3 +130,51 @@ pub fn create_beam(config: &BeamConfig) -> Result<Box<dyn Beam>, String> {
         other => Err(format!("Unknown beam type: {}", other)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::config::Collimation;
+
+    const BEAM_ENERGY_MARKER: f64 = 12.533743110;
+
+    fn default_beam_config(beam_type: &str) -> BeamConfig {
+        BeamConfig {
+            beam_type: Some(beam_type.to_string()),
+            energy: Some(BEAM_ENERGY_MARKER),
+            flux: Some(10.0),
+            collimation: Some(Collimation::Rectangular { h: 1.0, v: 1.0 }),
+            fwhm_x: Some(1.0),
+            fwhm_y: Some(1.0),
+            pixel_size_x: Some(1.0),
+            pixel_size_y: Some(1.0),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn create_beam_tophat() {
+        let b = create_beam(&default_beam_config("tophat")).unwrap();
+        assert_eq!(b.beam_type(), "TopHat");
+        assert!((b.photon_energy() - BEAM_ENERGY_MARKER).abs() < 1e-10);
+    }
+
+    #[test]
+    fn create_beam_gaussian() {
+        let b = create_beam(&default_beam_config("gaussian")).unwrap();
+        assert_eq!(b.beam_type(), "Gaussian");
+        assert!((b.photon_energy() - BEAM_ENERGY_MARKER).abs() < 1e-10);
+    }
+
+    #[test]
+    fn create_beam_fails_on_invalid_type() {
+        let result = create_beam(&default_beam_config("invalid"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn create_beam_fails_on_empty_type() {
+        let result = create_beam(&default_beam_config(""));
+        assert!(result.is_err());
+    }
+}
