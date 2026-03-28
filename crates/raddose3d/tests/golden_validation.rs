@@ -1,8 +1,8 @@
-//! Phase 5 validation tests.
+//! Golden file validation tests.
 //!
 //! Runs the full pipeline with all output types enabled and compares
 //! against Java golden files captured with:
-//!   java -jar raddose3d.jar -i insulin_test.txt -p golden/phase5/insulin_
+//!   java -jar raddose3d.jar -i insulin_test.txt -p golden/insulin/insulin_
 
 use raddose3d::{
     experiment::Experiment,
@@ -15,7 +15,7 @@ use raddose3d::{
 };
 
 const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
-const GOLDEN_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/golden/phase5");
+const GOLDEN_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/golden/insulin");
 /// Large golden files that are too big for git; stored outside the repo.
 const NON_COMMIT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../non_commit_test_files");
 /// Java jar used to regenerate large golden files when missing.
@@ -123,7 +123,7 @@ fn large_golden(name: &str) -> String {
 // ── Summary.txt ───────────────────────────────────────────────────────────────
 
 #[test]
-fn phase5_summary_txt_avg_dwd() {
+fn insulin_summary_txt_avg_dwd() {
     let out = run_insulin();
     let rust = &out["Summary.txt"];
     let java = golden("Summary.txt");
@@ -138,7 +138,7 @@ fn phase5_summary_txt_avg_dwd() {
 }
 
 #[test]
-fn phase5_summary_txt_max_dose() {
+fn insulin_summary_txt_max_dose() {
     let out = run_insulin();
     let rust = &out["Summary.txt"];
     let java = golden("Summary.txt");
@@ -152,7 +152,7 @@ fn phase5_summary_txt_max_dose() {
 }
 
 #[test]
-fn phase5_summary_txt_used_volume() {
+fn insulin_summary_txt_used_volume() {
     let out = run_insulin();
     let rust = &out["Summary.txt"];
     let java = golden("Summary.txt");
@@ -168,7 +168,7 @@ fn phase5_summary_txt_used_volume() {
 }
 
 #[test]
-fn phase5_summary_txt_histogram_present() {
+fn insulin_summary_txt_histogram_present() {
     let out = run_insulin();
     let rust = &out["Summary.txt"];
     assert!(
@@ -183,7 +183,7 @@ fn phase5_summary_txt_histogram_present() {
 }
 
 #[test]
-fn phase5_summary_txt_dose_inefficiency_pe() {
+fn insulin_summary_txt_dose_inefficiency_pe() {
     let out = run_insulin();
     let rust = &out["Summary.txt"];
     assert!(
@@ -193,7 +193,7 @@ fn phase5_summary_txt_dose_inefficiency_pe() {
 }
 
 #[test]
-fn phase5_summary_txt_crystal_coefcalc_info() {
+fn insulin_summary_txt_crystal_coefcalc_info() {
     let out = run_insulin();
     let rust = &out["Summary.txt"];
     assert!(
@@ -209,7 +209,7 @@ fn phase5_summary_txt_crystal_coefcalc_info() {
 // ── Summary.csv ───────────────────────────────────────────────────────────────
 
 #[test]
-fn phase5_summary_csv_header() {
+fn insulin_summary_csv_header() {
     let out = run_insulin();
     let rust = &out["Summary.csv"];
     let java = golden("Summary.csv");
@@ -223,7 +223,7 @@ fn phase5_summary_csv_header() {
 }
 
 #[test]
-fn phase5_summary_csv_row_count() {
+fn insulin_summary_csv_row_count() {
     let out = run_insulin();
     let rust = &out["Summary.csv"];
     let java = golden("Summary.csv");
@@ -239,7 +239,7 @@ fn phase5_summary_csv_row_count() {
 // ── DWDs.csv ─────────────────────────────────────────────────────────────────
 
 #[test]
-fn phase5_dwds_csv_header() {
+fn insulin_dwds_csv_header() {
     let out = run_insulin();
     let rust = &out["DWDs.csv"];
     let java = golden("DWDs.csv");
@@ -253,7 +253,7 @@ fn phase5_dwds_csv_header() {
 }
 
 #[test]
-fn phase5_dwds_csv_row_count() {
+fn insulin_dwds_csv_row_count() {
     let out = run_insulin();
     let rust = &out["DWDs.csv"];
     let java = golden("DWDs.csv");
@@ -267,7 +267,7 @@ fn phase5_dwds_csv_row_count() {
 }
 
 #[test]
-fn phase5_dwds_csv_first_row_values() {
+fn insulin_dwds_csv_first_row_values() {
     let out = run_insulin();
     let rust = &out["DWDs.csv"];
     let java = golden("DWDs.csv");
@@ -301,7 +301,7 @@ fn phase5_dwds_csv_first_row_values() {
 // ── RDE.csv ──────────────────────────────────────────────────────────────────
 
 #[test]
-fn phase5_rde_csv_header() {
+fn insulin_rde_csv_header() {
     let out = run_insulin();
     let rust = &out["RDE.csv"];
     let java = golden("RDE.csv");
@@ -315,7 +315,7 @@ fn phase5_rde_csv_header() {
 }
 
 #[test]
-fn phase5_rde_csv_row_count() {
+fn insulin_rde_csv_row_count() {
     let out = run_insulin();
     let rust = &out["RDE.csv"];
     let java = golden("RDE.csv");
@@ -332,7 +332,7 @@ fn phase5_rde_csv_row_count() {
 
 #[test]
 #[ignore = "large golden file not in git; run with --ignored (auto-regenerates if jar present)"]
-fn phase5_dose_state_csv_row_count() {
+fn insulin_dose_state_csv_row_count() {
     let out = run_insulin();
     let rust = &out["DoseState.csv"];
     let java = large_golden("DoseState.csv");
@@ -346,7 +346,7 @@ fn phase5_dose_state_csv_row_count() {
 }
 
 #[test]
-fn phase5_dose_state_csv_columns_per_row() {
+fn insulin_dose_state_csv_columns_per_row() {
     let out = run_insulin();
     let rust = &out["DoseState.csv"];
     // Each row should have 6 comma-separated values: x,y,z,dose,fluence,elastic
@@ -362,7 +362,7 @@ fn phase5_dose_state_csv_columns_per_row() {
 // ── DoseState.R ───────────────────────────────────────────────────────────────
 
 #[test]
-fn phase5_dose_state_r_structure() {
+fn insulin_dose_state_r_structure() {
     let out = run_insulin();
     let rust = &out["DoseState.R"];
     assert!(
@@ -383,7 +383,7 @@ fn phase5_dose_state_r_structure() {
 
 #[test]
 #[ignore = "large golden file not in git; run with --ignored (auto-regenerates if jar present)"]
-fn phase5_voxel_dose_row_count() {
+fn insulin_voxel_dose_row_count() {
     let out = run_insulin();
     let rust = &out["VoxelDose.csv"];
     let java = large_golden("VoxelDose.csv");
@@ -398,7 +398,7 @@ fn phase5_voxel_dose_row_count() {
 
 #[test]
 #[ignore = "large golden file not in git; run with --ignored (auto-regenerates if jar present)"]
-fn phase5_voxel_fluences_row_count() {
+fn insulin_voxel_fluences_row_count() {
     let out = run_insulin();
     let rust = &out["VoxelFluences.csv"];
     let java = large_golden("VoxelFluences.csv");
@@ -411,7 +411,157 @@ fn phase5_voxel_fluences_row_count() {
     );
 }
 
+// ── SAXS cylinder golden comparison ──────────────────────────────────────────
+//
+// Regression test for bdab848 (match Java occupancy for boundary voxels in
+// polyhedron ray-casting). The SAXS cylinder example exposed a discrepancy in
+// Used Volume (72.2% vs Java 71.5%) caused by incorrect ray-casting threshold
+// and vertex rotation in cylinder_geometry.
+
+const SAXS_GOLDEN_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/golden/saxs");
+
+fn run_saxs() -> std::collections::HashMap<&'static str, String> {
+    let path = format!("{}/saxs_example.txt", FIXTURES_DIR);
+    let config = raddose3d::parse_input_file(std::path::Path::new(&path))
+        .expect("saxs fixture parse failed");
+
+    let (w_sumtxt, b_sumtxt) = shared_string_writer();
+    let (w_sumcsv, b_sumcsv) = shared_string_writer();
+
+    let mut exp = Experiment::new();
+    exp.add_observer(Box::new(OutputSummaryText::new(w_sumtxt)));
+    exp.add_observer(Box::new(OutputSummaryCSV::new(w_sumcsv)));
+
+    for cc in &config.crystals {
+        let c = raddose3d::crystal::create_crystal(cc).unwrap();
+        exp.set_crystal(c);
+    }
+    for bc in &config.beams {
+        let b = raddose3d::beam::create_beam(bc).unwrap();
+        exp.set_beam(b);
+    }
+    for wc in &config.wedges {
+        let w = raddose3d::wedge::Wedge::from_config(wc);
+        exp.expose_wedge(&w);
+    }
+    exp.close();
+
+    let to_string = |buf: std::sync::Arc<std::sync::Mutex<Vec<u8>>>| {
+        String::from_utf8(buf.lock().unwrap().clone()).unwrap()
+    };
+
+    let mut out = std::collections::HashMap::new();
+    out.insert("Summary.txt", to_string(b_sumtxt));
+    out.insert("Summary.csv", to_string(b_sumcsv));
+    out
+}
+
+fn saxs_golden(name: &str) -> String {
+    let path = format!("{}/saxs_{}", SAXS_GOLDEN_DIR, name);
+    std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("golden file missing: {}", path))
+}
+
+#[test]
+fn saxs_used_volume_matches_golden() {
+    let out = run_saxs();
+    let rust = &out["Summary.txt"];
+    let java = saxs_golden("Summary.txt");
+
+    let rust_val = extract_percent(rust, "Used Volume");
+    let java_val = extract_percent(&java, "Used Volume");
+    assert!(
+        (rust_val - java_val).abs() < 0.1,
+        "Used Volume: rust={rust_val}% java={java_val}% (>0.1% diff)"
+    );
+}
+
+#[test]
+fn saxs_max_dose_matches_golden() {
+    let out = run_saxs();
+    let rust = &out["Summary.txt"];
+    let java = saxs_golden("Summary.txt");
+
+    let rust_val = extract_metric(rust, "Max Dose");
+    let java_val = extract_metric(&java, "Max Dose");
+    assert!(
+        (rust_val - java_val).abs() / java_val < 0.001,
+        "Max Dose: rust={rust_val} java={java_val} (>0.1% diff)"
+    );
+}
+
+#[test]
+fn saxs_avg_dwd_matches_golden() {
+    let out = run_saxs();
+    let rust = &out["Summary.txt"];
+    let java = saxs_golden("Summary.txt");
+
+    let rust_val = extract_metric(rust, "Average Diffraction Weighted Dose");
+    let java_val = extract_metric(&java, "Average Diffraction Weighted Dose");
+    assert!(
+        (rust_val - java_val).abs() / java_val < 0.001,
+        "Avg DWD: rust={rust_val} java={java_val} (>0.1% diff)"
+    );
+}
+
+#[test]
+fn saxs_avg_dose_whole_matches_golden() {
+    let out = run_saxs();
+    let rust = &out["Summary.txt"];
+    let java = saxs_golden("Summary.txt");
+
+    let rust_val = extract_metric(rust, "Average Dose (Whole Crystal)");
+    let java_val = extract_metric(&java, "Average Dose (Whole Crystal)");
+    assert!(
+        (rust_val - java_val).abs() / java_val < 0.001,
+        "Avg Dose Whole: rust={rust_val} java={java_val} (>0.1% diff)"
+    );
+}
+
+#[test]
+fn saxs_elastic_yield_matches_golden() {
+    let out = run_saxs();
+    let rust = &out["Summary.txt"];
+    let java = saxs_golden("Summary.txt");
+
+    let rust_val = extract_metric(rust, "Elastic Yield");
+    let java_val = extract_metric(&java, "Elastic Yield");
+    assert!(
+        (rust_val - java_val).abs() / java_val < 0.001,
+        "Elastic Yield: rust={rust_val} java={java_val} (>0.1% diff)"
+    );
+}
+
+#[test]
+fn saxs_absorbed_energy_matches_golden() {
+    let out = run_saxs();
+    let rust = &out["Summary.txt"];
+    let java = saxs_golden("Summary.txt");
+
+    let rust_val = extract_metric(rust, "Absorbed Energy");
+    let java_val = extract_metric(&java, "Absorbed Energy");
+    assert!(
+        (rust_val - java_val).abs() / java_val < 0.001,
+        "Absorbed Energy: rust={rust_val} java={java_val} (>0.1% diff)"
+    );
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Extract a percentage value from lines like "Used Volume : 71.5%"
+fn extract_percent(text: &str, label: &str) -> f64 {
+    for line in text.lines() {
+        if line.contains(label) {
+            if let Some(val) = line
+                .split_whitespace()
+                .filter_map(|s| s.trim_end_matches('%').parse::<f64>().ok())
+                .next_back()
+            {
+                return val;
+            }
+        }
+    }
+    panic!("label '{label}' not found in output")
+}
 
 /// Extract the numeric value after `: ` on the first line matching `label`.
 fn extract_metric(text: &str, label: &str) -> f64 {

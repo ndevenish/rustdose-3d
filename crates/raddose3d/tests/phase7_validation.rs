@@ -7,7 +7,7 @@
 use raddose3d::{parse_input, parse_input_json, run};
 
 const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
-const GOLDEN_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/golden/phase5");
+const GOLDEN_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/golden/insulin");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

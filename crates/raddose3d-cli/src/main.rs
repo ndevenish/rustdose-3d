@@ -111,23 +111,7 @@ fn main() {
     // Resolve relative file paths in the config relative to the input file's directory.
     if input_path != "-" {
         if let Some(base) = std::path::Path::new(&input_path).parent() {
-            let resolve = |p: &mut Option<String>| {
-                if let Some(s) = p {
-                    let path = std::path::Path::new(s.as_str());
-                    if path.is_relative() {
-                        *s = base.join(path).to_string_lossy().into_owned();
-                    }
-                }
-            };
-            for cc in &mut config.crystals {
-                resolve(&mut cc.seq_file);
-                resolve(&mut cc.pdb);
-                resolve(&mut cc.cif);
-                resolve(&mut cc.model_file);
-            }
-            for bc in &mut config.beams {
-                resolve(&mut bc.file);
-            }
+            config.resolve_paths(base);
         }
     }
 

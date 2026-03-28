@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// Top-level configuration parsed from a RADDOSE-3D input file.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -6,6 +7,34 @@ pub struct Config {
     pub crystals: Vec<CrystalConfig>,
     pub beams: Vec<BeamConfig>,
     pub wedges: Vec<WedgeConfig>,
+}
+
+impl Config {
+    /// Resolve relative file paths in the config against a base directory.
+    ///
+    /// When a config is parsed from a file, call this with the parent directory
+    /// of that file so that `SeqFile`, `PDB`, `CIF`, `ModelFile`, and beam
+    /// `File` paths are resolved relative to the input file's location.
+    /// When the source is stdin or a string, pass the current working directory.
+    pub fn resolve_paths(&mut self, base: &Path) {
+        let resolve = |p: &mut Option<String>| {
+            if let Some(s) = p {
+                let path = Path::new(s.as_str());
+                if path.is_relative() {
+                    *s = base.join(path).to_string_lossy().into_owned();
+                }
+            }
+        };
+        for cc in &mut self.crystals {
+            resolve(&mut cc.seq_file);
+            resolve(&mut cc.pdb);
+            resolve(&mut cc.cif);
+            resolve(&mut cc.model_file);
+        }
+        for bc in &mut self.beams {
+            resolve(&mut bc.file);
+        }
+    }
 }
 
 /// Absorption coefficient calculation method.

@@ -38,15 +38,34 @@ pub mod constants {
 
 // ── High-level public API ────────────────────────────────────────────────────
 
-/// Parse a RADDOSE-3D text input file into a `Config`.
+/// Parse a RADDOSE-3D text input string into a `Config`.
 ///
 /// This is the standard `.txt` format used by the Java RADDOSE-3D tool.
 /// For JSON input, use [`parse_input_json`].
+///
+/// Relative file paths (SeqFile, PDB, CIF, ModelFile, beam File) are left
+/// as-is. If the input came from a file, prefer [`parse_input_file`] which
+/// resolves them relative to the file's directory.
 ///
 /// # Errors
 /// Returns an error string if parsing fails.
 pub fn parse_input(input: &str) -> Result<parser::Config, String> {
     raddose3d_parser::parse(input).map_err(|e| e.to_string())
+}
+
+/// Parse a RADDOSE-3D input file, resolving relative paths against
+/// the file's parent directory.
+///
+/// # Errors
+/// Returns an error string if the file cannot be read or parsing fails.
+pub fn parse_input_file(path: &std::path::Path) -> Result<parser::Config, String> {
+    let input = std::fs::read_to_string(path)
+        .map_err(|e| format!("Cannot read input file {}: {}", path.display(), e))?;
+    let mut config = parse_input(&input)?;
+    if let Some(base) = path.parent() {
+        config.resolve_paths(base);
+    }
+    Ok(config)
 }
 
 /// Parse a RADDOSE-3D config from JSON.

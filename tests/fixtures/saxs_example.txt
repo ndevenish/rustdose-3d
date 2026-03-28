@@ -1,0 +1,32 @@
+##############################################################################
+#  Crystal Block ("Crystal" is still used but we are defining a SAXS sample) #
+##############################################################################
+Crystal
+Type Cylinder
+Dimensions 1700 1000
+PixelsPerMicron 0.01
+CoefCalc  SAXSseq
+SeqFile rcsb_pdb_4OR0.fasta  # PDB code 4OR0
+ProteinConc 2
+ContainerMaterialType elemental
+MaterialElements Si 1 O 2
+ContainerThickness 50
+ContainerDensity 2.648
+
+##############################################################################
+#                                  Beam Block                                #
+##############################################################################
+Beam
+Type Gaussian
+Flux 2e12
+FWHM 700 700
+Energy 12.1
+Collimation Rectangular 1000 1000
+
+##############################################################################
+#                                  Wedge Block                               #
+##############################################################################
+
+Wedge 0 0
+ExposureTime 50
+# AngularResolution 2
