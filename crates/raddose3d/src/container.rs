@@ -1,10 +1,10 @@
-use crate::element::{CrossSection, ElementDatabase};
-
-/// Avogadro's number.
-const AVOGADRO: f64 = 6.022_140_857e23;
+use crate::element::ElementDatabase;
 
 /// Conversion factor: microns to centimeters.
 const MICRONS_TO_CM: f64 = 1e-4;
+
+/// Conversion factor: MeV to keV.
+const MEV_TO_KEV: f64 = 1e3;
 
 /// Container trait: models the sample container that attenuates the beam.
 pub trait Container: std::fmt::Debug + Send + Sync {
@@ -18,35 +18,129 @@ pub trait Container: std::fmt::Debug + Send + Sync {
     fn info(&self) -> String;
 }
 
-/// Compute mass attenuation coefficient (cm²/g) for a compound given elemental
-/// composition and beam energy, using the McMaster polynomial database.
+/// Fetch mass attenuation coefficient (µ/ρ in cm²/g) for a single element
+/// from the NIST X-Ray Mass Attenuation Coefficients database.
 ///
-/// For each element i with count n_i, atomic weight A_i, and total cross-section σ_i (barns):
-///   µ/ρ = (N_A / (M × 1e24)) × Σ(n_i × σ_i)
-/// where M = Σ(n_i × A_i) is the molecular weight.
-fn compute_mass_attenuation_coeff(elements: &[(String, f64)], beam_energy: f64) -> f64 {
+/// Downloads the table from NIST, parses the energy vs µ/ρ data, and
+/// linearly interpolates to the requested beam energy.
+///
+/// Returns None if the download or parsing fails.
+fn fetch_nist_mass_attenuation(atomic_number: i32, beam_energy_kev: f64) -> Option<f64> {
+    let url = format!(
+        "https://physics.nist.gov/PhysRefData/XrayMassCoef/ElemTab/z{:02}.html",
+        atomic_number
+    );
+
+    let body = ureq::get(&url)
+        .call()
+        .ok()?
+        .body_mut()
+        .read_to_string()
+        .ok()?;
+
+    // Parse data between <PRE> and </PRE> tags, matching lines with scientific notation
+    let mut in_pre = false;
+    let mut prev_energy_kev = 0.0_f64;
+    let mut prev_mu_rho = 0.0_f64;
+
+    for line in body.lines() {
+        if line.contains("<PRE>") {
+            in_pre = true;
+            continue;
+        }
+        if line.contains("</PRE>") {
+            in_pre = false;
+            continue;
+        }
+
+        if !in_pre {
+            continue;
+        }
+
+        // Look for lines containing scientific notation (digits, E, +/-)
+        if !line.contains('E') {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        // Find the first column containing 'E' (scientific notation)
+        let energy_col = parts.iter().position(|p| p.contains('E'));
+        let energy_col = match energy_col {
+            Some(i) => i,
+            None => continue,
+        };
+
+        if parts.len() < energy_col + 2 {
+            continue;
+        }
+
+        let energy_mev: f64 = match parts[energy_col].parse() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let mu_rho: f64 = match parts[energy_col + 1].parse() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let energy_kev = energy_mev * MEV_TO_KEV;
+
+        if energy_kev > beam_energy_kev {
+            // Linearly interpolate between previous and current
+            if prev_energy_kev <= 0.0 {
+                return Some(mu_rho);
+            }
+            let frac = (beam_energy_kev - prev_energy_kev) / (energy_kev - prev_energy_kev);
+            return Some(prev_mu_rho + (mu_rho - prev_mu_rho) * frac);
+        }
+
+        prev_energy_kev = energy_kev;
+        prev_mu_rho = mu_rho;
+    }
+
+    // Beam energy beyond last table entry — use last value
+    if prev_mu_rho > 0.0 {
+        Some(prev_mu_rho)
+    } else {
+        None
+    }
+}
+
+/// Compute the weighted-average mass attenuation coefficient (cm²/g) for a
+/// compound, using NIST data for each element. This matches the Java
+/// RADDOSE-3D approach exactly (ContainerElemental.extractMassAttenuationCoef).
+fn compute_nist_mass_attenuation(elements: &[(String, f64)], beam_energy_kev: f64) -> Option<f64> {
     let db = ElementDatabase::instance();
 
-    let mut total_mol_weight = 0.0;
-    let mut weighted_xs_sum = 0.0;
+    let mut element_mu_rhos = Vec::with_capacity(elements.len());
+    let mut element_weights = Vec::with_capacity(elements.len());
+    let mut total_weight = 0.0_f64;
 
     for (symbol, count) in elements {
-        if let Some(elem) = db.get(symbol) {
-            let xs = elem.get_abs_coefficients(beam_energy);
-            let total_xs = xs[&CrossSection::Total]; // barns/atom
-            let atomic_weight = elem.atomic_weight(); // g/mol
+        let elem = db.get(symbol)?;
+        let z = elem.atomic_number();
+        let atomic_weight = elem.atomic_weight();
 
-            total_mol_weight += count * atomic_weight;
-            weighted_xs_sum += count * total_xs;
-        }
+        let mu_rho = fetch_nist_mass_attenuation(z, beam_energy_kev)?;
+
+        element_mu_rhos.push(mu_rho);
+        element_weights.push(count * atomic_weight);
+        total_weight += count * atomic_weight;
     }
 
-    if total_mol_weight <= 0.0 {
-        return 0.0;
+    if total_weight <= 0.0 {
+        return None;
     }
 
-    // Convert: barns → cm² (×1e-24), then per gram via Avogadro/mol_weight
-    AVOGADRO / (total_mol_weight * 1e24) * weighted_xs_sum
+    // Weighted average: µ/ρ = Σ(w_i × µ_i/ρ_i)
+    // where w_i = (count_i × A_i) / total_weight
+    let mut mass_atten = 0.0;
+    for i in 0..elements.len() {
+        let relative_weight = element_weights[i] / total_weight;
+        mass_atten += relative_weight * element_mu_rhos[i];
+    }
+
+    Some(mass_atten)
 }
 
 /// Transparent container: no attenuation at all.
@@ -111,7 +205,7 @@ impl Container for ContainerMixture {
     }
 }
 
-/// Container with elemental composition (attenuates beam via McMaster coefficients).
+/// Container with elemental composition (attenuates beam via NIST mass attenuation data).
 #[derive(Debug)]
 pub struct ContainerElemental {
     thickness_um: f64,
@@ -131,6 +225,22 @@ impl ContainerElemental {
             attenuation_fraction: 0.0,
         }
     }
+
+    /// Build chemical formula string (e.g. "SiO2").
+    fn formula(&self) -> String {
+        self.elements
+            .iter()
+            .map(|(s, c)| {
+                if (*c - 1.0).abs() < 1e-9 {
+                    s.clone()
+                } else if (*c - c.round()).abs() < 1e-9 {
+                    format!("{}{}", s, *c as i64)
+                } else {
+                    format!("{}{}", s, c)
+                }
+            })
+            .collect()
+    }
 }
 
 impl Container for ContainerElemental {
@@ -139,7 +249,18 @@ impl Container for ContainerElemental {
             return;
         }
 
-        self.mass_attenuation_coeff = compute_mass_attenuation_coeff(&self.elements, beam_energy);
+        match compute_nist_mass_attenuation(&self.elements, beam_energy) {
+            Some(mu_rho) => {
+                self.mass_attenuation_coeff = mu_rho;
+            }
+            None => {
+                eprintln!(
+                    "Warning: failed to fetch NIST data for container {}, using 0 attenuation",
+                    self.formula()
+                );
+                return;
+            }
+        }
 
         // mass_thickness = density (g/cm³) × thickness (cm)
         let thickness_cm = self.thickness_um * MICRONS_TO_CM;
@@ -158,20 +279,7 @@ impl Container for ContainerElemental {
     }
 
     fn info(&self) -> String {
-        // Format as chemical formula: "SiO2" style
-        let formula: String = self
-            .elements
-            .iter()
-            .map(|(s, c)| {
-                if (*c - 1.0).abs() < 1e-9 {
-                    s.clone()
-                } else if (*c - c.round()).abs() < 1e-9 {
-                    format!("{}{}", s, *c as i64)
-                } else {
-                    format!("{}{}", s, c)
-                }
-            })
-            .collect();
+        let formula = self.formula();
         if self.mass_attenuation_coeff > 0.0 {
             format!(
                 "The mass attenuation coefficient of the {} container is {:.2} centimetres^2 per gram.\n\
