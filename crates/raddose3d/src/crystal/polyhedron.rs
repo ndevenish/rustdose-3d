@@ -208,7 +208,8 @@ impl CrystalPolyhedron {
         i * ny * nz + j * nz + k
     }
 
-    /// Check if a point is inside the polyhedron using ray-casting (Z direction).
+    /// Check if a point is inside the polyhedron using ray-casting (+Z direction).
+    /// Matches Java's `calculateCrystalOccupancy` exactly.
     fn is_inside_polyhedron(&self, coord: &[f64; 3]) -> bool {
         let mut crossings = 0usize;
 
@@ -217,12 +218,10 @@ impl CrystalPolyhedron {
             let d = self.origin_distances[t];
 
             let denom = n[2]; // n · [0,0,1]
-            if denom.abs() < 1e-12 {
-                continue;
-            }
 
-            let t_val = (n[0] * coord[0] + n[1] * coord[1] + n[2] * coord[2] + d) / denom;
-            if t_val <= 0.0 || t_val.is_nan() || t_val.is_infinite() {
+            // Ray-plane: t = -(n·origin + d) / (n·dir), dir=[0,0,1], n·dir = n[2]
+            let t_val = -(n[0] * coord[0] + n[1] * coord[1] + n[2] * coord[2] + d) / denom;
+            if t_val < 0.0 || t_val.is_nan() || t_val.is_infinite() {
                 continue;
             }
 
@@ -312,22 +311,32 @@ pub fn cylinder_geometry(radius: f64, height: f64) -> (Vec<[f64; 3]>, Vec<[usize
     let mut vertices = Vec::with_capacity(num_vertices * 2);
 
     // Build interleaved base/top vertices with Java's angle formula,
-    // then apply 90° CCW rotation about Z: (x,y,z) -> (-y, x, z).
-    // Java uses angleToVertex = -2π/32 (going clockwise in y-z before rotation).
-    // After 90° CCW about Z: vertex (-height/2, y, z) -> (-y, -height/2, z)
+    // then apply 90° rotation about Z using the actual rotation matrix
+    // (matching Java's Math.cos/sin with floating-point imprecision).
+    let angle_rad = 90.0_f64.to_radians();
+    let cos_a = angle_rad.cos(); // ~6.12e-17, not exactly 0
+    let sin_a = angle_rad.sin(); // 1.0
+                                 // R_z = [[cos, -sin, 0], [sin, cos, 0], [0, 0, 1]]
+
     for vertex in 0..num_vertices {
         let angle = -(2.0 * std::f64::consts::PI / num_vertices as f64) * vertex as f64;
         let y_coord = radius * angle.cos();
         let z_coord = radius * angle.sin();
 
-        // Base vertex (originally at x = -height/2, after 90° CCW Z rot)
-        // pre-rotation: (-height/2, y_coord, z_coord)
-        // after 90° CCW about Z: x' = -y_coord, y' = -height/2, z' = z_coord
-        vertices.push([-y_coord, -height / 2.0, z_coord]); // 2*vertex
-                                                           // Top vertex (originally at x = +height/2)
-                                                           // pre-rotation: (+height/2, y_coord, z_coord)
-                                                           // after 90° CCW about Z: x' = -y_coord, y' = height/2, z' = z_coord
-        vertices.push([-y_coord, height / 2.0, z_coord]); // 2*vertex+1
+        // Base vertex pre-rotation: (-height/2, y_coord, z_coord)
+        let bx = -height / 2.0;
+        vertices.push([
+            cos_a * bx - sin_a * y_coord,
+            sin_a * bx + cos_a * y_coord,
+            z_coord,
+        ]);
+        // Top vertex pre-rotation: (+height/2, y_coord, z_coord)
+        let tx = height / 2.0;
+        vertices.push([
+            cos_a * tx - sin_a * y_coord,
+            sin_a * tx + cos_a * y_coord,
+            z_coord,
+        ]);
     }
 
     // Java indices are 1-based with 96 triangles, convert to 0-based
