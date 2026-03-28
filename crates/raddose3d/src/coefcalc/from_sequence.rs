@@ -97,8 +97,8 @@ pub fn parse_sequence_file(
     compute: &mut CoefCalcCompute,
     total_mw: &mut f64,
 ) -> Result<(), String> {
-    let content =
-        std::fs::read_to_string(path).map_err(|e| format!("Cannot read sequence file: {e}"))?;
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("Cannot read sequence file {path}: {e}"))?;
     let mut residue_type = TYPE_PROTEIN;
     for line in content.lines() {
         let line = line.trim();
