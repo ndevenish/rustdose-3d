@@ -184,15 +184,18 @@ impl OutputDoseStateHTML {
                 "Last DWD",
                 &format!("{:.6} MGy", s.last_dwd),
             );
-            write_table_row(
+            write_table_row_html(
                 &mut self.writer,
                 "Elastic Yield",
-                &format!("{:.2e} photons", s.elastic_yield),
+                &format!("{} photons", html_scientific(s.elastic_yield, 2)),
             );
-            write_table_row(
+            write_table_row_html(
                 &mut self.writer,
                 "Diffraction Efficiency",
-                &format!("{:.2e} photons/MGy", s.diffraction_efficiency),
+                &format!(
+                    "{} photons/MGy",
+                    html_scientific(s.diffraction_efficiency, 2)
+                ),
             );
             write_table_row(
                 &mut self.writer,
@@ -229,10 +232,10 @@ impl OutputDoseStateHTML {
                 "Used Volume",
                 &format!("{:.1}%", s.used_volume),
             );
-            write_table_row(
+            write_table_row_html(
                 &mut self.writer,
                 "Absorbed Energy",
-                &format!("{:.2e} J", s.absorbed_energy),
+                &format!("{} J", html_scientific(s.absorbed_energy, 2)),
             );
             write_table_row(
                 &mut self.writer,
@@ -485,6 +488,35 @@ fn write_table_row(w: &mut DebugWriter, label: &str, value: &str) {
         html_escape(label),
         html_escape(value),
     );
+}
+
+/// Write a table row where `value_html` already contains HTML (e.g. superscripts).
+fn write_table_row_html(w: &mut DebugWriter, label: &str, value_html: &str) {
+    let _ = writeln!(
+        w,
+        "<tr><td>{}</td><td class=\"num\">{}</td></tr>",
+        html_escape(label),
+        value_html,
+    );
+}
+
+/// Format a number in HTML scientific notation: `1.23 × 10<sup>4</sup>`.
+fn html_scientific(value: f64, precision: usize) -> String {
+    if value == 0.0 {
+        return "0".to_string();
+    }
+    let exp = value.abs().log10().floor() as i32;
+    let mantissa = value / 10f64.powi(exp);
+    if exp == 0 {
+        format!("{:.prec$}", mantissa, prec = precision)
+    } else {
+        format!(
+            "{:.prec$}&thinsp;&times;&thinsp;10<sup>{}</sup>",
+            mantissa,
+            exp,
+            prec = precision,
+        )
+    }
 }
 
 /// Write a Vec<f64> as a compact JSON array, rounding to 4 decimal places.
