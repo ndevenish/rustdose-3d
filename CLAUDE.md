@@ -171,8 +171,19 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - CoefCalc: Raddose (legacy v2 subprocess — stubs to Default)
 - Beam: EnergyDistribution integration with Experimental beam for pink beam multi-energy loop
 - Container: Mixture/Elemental NIST mass-attenuation lookup (structure done, lookup not implemented)
-- PE/FL escape code paths in expose loop
-- Cryo-surrounding voxel lattice
 - Crystal dispatch for MONTECARLO/GOS/XFEL/EMSP/EMED subprograms (wiring MC/XFEL/MicroED into expose())
 - CLI flags: `-o` (custom output module routing — Java's `module:dest` syntax not implemented)
 - WASM: `wasm-pack` toolchain must be installed separately; WASM target not in default `cargo build`
+
+### PE/FL Escape: Known Remaining Issues
+PE/FL escape and cryo surrounding are implemented (`crystal/escape.rs`, integrated into `expose_rd3d()`). Validated on LiFePO₄ test case (1µm sphere, SMALLMOLE, 1.487 keV). Core dose metrics (DWD, avg dose, histogram shape) match Java within 1-3%. Known discrepancies:
+
+1. **FL Escape value ~57% off**: The FL distance distribution calculation (`calc_fluorescence_distribution` in `escape.rs`) likely has index mapping issues between the Rust and Java `fe_factors` layouts (Java: `[1]=edge, [2]=ion_prob, [3]=fl_yield`; Rust: `[1]=ion_prob, [2]=fl_yield, [3]=edge`). The muabs lookup for FL photon absorption may also differ.
+
+2. **Absorbed Energy ~8x off**: Java likely subtracts escaped PE/FL energy from the reported "Absorbed Energy" in `ExposureSummary`, while Rust reports gross absorbed energy. This is an output accounting difference, not a physics error — the "Dose Inefficiency PE" metric (which uses deposited energy) matches within 2.2%.
+
+3. **PE Escape ~9% off**: Expected variance from random PE track sampling (`PE_ANGLE_RESOLUTION=1`). May also reflect minor icosphere mesh geometry differences between Java and Rust at low vertex counts.
+
+4. **Gumbel PDF negative beta**: At high density + low PE energy (e.g. ρ=3.6 g/mL, E_pe<0.82 keV), the Gumbel scale parameter goes negative. Java has no guard and relies on sign cancellation in the normalization. Rust matches this by only guarding `beta == 0`, not `beta < 0`. See `gumbel_pdf()` in `escape.rs`.
+
+5. **`Type Spherical` dispatch**: Now maps to `CrystalSphericalNew` (icosphere mesh) matching Java. The analytic `CrystalSpherical` is still available in code but not selectable via input file.
