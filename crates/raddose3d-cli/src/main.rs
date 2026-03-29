@@ -5,8 +5,8 @@ use raddose3d::beam;
 use raddose3d::crystal;
 use raddose3d::experiment::Experiment;
 use raddose3d::output::{
-    OutputDWDs, OutputFinalDoseStateCSV, OutputFinalDoseStateR, OutputRDECSV, OutputSummaryCSV,
-    OutputSummaryText, OutputVoxelDose, OutputVoxelFluences,
+    OutputDWDs, OutputDoseStateHTML, OutputFinalDoseStateCSV, OutputFinalDoseStateR, OutputRDECSV,
+    OutputSummaryCSV, OutputSummaryText, OutputVoxelDose, OutputVoxelFluences,
 };
 use raddose3d::wedge::Wedge;
 use raddose3d::writer::{file_writer, stdout_writer, TeeWriter};
@@ -212,6 +212,12 @@ fn add_default_observers(experiment: &mut Experiment, prefix: &str) {
     match file_writer(format!("{}VoxelFluences.csv", prefix)) {
         Ok(w) => experiment.add_observer(Box::new(OutputVoxelFluences::new(w))),
         Err(e) => eprintln!("Could not initialize OutputVoxelFluences: {}", e),
+    }
+
+    // HTML report with Plotly visualizations
+    match file_writer(format!("{}Report.html", prefix)) {
+        Ok(w) => experiment.add_observer(Box::new(OutputDoseStateHTML::new(w))),
+        Err(e) => eprintln!("Could not initialize OutputDoseStateHTML: {}", e),
     }
 
     // Progress indicator is now printed inline by expose_rd3d().
