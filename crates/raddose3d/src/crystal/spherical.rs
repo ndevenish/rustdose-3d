@@ -232,6 +232,14 @@ impl super::Crystal for CrystalSpherical {
         &self.subprogram
     }
 
+    fn photo_electron_escape(&self) -> bool {
+        self.photo_electron_escape
+    }
+
+    fn fluorescent_escape(&self) -> bool {
+        self.fluorescent_escape
+    }
+
     fn expose(&mut self, beam: &mut dyn Beam, wedge: &Wedge) {
         match self.subprogram.as_str() {
             "RD3D" | "" => {

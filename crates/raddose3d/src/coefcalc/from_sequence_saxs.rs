@@ -151,4 +151,30 @@ impl CoefCalc for CoefCalcFromSequenceSAXS {
     fn solvent_fraction(&self) -> f64 {
         self.compute.sol_fraction
     }
+    fn is_cryo(&self) -> bool {
+        self.compute.is_cryo()
+    }
+    fn update_cryo_coefficients(&mut self, photon_energy: f64) {
+        self.compute.update_cryo_coefficients(photon_energy);
+    }
+    fn cryo_absorption_coefficient(&self) -> f64 {
+        self.compute.cryo_abs_coeff_photo
+    }
+    fn cryo_density(&self) -> f64 {
+        self.compute.cryo_density
+    }
+    fn cryo_inelastic_coefficient(&self) -> f64 {
+        self.compute.cryo_abs_coeff_comp
+    }
+    fn cryo_fluorescent_escape_factors(&self, beam_energy: f64) -> Vec<Vec<f64>> {
+        self.compute
+            .calc_cryo_fluorescent_escape_factors(beam_energy)
+    }
+    fn present_elements(&self, cryo: bool) -> std::collections::HashSet<String> {
+        if cryo {
+            self.compute.cryo_elements.clone()
+        } else {
+            self.compute.present_elements.clone()
+        }
+    }
 }

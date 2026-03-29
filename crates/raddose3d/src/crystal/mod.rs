@@ -1,4 +1,12 @@
 pub mod cuboid;
+#[allow(
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    clippy::needless_range_loop,
+    clippy::explicit_counter_loop,
+    clippy::ptr_arg
+)]
+pub mod escape;
 pub mod polyhedron;
 pub mod spherical;
 
@@ -75,6 +83,26 @@ pub trait Crystal: std::fmt::Debug + Send + Sync {
     /// The subprogram mode (RD3D, XFEL, etc.)
     fn subprogram(&self) -> &str;
 
+    /// Whether photoelectron escape is enabled.
+    fn photo_electron_escape(&self) -> bool {
+        false
+    }
+
+    /// Whether fluorescent escape is enabled.
+    fn fluorescent_escape(&self) -> bool {
+        false
+    }
+
+    /// Whether surrounding (cryo) calculation is enabled.
+    fn calc_surrounding(&self) -> bool {
+        false
+    }
+
+    /// PE resolution override (None = use default).
+    fn pe_resolution(&self) -> Option<i32> {
+        None
+    }
+
     /// Expose the crystal to a beam according to a wedge strategy.
     fn expose(&mut self, beam: &mut dyn Beam, wedge: &Wedge);
 }
@@ -124,6 +152,62 @@ pub fn expose_rd3d(
     // Generate beam array (only relevant for experimental beam)
     beam.generate_beam_array();
 
+    // Set up escape parameters if enabled
+    let pe_enabled = crystal.photo_electron_escape();
+    let fl_enabled = crystal.fluorescent_escape();
+    let cryo_enabled = crystal.calc_surrounding() && crystal.coefcalc().is_cryo();
+
+    let fe_factors = crystal
+        .coefcalc()
+        .fluorescent_escape_factors(beam.photon_energy());
+
+    let pe_escape = if pe_enabled {
+        Some(escape::setup_pe_escape(
+            beam.photon_energy(),
+            crystal.coefcalc(),
+            &fe_factors,
+            crystal.crystal_pix_per_um(),
+            crystal.cryst_size_um(),
+            crystal.pe_resolution(),
+        ))
+    } else {
+        None
+    };
+
+    let fl_escape = if fl_enabled {
+        Some(escape::setup_fl_escape(
+            &fe_factors,
+            crystal.crystal_pix_per_um(),
+            crystal.cryst_size_um(),
+        ))
+    } else {
+        None
+    };
+
+    let cryo_fe_factors = if cryo_enabled {
+        crystal
+            .coefcalc_mut()
+            .update_cryo_coefficients(beam.photon_energy());
+        crystal
+            .coefcalc()
+            .cryo_fluorescent_escape_factors(beam.photon_energy())
+    } else {
+        vec![]
+    };
+
+    let cryo_escape = if cryo_enabled && pe_enabled {
+        Some(escape::setup_cryo_escape(
+            beam.photon_energy(),
+            crystal.coefcalc(),
+            &cryo_fe_factors,
+            crystal.crystal_pix_per_um(),
+            crystal.cryst_size_um(),
+            fl_enabled,
+        ))
+    } else {
+        None
+    };
+
     // Set up angles
     let angles = compute_angles(wedge);
     let crystal_size = crystal.cryst_size_voxels();
@@ -143,13 +227,18 @@ pub fn expose_rd3d(
     let energies = vec![beam.photon_energy()];
     let energies_per_angle = energies.len();
 
+    // Mutable escape tracking
+    let mut total_escaped_pe = 0.0_f64;
+    let mut total_escaped_fl = 0.0_f64;
+    let mut _total_dose_from_surrounding = 0.0_f64;
+
     // Main loop: angles × energies × voxels
     for (n, &angle) in angles.iter().enumerate() {
         for &photon_energy in &energies {
             // Update coefficients for this energy
             crystal.coefcalc_mut().update_coefficients(photon_energy);
 
-            expose_angle(
+            let (esc_pe, esc_fl) = expose_angle(
                 crystal,
                 beam,
                 wedge,
@@ -158,7 +247,28 @@ pub fn expose_rd3d(
                 angles.len(),
                 energies_per_angle,
                 photon_energy,
+                pe_escape.as_ref(),
+                fl_escape.as_ref(),
             );
+            total_escaped_pe += esc_pe;
+            total_escaped_fl += esc_fl;
+        }
+
+        // Cryo surrounding loop (after crystal exposure for this angle)
+        if let (Some(ref pe), Some(ref cryo)) = (&pe_escape, &cryo_escape) {
+            let dose_back = expose_cryo_angle(
+                crystal,
+                beam,
+                wedge,
+                angle,
+                n,
+                angles.len(),
+                energies_per_angle,
+                beam.photon_energy(),
+                cryo,
+                pe,
+            );
+            _total_dose_from_surrounding += dose_back;
         }
 
         // Notify image complete
@@ -190,6 +300,20 @@ pub fn expose_rd3d(
 
     // Close progress bar
     println!(" ]");
+
+    // Print escape summaries (matches Java)
+    if pe_enabled {
+        println!(
+            "\nEnergy that may escape by Photoelectron Escape: {:.2e} J.\n",
+            total_escaped_pe
+        );
+    }
+    if fl_enabled {
+        println!(
+            "Total energy that may escape by Fluorescent Escape: {:.2e} J.\n",
+            total_escaped_fl
+        );
+    }
 
     // Summary observations
     let voxel_mass_kg =
@@ -236,7 +360,7 @@ fn compute_angles(wedge: &Wedge) -> Vec<f64> {
     }
 }
 
-/// Expose one angle of the crystal.
+/// Expose one angle of the crystal. Returns (escaped_pe, escaped_fl).
 #[allow(clippy::too_many_arguments)]
 fn expose_angle(
     crystal: &mut dyn Crystal,
@@ -247,7 +371,9 @@ fn expose_angle(
     angle_count: usize,
     energies_per_angle: usize,
     photon_energy: f64,
-) {
+    pe_escape: Option<&escape::PeEscape>,
+    fl_escape: Option<&escape::FlEscape>,
+) -> (f64, f64) {
     let crystal_size = crystal.cryst_size_voxels();
 
     let wedge_start = wedge.start_vector();
@@ -292,6 +418,16 @@ fn expose_angle(
     let electron_mass_kg: f64 = 9.109_383_56e-31;
     let c_squared: f64 = 3.0e8 * 3.0e8;
     let mc_squared = electron_mass_kg * c_squared;
+
+    let mut total_escaped_pe = 0.0_f64;
+    let mut total_escaped_fl = 0.0_f64;
+
+    // Build a snapshot of crystal occupancy for escape closures.
+    // We need to pass is_crystal_at and add_dose as closures but both
+    // borrow crystal. Instead, we collect voxel data first, then apply.
+    // Actually, we can use the fact that the escape functions need
+    // shared access while we have exclusive access.
+    // We'll use a two-pass approach for escape: collect doses first, apply later.
 
     for i in 0..crystal_size[0] {
         for j in 0..crystal_size[1] {
@@ -363,8 +499,80 @@ fn expose_angle(
 
                     crystal.add_fluence(i, j, k, vox_fluence);
 
-                    // No escape: add full dose to voxel
-                    crystal.add_dose(i, j, k, vox_dose);
+                    // Apply escape logic based on enabled flags
+                    match (pe_escape, fl_escape) {
+                        (Some(pe), Some(fl)) => {
+                            // Case 1: Both PE and FL escape
+                            let tot_fl_energy = pe.fl_energy_release * num_photons;
+                            let vox_fl_dose = fluence_to_dose_factor * tot_fl_energy;
+                            let tot_auger_dose =
+                                pe.auger_energy * num_photons * fluence_to_dose_factor;
+
+                            // FL escape
+                            if vox_fl_dose > 0.0 {
+                                let fl_lost = apply_escape_fl(
+                                    crystal,
+                                    pe,
+                                    fl,
+                                    crystal_size,
+                                    i,
+                                    j,
+                                    k,
+                                    vox_fl_dose,
+                                );
+                                total_escaped_fl += fl_lost;
+                            }
+
+                            // Auger stays in voxel
+                            if tot_auger_dose > 0.0 {
+                                crystal.add_dose(i, j, k, tot_auger_dose);
+                            }
+
+                            // PE dose = total - FL - Auger
+                            let dose_pe = vox_dose - vox_fl_dose - tot_auger_dose;
+                            if dose_pe > 0.0 {
+                                let pe_lost =
+                                    apply_escape_pe(crystal, pe, crystal_size, i, j, k, dose_pe);
+                                total_escaped_pe += pe_lost;
+                            }
+                        }
+                        (Some(pe), None) => {
+                            // Case 2: PE escape only
+                            let tot_auger_dose =
+                                pe.auger_energy * num_photons * fluence_to_dose_factor;
+
+                            // PE dose = total - binding energy fraction
+                            let binding_frac = if photon_energy > 0.0 {
+                                pe.energy_to_subtract / photon_energy
+                            } else {
+                                0.0
+                            };
+                            let dose_pe = vox_dose - binding_frac * vox_dose;
+
+                            if dose_pe > 0.0 {
+                                let pe_lost =
+                                    apply_escape_pe(crystal, pe, crystal_size, i, j, k, dose_pe);
+                                total_escaped_pe += pe_lost;
+                            }
+
+                            // Auger stays in voxel
+                            if tot_auger_dose > 0.0 {
+                                crystal.add_dose(i, j, k, tot_auger_dose);
+                            }
+                        }
+                        (None, Some(_fl)) => {
+                            // Case 3: FL escape only (need pe params for fl_proportion)
+                            // Without PE setup, FL escape requires fl_energy_release data
+                            // which comes from PE setup. Fall through to no-escape.
+                            crystal.add_dose(i, j, k, vox_dose);
+                        }
+                        (None, None) => {
+                            // Case 4: No escape
+                            crystal.add_dose(i, j, k, vox_dose);
+                        }
+                    }
+
+                    // Compton dose and elastic always added
                     crystal.add_dose(i, j, k, vox_dose_compton);
                     crystal.add_elastic(i, j, k, elastic_yield);
                 } else if vox_dose < 0.0 {
@@ -373,6 +581,272 @@ fn expose_angle(
             }
         }
     }
+
+    (total_escaped_pe, total_escaped_fl)
+}
+
+/// Helper: apply PE escape for a single voxel. Works around borrow issues
+/// by doing escape calculations directly.
+fn apply_escape_pe(
+    crystal: &mut dyn Crystal,
+    pe: &escape::PeEscape,
+    crystal_size: [usize; 3],
+    i: usize,
+    j: usize,
+    k: usize,
+    dose_pe: f64,
+) -> f64 {
+    use rand::Rng;
+
+    let mut rng = rand::thread_rng();
+    let mut dose_lost = 0.0;
+
+    if pe.track_bias.is_empty() {
+        return dose_lost;
+    }
+
+    for _ in 0..(escape::PE_ANGLE_RESOLUTION_PUB * escape::PE_ANGLE_RESOLUTION_PUB) {
+        let random_idx = rng.gen_range(0..pe.track_bias.len());
+        let random_track = pe.track_bias[random_idx];
+
+        for m in 0..pe.pe_dist_bins {
+            if random_track >= pe.relative_vox_xyz[m].len() {
+                continue;
+            }
+            let [rx, ry, rz] = pe.relative_vox_xyz[m][random_track];
+            let partial_dose = dose_pe * pe.propn_dose_at_dist[m]
+                / (escape::PE_ANGLE_RESOLUTION_PUB * escape::PE_ANGLE_RESOLUTION_PUB) as f64;
+
+            let ti = (i as f64 + rx).round() as i64;
+            let tj = (j as f64 + ry).round() as i64;
+            let tk = (k as f64 + rz).round() as i64;
+
+            if ti >= 0
+                && tj >= 0
+                && tk >= 0
+                && (ti as usize) < crystal_size[0]
+                && (tj as usize) < crystal_size[1]
+                && (tk as usize) < crystal_size[2]
+                && crystal.is_crystal_at(ti as usize, tj as usize, tk as usize)
+            {
+                crystal.add_dose(ti as usize, tj as usize, tk as usize, partial_dose);
+            } else {
+                dose_lost += partial_dose;
+            }
+        }
+    }
+
+    dose_lost
+}
+
+/// Helper: apply FL escape for a single voxel.
+#[allow(clippy::too_many_arguments)]
+fn apply_escape_fl(
+    crystal: &mut dyn Crystal,
+    pe: &escape::PeEscape,
+    fl: &escape::FlEscape,
+    crystal_size: [usize; 3],
+    i: usize,
+    j: usize,
+    k: usize,
+    dose_fl: f64,
+) -> f64 {
+    let mut dose_lost = 0.0;
+    let num_elements = pe.fl_proportion_event.len();
+
+    for n in 0..num_elements {
+        for l in 0..4 {
+            for m in 0..fl.fl_dist_bins {
+                for q in 0..(escape::FL_ANGLE_RESOLUTION_PUB * escape::FL_ANGLE_RESOLUTION_PUB) {
+                    if pe.fl_proportion_event[n][l] == 0.0 {
+                        continue;
+                    }
+                    if n >= fl.fl_relative_vox_xyz.len()
+                        || l >= fl.fl_relative_vox_xyz[n].len()
+                        || m >= fl.fl_relative_vox_xyz[n][l].len()
+                        || q >= fl.fl_relative_vox_xyz[n][l][m].len()
+                    {
+                        continue;
+                    }
+
+                    let fl_partial_dose =
+                        dose_fl * pe.fl_proportion_event[n][l] * fl.fl_dist_distribution[n][l][m]
+                            / (escape::FL_ANGLE_RESOLUTION_PUB * escape::FL_ANGLE_RESOLUTION_PUB)
+                                as f64;
+
+                    let [rx, ry, rz] = fl.fl_relative_vox_xyz[n][l][m][q];
+                    let ti = (i as f64 + rx).round() as i64;
+                    let tj = (j as f64 + ry).round() as i64;
+                    let tk = (k as f64 + rz).round() as i64;
+
+                    if ti >= 0
+                        && tj >= 0
+                        && tk >= 0
+                        && (ti as usize) < crystal_size[0]
+                        && (tj as usize) < crystal_size[1]
+                        && (tk as usize) < crystal_size[2]
+                        && crystal.is_crystal_at(ti as usize, tj as usize, tk as usize)
+                    {
+                        crystal.add_dose(ti as usize, tj as usize, tk as usize, fl_partial_dose);
+                    } else {
+                        dose_lost += fl_partial_dose;
+                    }
+                }
+            }
+        }
+    }
+
+    dose_lost
+}
+
+/// Expose surrounding (cryo) voxels for one angle and calculate PE dose
+/// that enters the crystal from surrounding material.
+/// Returns total dose deposited back into crystal from surrounding.
+#[allow(clippy::too_many_arguments)]
+fn expose_cryo_angle(
+    crystal: &mut dyn Crystal,
+    beam: &dyn Beam,
+    wedge: &Wedge,
+    angle: f64,
+    _angle_num: usize,
+    angle_count: usize,
+    energies_per_angle: usize,
+    photon_energy: f64,
+    cryo: &escape::CryoEscape,
+    _pe: &escape::PeEscape,
+) -> f64 {
+    use rand::Rng;
+
+    let crystal_size = crystal.cryst_size_voxels();
+    let pix_per_um = crystal.crystal_pix_per_um();
+    let cc = crystal.coefcalc();
+    let cryo_abs_coeff = cc.cryo_absorption_coefficient();
+    let _att_coeff = cc.attenuation_coefficient();
+    let density = cc.density();
+
+    if cryo_abs_coeff <= 0.0 {
+        return 0.0;
+    }
+
+    let energy_per_fluence = -(-cryo_abs_coeff / pix_per_um).exp_m1();
+    let energy_to_dose_factor = UNIT_CONVERSION * (pix_per_um.powi(-3) * density);
+
+    let beam_attenuation_factor =
+        pix_per_um.powi(-2) * wedge.total_sec() / (angle_count * energies_per_angle) as f64;
+
+    let wedge_start = wedge.start_vector();
+    let wedge_translation = wedge.translation_vector(angle);
+    let angle_cos = angle.cos();
+    let angle_sin = angle.sin();
+
+    let extra = cryo.cryo_extra_voxels;
+    let mut total_dose_back = 0.0;
+    let mut rng = rand::thread_rng();
+
+    // Iterate over cryo voxel grid (larger than crystal)
+    for ci in 0..cryo.cryo_size_voxels[0] {
+        for cj in 0..cryo.cryo_size_voxels[1] {
+            for ck in 0..cryo.cryo_size_voxels[2] {
+                // Convert cryo voxel to crystal voxel coordinates
+                let i_cryst = ci as f64 - extra as f64;
+                let j_cryst = cj as f64 - extra as f64;
+                let k_cryst = ck as f64 - extra as f64;
+
+                // Only process voxels OUTSIDE the crystal
+                let ii = i_cryst.round() as i64;
+                let jj = j_cryst.round() as i64;
+                let kk = k_cryst.round() as i64;
+                let inside = ii >= 0
+                    && jj >= 0
+                    && kk >= 0
+                    && (ii as usize) < crystal_size[0]
+                    && (jj as usize) < crystal_size[1]
+                    && (kk as usize) < crystal_size[2]
+                    && crystal.is_crystal_at(ii as usize, jj as usize, kk as usize);
+                if inside {
+                    continue;
+                }
+
+                // Calculate beam intensity at cryo voxel position
+                let x_um = i_cryst / pix_per_um;
+                let y_um = j_cryst / pix_per_um;
+                let z_um = k_cryst / pix_per_um;
+                let coords = [x_um, y_um, z_um];
+                let translated = translate_crystal_to_position(
+                    &coords,
+                    &wedge_start,
+                    &wedge_translation,
+                    angle_cos,
+                    angle_sin,
+                );
+
+                let intensity =
+                    beam.beam_intensity(translated[0], translated[1], wedge.off_axis_um);
+                if intensity <= 0.0 {
+                    continue;
+                }
+
+                let vox_fluence = intensity * beam_attenuation_factor;
+                let cryo_vox_energy = energy_per_fluence * vox_fluence;
+
+                if cryo_vox_energy <= 0.0 {
+                    continue;
+                }
+
+                // PE energy from cryo voxel
+                let binding_frac = if photon_energy > 0.0 {
+                    cryo.cryo_energy_to_subtract / photon_energy
+                } else {
+                    0.0
+                };
+                let energy_pe = cryo_vox_energy - binding_frac * cryo_vox_energy;
+
+                if energy_pe <= 0.0 {
+                    continue;
+                }
+
+                // Follow PE tracks from cryo voxel, add dose to crystal voxels they reach
+                if cryo.cryo_track_bias.is_empty() {
+                    continue;
+                }
+
+                let pe_dist_bins = cryo.cryo_pe_distances.len();
+                for _ in 0..1 {
+                    // PE_ANGLE_RESOLUTION^2 = 1
+                    let random_idx = rng.gen_range(0..cryo.cryo_track_bias.len());
+                    let random_track = cryo.cryo_track_bias[random_idx];
+
+                    for m in 0..pe_dist_bins {
+                        if random_track >= cryo.relative_vox_xyz_cryo[m].len() {
+                            continue;
+                        }
+                        let [rx, ry, rz] = cryo.relative_vox_xyz_cryo[m][random_track];
+
+                        let partial_energy = energy_pe * cryo.propn_dose_at_dist_cryo[m];
+                        let partial_dose = (partial_energy / energy_to_dose_factor) * 1e-6;
+
+                        let ti = (i_cryst + rx).round() as i64;
+                        let tj = (j_cryst + ry).round() as i64;
+                        let tk = (k_cryst + rz).round() as i64;
+
+                        if ti >= 0
+                            && tj >= 0
+                            && tk >= 0
+                            && (ti as usize) < crystal_size[0]
+                            && (tj as usize) < crystal_size[1]
+                            && (tk as usize) < crystal_size[2]
+                            && crystal.is_crystal_at(ti as usize, tj as usize, tk as usize)
+                        {
+                            crystal.add_dose(ti as usize, tj as usize, tk as usize, partial_dose);
+                            total_dose_back += partial_dose;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    total_dose_back
 }
 
 /// Create a crystal from parsed configuration.
@@ -388,7 +862,12 @@ pub fn create_crystal(
         CrystalType::SphericalNew => Ok(Box::new(polyhedron::crystal_spherical_new_from_config(
             config,
         )?)),
-        CrystalType::Spherical => Ok(Box::new(CrystalSpherical::from_config(config)?)),
+        // Match Java: "Type Spherical" maps to CrystalSphericalNew (icosphere mesh),
+        // same as "Type SphericalNew". The analytic CrystalSpherical is still available
+        // in code but not selectable via input file, matching Java's behavior.
+        CrystalType::Spherical => Ok(Box::new(polyhedron::crystal_spherical_new_from_config(
+            config,
+        )?)),
     }
 }
 

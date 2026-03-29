@@ -52,6 +52,44 @@ impl CoefCalcSmallMolecules {
         }
         // Note: fillRestWithWater = false for small molecules
 
+        // Cryo/surrounding setup
+        let calc_surrounding = config
+            .calc_surrounding
+            .as_deref()
+            .is_some_and(|s| s.eq_ignore_ascii_case("true"));
+
+        if calc_surrounding {
+            let cryo_solution_names: Vec<String> = config
+                .surrounding_heavy_conc
+                .iter()
+                .map(|e| e.symbol.clone())
+                .collect();
+            let cryo_solution_concs: Vec<f64> = config
+                .surrounding_heavy_conc
+                .iter()
+                .map(|e| e.count)
+                .collect();
+
+            let oil_element_names: Vec<String> = config
+                .oil_elements
+                .iter()
+                .map(|e| e.symbol.clone())
+                .collect();
+            let oil_element_nums: Vec<f64> = config.oil_elements.iter().map(|e| e.count).collect();
+
+            let oil_density = config.oil_density.unwrap_or(0.0);
+
+            compute.add_cryo_concentrations(
+                &cryo_solution_names,
+                &cryo_solution_concs,
+                config.oil_based.as_deref(),
+                &oil_element_names,
+                &oil_element_nums,
+                oil_density,
+            );
+            compute.calculate_cryo_density();
+        }
+
         compute.calculate_density();
         Ok(CoefCalcSmallMolecules { compute })
     }
@@ -89,5 +127,38 @@ impl CoefCalc for CoefCalcSmallMolecules {
     }
     fn solvent_fraction(&self) -> f64 {
         self.compute.sol_fraction
+    }
+
+    fn is_cryo(&self) -> bool {
+        self.compute.is_cryo()
+    }
+
+    fn update_cryo_coefficients(&mut self, photon_energy: f64) {
+        self.compute.update_cryo_coefficients(photon_energy);
+    }
+
+    fn cryo_absorption_coefficient(&self) -> f64 {
+        self.compute.cryo_abs_coeff_photo
+    }
+
+    fn cryo_density(&self) -> f64 {
+        self.compute.cryo_density
+    }
+
+    fn cryo_inelastic_coefficient(&self) -> f64 {
+        self.compute.cryo_abs_coeff_comp
+    }
+
+    fn cryo_fluorescent_escape_factors(&self, beam_energy: f64) -> Vec<Vec<f64>> {
+        self.compute
+            .calc_cryo_fluorescent_escape_factors(beam_energy)
+    }
+
+    fn present_elements(&self, cryo: bool) -> std::collections::HashSet<String> {
+        if cryo {
+            self.compute.cryo_elements.clone()
+        } else {
+            self.compute.present_elements.clone()
+        }
     }
 }

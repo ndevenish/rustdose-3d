@@ -40,6 +40,7 @@ pub struct CrystalPolyhedron {
     subprogram: String,
     photo_electron_escape: bool,
     fluorescent_escape: bool,
+    calc_surrounding: bool,
     crystal_name: String,
     angle_p: f64,
     angle_l: f64,
@@ -152,6 +153,11 @@ impl CrystalPolyhedron {
             .as_deref()
             .is_some_and(|s| s.eq_ignore_ascii_case("true"));
 
+        let calc_surrounding = config
+            .calc_surrounding
+            .as_deref()
+            .is_some_and(|s| s.eq_ignore_ascii_case("true"));
+
         let container = container::create_container(config);
 
         let rotated_normals = normals.clone();
@@ -181,6 +187,7 @@ impl CrystalPolyhedron {
             subprogram,
             photo_electron_escape,
             fluorescent_escape,
+            calc_surrounding,
             crystal_name: name.to_string(),
             angle_p,
             angle_l,
@@ -836,6 +843,18 @@ impl super::Crystal for CrystalPolyhedron {
 
     fn subprogram(&self) -> &str {
         &self.subprogram
+    }
+
+    fn photo_electron_escape(&self) -> bool {
+        self.photo_electron_escape
+    }
+
+    fn fluorescent_escape(&self) -> bool {
+        self.fluorescent_escape
+    }
+
+    fn calc_surrounding(&self) -> bool {
+        self.calc_surrounding
     }
 
     fn expose(&mut self, beam: &mut dyn Beam, wedge: &Wedge) {

@@ -421,19 +421,327 @@ impl CoefCalcCompute {
             .unwrap_or(0.0)
     }
 
-    /// Add cryo-solution concentrations (stub — populates cryo_occurrence for density calc).
-    pub fn add_cryo_concentrations(&mut self, cryo_names: &[String], cryo_concs: &[f64]) {
-        for (name, &conc) in cryo_names.iter().zip(cryo_concs.iter()) {
+    /// Add cryo-solution concentrations.
+    /// Matches Java `CoefCalcCompute.addCryoConcentrations()`.
+    ///
+    /// Parameters:
+    /// - `cryo_solution_names` / `cryo_solution_concs`: heavy atom concentrations in surrounding
+    /// - `oil_based`: if "true", use density-based path (no water fill)
+    /// - `oil_element_names` / `oil_element_nums`: molecular formula of surrounding (density-based)
+    /// - `oil_density`: density of surrounding material in g/mL (density-based)
+    pub fn add_cryo_concentrations(
+        &mut self,
+        cryo_solution_names: &[String],
+        cryo_solution_concs: &[f64],
+        oil_based: Option<&str>,
+        oil_element_names: &[String],
+        oil_element_nums: &[f64],
+        oil_density: f64,
+    ) {
+        let mut non_water_atoms = 0.0;
+
+        let calc_water = !oil_based
+            .map(|s| s.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        // Add cryo solution concentrations (heavy atom concentrations in surrounding)
+        for (name, &conc) in cryo_solution_names.iter().zip(cryo_solution_concs.iter()) {
             *self.cryo_concentration.entry(name.clone()).or_insert(0.0) += conc;
         }
-        // Populate cryo_occurrence for density calculation
-        let vol = self.cell_volume;
-        let sf = self.sol_fraction.max(0.0);
-        for (name, &conc) in self.cryo_concentration.clone().iter() {
-            let count = conc * AVOGADRO_NUM * vol * sf * 1e-3 * 1e-27;
-            *self.cryo_occurrence.entry(name.clone()).or_insert(0.0) += count;
-            self.cryo_elements.insert(name.clone());
+
+        // If oil-based (density-based), compute element concentrations from molecular formula
+        if !calc_water && !oil_element_names.is_empty() {
+            let db = ElementDatabase::instance();
+            let mut g_per_mol = 0.0;
+            for (name, &num) in oil_element_names.iter().zip(oil_element_nums.iter()) {
+                if let Some(e) = db.get(name) {
+                    g_per_mol += e.atomic_weight() * num;
+                }
+            }
+            // concentration in µmol/L → multiply by 1E6 to get per-litre
+            let oil_conc = (oil_density / g_per_mol) * 1e6;
+            for (name, &num) in oil_element_names.iter().zip(oil_element_nums.iter()) {
+                let element_conc = oil_conc * num;
+                *self.cryo_concentration.entry(name.clone()).or_insert(0.0) += element_conc;
+            }
         }
+
+        // Convert concentrations to atom counts per unit cell
+        let vol = self.cell_volume;
+        for (name, &conc) in self.cryo_concentration.clone().iter() {
+            let atom_count = conc * AVOGADRO_NUM * vol * 1e-3 * 1e-27;
+            *self.cryo_occurrence.entry(name.clone()).or_insert(0.0) += atom_count;
+            non_water_atoms += atom_count;
+        }
+
+        // Add water if not oil-based
+        if calc_water {
+            let water_molecules = WATER_CONCENTRATION * AVOGADRO_NUM / UNITS_PER_MILLI_UNIT
+                * vol
+                * (1.0 / MASS_TO_CELL_VOLUME)
+                - non_water_atoms;
+
+            *self.cryo_occurrence.entry("H".to_string()).or_insert(0.0) += water_molecules * 2.0;
+            *self.cryo_occurrence.entry("O".to_string()).or_insert(0.0) += water_molecules;
+        }
+
+        // Populate cryo_elements set
+        self.cryo_elements = self.cryo_occurrence.keys().cloned().collect();
+    }
+
+    /// Calculate cryo-solution density from its composition.
+    /// Matches Java `CoefCalcCompute.calculateCryoDensity()`.
+    pub fn calculate_cryo_density(&mut self) {
+        let db = ElementDatabase::instance();
+        let mut mass = 0.0;
+
+        for name in &self.cryo_elements {
+            if let Some(e) = db.get(name) {
+                let occ = self.cryo_occurrence.get(name).copied().unwrap_or(0.0);
+                mass += occ * e.atomic_weight_in_grams();
+            }
+        }
+
+        self.cryo_density = mass * MASS_TO_CELL_VOLUME / (self.cell_volume * UNITS_PER_MILLI_UNIT);
+    }
+
+    /// Whether cryo elements have been populated.
+    pub fn is_cryo(&self) -> bool {
+        !self.cryo_elements.is_empty()
+    }
+
+    /// Calculate cryo-solution absorption/attenuation coefficients.
+    /// Matches Java `CoefCalcCompute.calculateCryoCoefficientsAll()`.
+    pub fn calculate_cryo_coefficients_all(&self, energy: f64) -> (f64, f64, f64, f64) {
+        let db = ElementDatabase::instance();
+        let mut photo = 0.0;
+        let mut coherent = 0.0;
+        let mut total = 0.0;
+        let mut compton = 0.0;
+
+        for name in &self.cryo_elements {
+            if let Some(e) = db.get(name) {
+                let cs = e.get_abs_coefficients(energy);
+                let occ = self.cryo_occurrence.get(name).copied().unwrap_or(0.0);
+
+                photo +=
+                    occ * cs[&CrossSection::Photoelectric] / self.cell_volume / UNITS_PER_DECI_UNIT;
+                coherent +=
+                    occ * cs[&CrossSection::Coherent] / self.cell_volume / UNITS_PER_DECI_UNIT;
+                total += occ * cs[&CrossSection::Total] / self.cell_volume / UNITS_PER_DECI_UNIT;
+                compton +=
+                    occ * cs[&CrossSection::Compton] / self.cell_volume / UNITS_PER_DECI_UNIT;
+            }
+        }
+
+        (
+            photo / UNITS_PER_MILLI_UNIT,
+            coherent / UNITS_PER_MILLI_UNIT,
+            compton / UNITS_PER_MILLI_UNIT,
+            total / UNITS_PER_MILLI_UNIT,
+        )
+    }
+
+    /// Calculate coefficients for a single cryo element.
+    /// Matches Java `CoefCalcCompute.calculateCoefficientsCryoElement()`.
+    fn calculate_coefficients_cryo_element(
+        &self,
+        energy: f64,
+        element_name: &str,
+    ) -> (f64, f64, f64, f64) {
+        let db = ElementDatabase::instance();
+        let mut photo = 0.0;
+        let mut coherent = 0.0;
+        let mut total = 0.0;
+        let mut compton = 0.0;
+
+        if let Some(e) = db.get(element_name) {
+            let cs = e.get_abs_coefficients(energy);
+            let occ = self
+                .cryo_occurrence
+                .get(element_name)
+                .copied()
+                .unwrap_or(0.0);
+
+            photo +=
+                occ * cs[&CrossSection::Photoelectric] / self.cell_volume / UNITS_PER_DECI_UNIT;
+            coherent += occ * cs[&CrossSection::Coherent] / self.cell_volume / UNITS_PER_DECI_UNIT;
+            total += occ * cs[&CrossSection::Total] / self.cell_volume / UNITS_PER_DECI_UNIT;
+            compton += occ * cs[&CrossSection::Compton] / self.cell_volume / UNITS_PER_DECI_UNIT;
+        }
+
+        (
+            photo / UNITS_PER_MILLI_UNIT,
+            coherent / UNITS_PER_MILLI_UNIT,
+            compton / UNITS_PER_MILLI_UNIT,
+            total / UNITS_PER_MILLI_UNIT,
+        )
+    }
+
+    /// Update cryo coefficients for a given photon energy.
+    /// Matches Java `CoefCalcCompute.updateCryoCoefficients(double)`.
+    pub fn update_cryo_coefficients(&mut self, photon_energy: f64) {
+        let (photo, coherent, compton, total) = self.calculate_cryo_coefficients_all(photon_energy);
+        self.cryo_abs_coeff_photo = photo;
+        self.cryo_elas_coeff = coherent;
+        self.cryo_abs_coeff_comp = compton;
+        self.cryo_att_coeff = total;
+    }
+
+    /// Calculate fluorescent escape factors for cryo elements.
+    /// Matches Java `CoefCalcCompute.getCryoFluorescentEscapeFactors()`.
+    /// Uses the same Rust index layout as `calc_fluorescent_escape_factors()`.
+    pub fn calc_cryo_fluorescent_escape_factors(&self, beam_energy: f64) -> Vec<Vec<f64>> {
+        let db = ElementDatabase::instance();
+        let mut factors = Vec::new();
+
+        for name in &self.cryo_elements {
+            if let Some(e) = db.get(name) {
+                let mut row = vec![0.0; NUM_FLUOR_ESCAPE_FACTORS];
+
+                // mu_ratio: element cryo absorption / total cryo absorption
+                let (el_photo, _, _, _) =
+                    self.calculate_coefficients_cryo_element(beam_energy, name);
+
+                if self.cryo_abs_coeff_photo > 0.0 {
+                    row[0] = el_photo / self.cryo_abs_coeff_photo;
+                }
+
+                let k_edge = e.k_edge().unwrap_or(0.0);
+                let l1_edge = e.l1_edge().unwrap_or(0.0);
+                let l2_edge = e.l2_edge().unwrap_or(0.0);
+                let l3_edge = e.l3_edge().unwrap_or(0.0);
+                let m1_edge_val = e.m1_edge();
+                let m2_edge = e.m2_edge().unwrap_or(0.0);
+                let m3_edge = e.m3_edge().unwrap_or(0.0);
+                let m4_edge = e.m4_edge().unwrap_or(0.0);
+                let m5_edge = e.m5_edge().unwrap_or(0.0);
+
+                // K shell
+                let mut k_factor_a = 0.0;
+                if beam_energy > k_edge && k_edge > 0.0 {
+                    k_factor_a = e.k_ionisation_prob();
+                    let k_factor_b = e.k_fluorescence_yield().unwrap_or(0.0);
+                    // Escape muabs: compute crystal coefficients at K fluorescence energy
+                    let escape_muabs_k = if let Some(k_fl_avg) = e.k_fl_average() {
+                        let (k_photo, _, _, _) = self.calculate_coefficients_all(k_fl_avg);
+                        k_photo
+                    } else {
+                        0.0
+                    };
+                    row[1] = k_factor_a;
+                    row[2] = k_factor_b;
+                    row[3] = k_edge;
+                    row[4] = escape_muabs_k;
+                }
+
+                // L1 shell
+                let mut l1_factor_a = 0.0;
+                if beam_energy > l1_edge && l1_edge > 0.0 && e.atomic_number() >= 12 {
+                    l1_factor_a = e.l1_ionisation_prob() * (1.0 - k_factor_a);
+                    row[5] = l1_factor_a;
+                    row[6] = e.l1_fluorescence_yield().unwrap_or(0.0);
+                    row[7] = l1_edge;
+                    if let Some(l_fl_avg) = e.l_fl_average() {
+                        let (l_photo, _, _, _) = self.calculate_coefficients_all(l_fl_avg);
+                        row[8] = l_photo;
+                    }
+                }
+
+                // L2 shell
+                let mut l2_factor_a = 0.0;
+                if beam_energy > l2_edge && l2_edge > 0.0 && e.atomic_number() >= 12 {
+                    l2_factor_a = e.l2_ionisation_prob() * (1.0 - k_factor_a - l1_factor_a);
+                    row[9] = l2_factor_a;
+                    row[10] = e.l2_fluorescence_yield().unwrap_or(0.0);
+                    row[11] = l2_edge;
+                    if let Some(l_fl_avg) = e.l_fl_average() {
+                        let (l_photo, _, _, _) = self.calculate_coefficients_all(l_fl_avg);
+                        row[12] = l_photo;
+                    }
+                }
+
+                // L3 shell
+                let mut l3_factor_a = 0.0;
+                if beam_energy > l3_edge && l3_edge > 0.0 && e.atomic_number() >= 12 {
+                    l3_factor_a =
+                        e.l3_ionisation_prob() * (1.0 - k_factor_a - l1_factor_a - l2_factor_a);
+                    row[13] = l3_factor_a;
+                    row[14] = e.l3_fluorescence_yield().unwrap_or(0.0);
+                    row[15] = l3_edge;
+                    if let Some(l_fl_avg) = e.l_fl_average() {
+                        let (l_photo, _, _, _) = self.calculate_coefficients_all(l_fl_avg);
+                        row[16] = l_photo;
+                    }
+                }
+
+                // M shells (Z >= 73)
+                let mut m1_factor_a = 0.0;
+                if beam_energy > m1_edge_val && m1_edge_val > 0.0 && e.atomic_number() >= 73 {
+                    m1_factor_a = e.m1_ionisation_prob()
+                        * (1.0 - k_factor_a - l1_factor_a - l2_factor_a - l3_factor_a);
+                    row[17] = m1_factor_a;
+                    row[18] = m1_edge_val;
+                }
+                let mut m2_factor_a = 0.0;
+                if beam_energy > m2_edge && m2_edge > 0.0 && e.atomic_number() >= 73 {
+                    m2_factor_a = e.m2_ionisation_prob()
+                        * (1.0
+                            - k_factor_a
+                            - l1_factor_a
+                            - l2_factor_a
+                            - l3_factor_a
+                            - m1_factor_a);
+                    row[19] = m2_factor_a;
+                    row[20] = m2_edge;
+                }
+                let mut m3_factor_a = 0.0;
+                if beam_energy > m3_edge && m3_edge > 0.0 && e.atomic_number() >= 73 {
+                    m3_factor_a = e.m3_ionisation_prob()
+                        * (1.0
+                            - k_factor_a
+                            - l1_factor_a
+                            - l2_factor_a
+                            - l3_factor_a
+                            - m1_factor_a
+                            - m2_factor_a);
+                    row[21] = m3_factor_a;
+                    row[22] = m3_edge;
+                }
+                let mut m4_factor_a = 0.0;
+                if beam_energy > m4_edge && m4_edge > 0.0 && e.atomic_number() >= 73 {
+                    m4_factor_a = e.m4_ionisation_prob()
+                        * (1.0
+                            - k_factor_a
+                            - l1_factor_a
+                            - l2_factor_a
+                            - l3_factor_a
+                            - m1_factor_a
+                            - m2_factor_a
+                            - m3_factor_a);
+                    row[23] = m4_factor_a;
+                    row[24] = m4_edge;
+                }
+                if beam_energy > m5_edge && m5_edge > 0.0 && e.atomic_number() >= 73 {
+                    let m5_factor_a = e.m5_ionisation_prob()
+                        * (1.0
+                            - k_factor_a
+                            - l1_factor_a
+                            - l2_factor_a
+                            - l3_factor_a
+                            - m1_factor_a
+                            - m2_factor_a
+                            - m3_factor_a
+                            - m4_factor_a);
+                    row[25] = m5_factor_a;
+                    row[26] = m5_edge;
+                }
+
+                factors.push(row);
+            }
+        }
+
+        factors
     }
 
     /// Calculate fluorescent escape factors for present elements.
