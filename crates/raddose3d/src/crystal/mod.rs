@@ -391,6 +391,12 @@ fn expose_angle(
     let elastic_coeff = cc.elastic_coefficient();
     let att_coeff = cc.attenuation_coefficient();
     let density = cc.density();
+    // Java bug compat: capture cryo coefficient upfront (see docs/java-bugs-analysis.md §Bug 2)
+    let cryo_abs_coeff_if_active = if cc.is_cryo() {
+        Some(cc.cryo_absorption_coefficient())
+    } else {
+        None
+    };
 
     // Fluence to dose factor (photoelectric)
     let fluence_to_dose_factor = -(-abs_coeff / pix_per_um).exp_m1()
@@ -478,7 +484,18 @@ fn expose_angle(
                 if vox_dose > 0.0 {
                     let total_dose_before = crystal.get_dose(i, j, k);
                     let rde = crystal.ddm().calc_decay(total_dose_before);
-                    let energy_per_fluence = -(-abs_coeff / pix_per_um).exp_m1();
+                    // Java bug compatibility: when cryo surrounding + PE escape are both
+                    // active, Crystal.java:1236 overwrites energyPerFluence with the cryo
+                    // absorption coefficient, and that leaked value is used at line 1361 for
+                    // crystal absorbed energy. See docs/java-bugs-analysis.md §Bug 2.
+                    let epf_coeff = if let (Some(cryo_coeff), Some(_)) =
+                        (cryo_abs_coeff_if_active, &pe_escape)
+                    {
+                        cryo_coeff // Java scope-leak value
+                    } else {
+                        abs_coeff // correct: crystal absorption coefficient
+                    };
+                    let energy_per_fluence = -(-epf_coeff / pix_per_um).exp_m1();
                     let energy_absorbed =
                         energy_per_fluence * vox_fluence + energy_per_fluence * compton_fluence;
 

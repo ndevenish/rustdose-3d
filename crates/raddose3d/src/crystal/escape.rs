@@ -1097,13 +1097,10 @@ fn calc_fluorescence_distribution(
             // Check if this shell has fluorescence
             // FL proportion is computed from fl_energy_per_event / total, but here we just
             // check if there's a valid muabs coefficient
-            let muabs_index = match j {
-                0 => 4,  // K: muabs at K fluorescence energy
-                1 => 8,  // L1
-                2 => 12, // L2
-                3 => 16, // L3
-                _ => continue,
-            };
+            // Java bug compatibility: muabsIndex is hardcoded to 4 (K-shell) for all
+            // shells instead of the correct (4*j)+4. The correct formula is commented
+            // out in CrystalPolyhedron.java:1239. See docs/java-bugs-analysis.md §Bug 1.
+            let muabs_index = 4; // correct: (4 * j) + 4
             let muabs = safe_idx(row, muabs_index);
             // Check if shell is active: ion_prob > 0 and fl_yield > 0
             let ion_idx = match j {
@@ -1117,12 +1114,20 @@ fn calc_fluorescence_distribution(
             let ion_prob = safe_idx(row, ion_idx);
             let fl_yield = safe_idx(row, fl_idx);
 
-            if ion_prob <= 0.0 || fl_yield <= 0.0 || muabs <= 0.0 || !muabs.is_finite() {
+            if ion_prob <= 0.0 || fl_yield <= 0.0 {
                 continue;
             }
 
-            // Max distance where escape probability = 5%
-            let mut max_dist_fl = -(0.05_f64.ln()) / muabs;
+            // Max distance where escape probability = 5%.
+            // When muabs <= 0 (e.g. K-shell escapeMuAbs is 0 because beam is below
+            // K-edge — see Bug 1 in docs/java-bugs-analysis.md), Java computes
+            // -ln(0.05)/0 = Infinity, then clamps to crystal diagonal. The resulting
+            // exp(-0 * d) = 1.0 distribution puts 100% in the escape bin.
+            let mut max_dist_fl = if muabs <= 0.0 || !muabs.is_finite() {
+                f64::INFINITY
+            } else {
+                -(0.05_f64.ln()) / muabs
+            };
             if max_dist_fl > crystal_max_dist {
                 max_dist_fl = crystal_max_dist;
             }
