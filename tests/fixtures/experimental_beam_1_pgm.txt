@@ -1,0 +1,21 @@
+Crystal  # Specification for an insulin crystal
+Dimensions 89 74 40
+Type Cuboid
+CoefCalc RD3D
+NumMonomers 8
+NumResidues 153
+ProteinHeavyAtoms Zn 2 S 6
+SolventHeavyConc P 425
+UnitCell 78.4 78.4 78.4
+SolventFraction 0.6436
+
+Beam
+Type Experimentalpgm  # Tell RADDOSE-3D that it should expect an experimental beam
+File tophat_beam_experimental.pgm  # location of experimental beam file
+PixelSize 0.310 0.336  # Pixel size in microns
+Flux 1.9e11
+Energy 12.7
+
+Wedge 0 90  # 90 degree rotation
+ExposureTime 45  # 45 second exposure
+

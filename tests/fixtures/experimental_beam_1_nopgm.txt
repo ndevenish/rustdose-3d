@@ -1,0 +1,19 @@
+Crystal  # Specification for an insulin crystal
+Dimensions 89 74 40
+Type Cuboid
+CoefCalc RD3D
+NumMonomers 8
+NumResidues 153
+ProteinHeavyAtoms Zn 2 S 6
+SolventHeavyConc P 425
+UnitCell 78.4 78.4 78.4
+SolventFraction 0.6436
+
+Beam
+Type Tophat
+Flux 1.9e11
+Energy 12.7
+Collimation Rectangular 140 140
+
+Wedge 0 90  # 90 degree rotation
+ExposureTime 45  # 45 second exposure

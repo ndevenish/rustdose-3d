@@ -1,0 +1,17 @@
+Crystal
+Type Polyhedron  # Polyhedron crystal definition
+Wireframetype obj  # The type of geometry file being used
+ModelFile cube.obj  # The name of the geometry file
+PixelsPerMicron 1
+CoefCalc exp # Tell RADDOSE-3D to expect a PDB code
+pdb 1KMT
+SolventHeavyConc Na 100
+
+Beam
+Type Tophat
+Flux 1e12
+Energy 12.66
+Collimation Rectangular 50 50
+
+Wedge 0 0  # No rotation
+ExposureTime 30
