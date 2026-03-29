@@ -169,7 +169,7 @@ fn phase6_microed_optimal_voltage_matches_java() {
 
     // Gaussian beam: 300 keV, 2×2 µm FWHM, 1e6 ph/s, 60s exposure
     let beam_config = raddose3d::parser::config::BeamConfig {
-        beam_type: Some("Gaussian".to_string()),
+        beam_type: Some(raddose3d::parser::config::BeamType::Gaussian),
         energy: Some(300.0),
         fwhm_x: Some(2.0),
         fwhm_y: Some(2.0),
@@ -292,7 +292,7 @@ fn phase6_mc_statistical_comparison_with_java() {
     let mut coef_calc = CoefCalcFromParams::from_config(&config).expect("coefcalc");
 
     let beam_config = raddose3d::parser::config::BeamConfig {
-        beam_type: Some("Gaussian".to_string()),
+        beam_type: Some(raddose3d::parser::config::BeamType::Gaussian),
         energy: Some(12.1),
         fwhm_x: Some(100.0),
         fwhm_y: Some(100.0),

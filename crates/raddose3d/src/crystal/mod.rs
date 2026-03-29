@@ -11,6 +11,7 @@ use crate::coefcalc::CoefCalc;
 use crate::constants::*;
 use crate::container::Container;
 use crate::ddm::DdmModel;
+use crate::parser::config::CrystalType;
 use crate::wedge::Wedge;
 
 /// Crystal trait: all crystal geometries implement this.
@@ -378,21 +379,16 @@ fn expose_angle(
 pub fn create_crystal(
     config: &crate::parser::config::CrystalConfig,
 ) -> Result<Box<dyn Crystal>, String> {
-    let crystal_type = config
-        .crystal_type
-        .as_deref()
-        .unwrap_or("cuboid")
-        .to_lowercase();
+    let crystal_type = config.crystal_type.unwrap_or(CrystalType::Cuboid);
 
-    match crystal_type.as_str() {
-        "cuboid" => Ok(Box::new(CrystalCuboid::from_config(config)?)),
-        "polyhedron" | "obj" => Ok(Box::new(CrystalPolyhedron::from_config(config)?)),
-        "cylinder" => Ok(Box::new(polyhedron::crystal_cylinder_from_config(config)?)),
-        "sphericalnew" => Ok(Box::new(polyhedron::crystal_spherical_new_from_config(
+    match crystal_type {
+        CrystalType::Cuboid => Ok(Box::new(CrystalCuboid::from_config(config)?)),
+        CrystalType::Polyhedron => Ok(Box::new(CrystalPolyhedron::from_config(config)?)),
+        CrystalType::Cylinder => Ok(Box::new(polyhedron::crystal_cylinder_from_config(config)?)),
+        CrystalType::SphericalNew => Ok(Box::new(polyhedron::crystal_spherical_new_from_config(
             config,
         )?)),
-        "spherical" => Ok(Box::new(CrystalSpherical::from_config(config)?)),
-        other => Err(format!("Crystal type '{}' not yet implemented", other)),
+        CrystalType::Spherical => Ok(Box::new(CrystalSpherical::from_config(config)?)),
     }
 }
 
@@ -403,9 +399,9 @@ mod tests {
 
     const CRYSTAL_RESOLUTION_MARKER: f64 = 0.533743110;
 
-    fn default_crystal_config(crystal_type: &str) -> CrystalConfig {
+    fn default_crystal_config(crystal_type: CrystalType) -> CrystalConfig {
         CrystalConfig {
-            crystal_type: Some(crystal_type.to_string()),
+            crystal_type: Some(crystal_type),
             coefcalc: Some(CoefCalcType::Average),
             dim_x: Some(10.0),
             dim_y: Some(10.0),
@@ -422,7 +418,7 @@ mod tests {
 
     #[test]
     fn create_crystal_cuboid() {
-        let c = create_crystal(&default_crystal_config("cuboid")).unwrap();
+        let c = create_crystal(&default_crystal_config(CrystalType::Cuboid)).unwrap();
         assert!(
             (c.crystal_pix_per_um() - CRYSTAL_RESOLUTION_MARKER).abs() < 1e-6,
             "Resolution mismatch"
@@ -431,22 +427,10 @@ mod tests {
 
     #[test]
     fn create_crystal_spherical() {
-        let c = create_crystal(&default_crystal_config("spherical")).unwrap();
+        let c = create_crystal(&default_crystal_config(CrystalType::Spherical)).unwrap();
         assert!(
             (c.crystal_pix_per_um() - CRYSTAL_RESOLUTION_MARKER).abs() < 1e-6,
             "Resolution mismatch"
         );
-    }
-
-    #[test]
-    fn create_crystal_fails_on_invalid_type() {
-        let result = create_crystal(&default_crystal_config("invalid"));
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn create_crystal_fails_on_empty_type() {
-        let result = create_crystal(&default_crystal_config(""));
-        assert!(result.is_err());
     }
 }

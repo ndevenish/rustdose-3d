@@ -13,7 +13,7 @@ fn test_smxray_example() {
     assert_eq!(config.wedges.len(), 1);
 
     let c = &config.crystals[0];
-    assert_eq!(c.crystal_type.as_deref(), Some("Cuboid"));
+    assert_eq!(c.crystal_type, Some(CrystalType::Cuboid));
     assert_eq!(c.coefcalc, Some(CoefCalcType::SmallMole));
     assert_eq!(c.dim_x, Some(0.2));
     assert_eq!(c.pixels_per_micron, Some(100.0));

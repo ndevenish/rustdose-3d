@@ -261,11 +261,11 @@ impl super::Beam for BeamGaussian {
 mod tests {
     use super::*;
     use crate::beam::Beam;
-    use crate::parser::config::{BeamConfig, Collimation};
+    use crate::parser::config::{BeamConfig, BeamType, Collimation};
 
     fn make_gaussian() -> BeamGaussian {
         let config = BeamConfig {
-            beam_type: Some("gaussian".to_string()),
+            beam_type: Some(BeamType::Gaussian),
             energy: Some(12.0),
             flux: Some(1e10),
             fwhm_x: Some(20.0),
@@ -306,7 +306,7 @@ mod tests {
     #[test]
     fn gaussian_circular_clips_correctly() {
         let config = BeamConfig {
-            beam_type: Some("gaussian".to_string()),
+            beam_type: Some(BeamType::Gaussian),
             energy: Some(12.0),
             flux: Some(1e10),
             fwhm_x: Some(20.0),

@@ -50,6 +50,25 @@ impl Config {
     }
 }
 
+/// Crystal geometry type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CrystalType {
+    Cuboid,
+    Polyhedron,
+    Cylinder,
+    SphericalNew,
+    Spherical,
+}
+
+/// Beam profile type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BeamType {
+    Gaussian,
+    Tophat,
+    Experimental,
+    ExperimentalPgm,
+}
+
 /// Absorption coefficient calculation method.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CoefCalcType {
@@ -102,7 +121,7 @@ pub struct ElementCount {
 /// Crystal block configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CrystalConfig {
-    pub crystal_type: Option<String>,
+    pub crystal_type: Option<CrystalType>,
     pub coefcalc: Option<CoefCalcType>,
     pub ddm: Option<DdmType>,
     pub container_material: Option<ContainerMaterialType>,
@@ -184,7 +203,7 @@ pub struct CrystalConfig {
 /// Beam block configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BeamConfig {
-    pub beam_type: Option<String>,
+    pub beam_type: Option<BeamType>,
     pub flux: Option<f64>,
     pub fwhm_x: Option<f64>,
     pub fwhm_y: Option<f64>,

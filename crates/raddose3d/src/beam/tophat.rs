@@ -183,7 +183,7 @@ impl super::Beam for BeamTophat {
 mod tests {
     use super::*;
     use crate::beam::Beam;
-    use crate::parser::config::{BeamConfig, Collimation};
+    use crate::parser::config::{BeamConfig, BeamType, Collimation};
 
     fn make_tophat(coll_h: f64, coll_v: f64, circular: bool) -> BeamTophat {
         let collimation = if circular {
@@ -198,7 +198,7 @@ mod tests {
             }
         };
         let config = BeamConfig {
-            beam_type: Some("tophat".to_string()),
+            beam_type: Some(BeamType::Tophat),
             energy: Some(12.0),
             flux: Some(1e10),
             collimation: Some(collimation),

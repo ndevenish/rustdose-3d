@@ -257,12 +257,12 @@ impl super::Crystal for CrystalSpherical {
 mod tests {
     use super::*;
     use crate::crystal::Crystal;
-    use crate::parser::config::{CrystalConfig, WedgeConfig};
+    use crate::parser::config::{CrystalConfig, CrystalType, WedgeConfig};
     use crate::wedge::Wedge;
 
     fn make_spherical_config(diameter: f64) -> CrystalConfig {
         CrystalConfig {
-            crystal_type: Some("spherical".to_string()),
+            crystal_type: Some(CrystalType::Spherical),
             dim_x: Some(diameter),
             // Minimal unit cell for CoefCalcFromParams
             cell_a: Some(78.0),

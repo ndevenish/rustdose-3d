@@ -919,11 +919,11 @@ fn point_in_triangle(p: &[f64; 3], a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> 
 mod tests {
     use super::*;
     use crate::crystal::Crystal;
-    use crate::parser::config::CrystalConfig;
+    use crate::parser::config::{CrystalConfig, CrystalType};
 
     fn make_cylinder_config(diameter: f64, height: f64) -> CrystalConfig {
         CrystalConfig {
-            crystal_type: Some("cylinder".to_string()),
+            crystal_type: Some(CrystalType::Cylinder),
             dim_x: Some(diameter),
             dim_y: Some(height),
             // Minimal unit cell for CoefCalcFromParams
@@ -937,7 +937,7 @@ mod tests {
 
     fn make_spherical_new_config(diameter: f64) -> CrystalConfig {
         CrystalConfig {
-            crystal_type: Some("sphericalnew".to_string()),
+            crystal_type: Some(CrystalType::SphericalNew),
             dim_x: Some(diameter),
             // Minimal unit cell for CoefCalcFromParams
             cell_a: Some(78.0),
@@ -1001,7 +1001,7 @@ mod tests {
 
     fn make_polyhedron_config(obj_path: &str) -> CrystalConfig {
         CrystalConfig {
-            crystal_type: Some("polyhedron".to_string()),
+            crystal_type: Some(CrystalType::Polyhedron),
             model_file: Some(obj_path.to_string()),
             pixels_per_micron: Some(0.5),
             angle_p: Some(0.0),
@@ -1157,7 +1157,7 @@ mod tests {
         );
 
         let config = CrystalConfig {
-            crystal_type: Some("polyhedron".to_string()),
+            crystal_type: Some(CrystalType::Polyhedron),
             model_file: Some(obj_path),
             angle_p: Some(0.0),
             angle_l: Some(0.0),
@@ -1227,7 +1227,7 @@ mod tests {
         resolution: f64,
     ) -> CrystalPolyhedron {
         let config = CrystalConfig {
-            crystal_type: Some("polyhedron".to_string()),
+            crystal_type: Some(CrystalType::Polyhedron),
             coefcalc: Some(crate::parser::config::CoefCalcType::Average),
             dim_x: Some(dim_x),
             dim_y: Some(dim_y),
@@ -1264,7 +1264,7 @@ mod tests {
         );
 
         let cub_config = CrystalConfig {
-            crystal_type: Some("cuboid".to_string()),
+            crystal_type: Some(CrystalType::Cuboid),
             coefcalc: Some(crate::parser::config::CoefCalcType::Average),
             dim_x: Some(xdim),
             dim_y: Some(ydim),

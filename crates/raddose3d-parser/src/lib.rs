@@ -94,7 +94,18 @@ fn parse_crystal(pair: Pairs<'_>) -> Result<CrystalConfig, ParseError> {
         match line.as_rule() {
             Rule::crystal_type => {
                 let val = line.into_inner().next().unwrap();
-                c.crystal_type = Some(val.as_str().to_string());
+                c.crystal_type = Some(match val.as_str().to_lowercase().as_str() {
+                    "cuboid" => CrystalType::Cuboid,
+                    "polyhedron" | "obj" => CrystalType::Polyhedron,
+                    "cylinder" => CrystalType::Cylinder,
+                    "sphericalnew" => CrystalType::SphericalNew,
+                    "spherical" => CrystalType::Spherical,
+                    other => {
+                        return Err(ParseError::Grammar(format!(
+                            "Unknown crystal type: '{other}'"
+                        )))
+                    }
+                });
             }
             Rule::crystal_ddm => {
                 let kw = line.into_inner().next().unwrap();
@@ -333,7 +344,15 @@ fn parse_beam(pair: Pairs<'_>) -> Result<BeamConfig, ParseError> {
         match line.as_rule() {
             Rule::beam_type => {
                 let val = line.into_inner().next().unwrap();
-                b.beam_type = Some(val.as_str().to_string());
+                b.beam_type = Some(match val.as_str().to_lowercase().as_str() {
+                    "gaussian" => BeamType::Gaussian,
+                    "tophat" => BeamType::Tophat,
+                    "experimental" => BeamType::Experimental,
+                    "experimentalpgm" => BeamType::ExperimentalPgm,
+                    other => {
+                        return Err(ParseError::Grammar(format!("Unknown beam type: '{other}'")))
+                    }
+                });
             }
             Rule::beam_flux => {
                 let f = line.into_inner().next().unwrap();
@@ -491,7 +510,7 @@ ExposureTime 60
         assert_eq!(config.wedges.len(), 1);
 
         let c = &config.crystals[0];
-        assert_eq!(c.crystal_type.as_deref(), Some("Cuboid"));
+        assert_eq!(c.crystal_type, Some(CrystalType::Cuboid));
         assert_eq!(c.coefcalc, Some(CoefCalcType::SmallMole));
         assert_eq!(c.dim_x, Some(0.2));
         assert_eq!(c.dim_y, Some(0.2));
@@ -505,7 +524,7 @@ ExposureTime 60
         assert_eq!(c.small_mole_atoms[1].count, 3.0);
 
         let b = &config.beams[0];
-        assert_eq!(b.beam_type.as_deref(), Some("Gaussian"));
+        assert_eq!(b.beam_type, Some(BeamType::Gaussian));
         assert_eq!(b.flux, Some(3.8e12));
         assert_eq!(b.fwhm_x, Some(10.0));
         assert_eq!(b.energy, Some(12.4));
@@ -625,7 +644,7 @@ ExposureTime 50
 "#;
         let config = parse(input).unwrap();
         let c = &config.crystals[0];
-        assert_eq!(c.crystal_type.as_deref(), Some("Cylinder"));
+        assert_eq!(c.crystal_type, Some(CrystalType::Cylinder));
         assert_eq!(c.dim_x, Some(1700.0));
         assert_eq!(c.dim_y, Some(1000.0));
         assert_eq!(c.dim_z, None);

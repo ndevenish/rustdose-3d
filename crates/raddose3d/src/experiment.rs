@@ -162,9 +162,9 @@ mod tests {
 
     /// Helper to build a minimal crystal config for testing.
     fn make_test_crystal() -> Box<dyn Crystal> {
-        use crate::parser::config::{CoefCalcType, CrystalConfig};
+        use crate::parser::config::{CoefCalcType, CrystalConfig, CrystalType};
         let config = CrystalConfig {
-            crystal_type: Some("cuboid".to_string()),
+            crystal_type: Some(CrystalType::Cuboid),
             coefcalc: Some(CoefCalcType::Average),
             dim_x: Some(10.0),
             dim_y: Some(10.0),
@@ -181,9 +181,9 @@ mod tests {
     }
 
     fn make_test_beam() -> Box<dyn Beam> {
-        use crate::parser::config::{BeamConfig, Collimation};
+        use crate::parser::config::{BeamConfig, BeamType, Collimation};
         let config = BeamConfig {
-            beam_type: Some("tophat".to_string()),
+            beam_type: Some(BeamType::Tophat),
             energy: Some(12.0),
             flux: Some(1e10),
             collimation: Some(Collimation::Rectangular { h: 10.0, v: 10.0 }),

@@ -661,7 +661,7 @@ fn point_in_triangle(p: &[f64; 3], a: &[f64; 3], b: &[f64; 3], c: &[f64; 3]) -> 
 mod tests {
     use super::*;
     use crate::crystal::Crystal;
-    use crate::parser::config::{CoefCalcType, CrystalConfig, WedgeConfig};
+    use crate::parser::config::{CoefCalcType, CrystalConfig, CrystalType, WedgeConfig};
 
     fn make_cuboid_crystal(
         dim_x: f64,
@@ -672,7 +672,7 @@ mod tests {
         angle_l: f64,
     ) -> CrystalCuboid {
         let config = CrystalConfig {
-            crystal_type: Some("cuboid".to_string()),
+            crystal_type: Some(CrystalType::Cuboid),
             coefcalc: Some(CoefCalcType::Average),
             dim_x: Some(dim_x),
             dim_y: Some(dim_y),
