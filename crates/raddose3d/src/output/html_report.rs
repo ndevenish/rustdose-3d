@@ -137,14 +137,15 @@ impl OutputDoseStateHTML {
             .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.12);\n\
                     padding: 20px; margin-bottom: 20px; }\n\
             .card h2 { margin-bottom: 12px; font-size: 1.2em; }\n\
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }\n\
-            @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }\n\
+            .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }\n\
+            .right-col { display: flex; flex-direction: column; gap: 20px; }\n\
+            @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }\n\
             table { border-collapse: collapse; width: 100%; }\n\
             th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; }\n\
             th { background: #f8f8f8; font-weight: 600; white-space: nowrap; }\n\
             td.num { text-align: right; font-variant-numeric: tabular-nums; }\n\
-            #dose3d { width: 100%; height: 600px; }\n\
-            #histogram { width: 100%; height: 350px; }\n\
+            #dose3d { width: 100%; height: 500px; }\n\
+            #histogram { width: 100%; height: 300px; }\n\
             .info { font-size: 0.9em; color: #666; margin-top: 8px; }\n\
             </style>\n</head>\n<body>\n");
 
@@ -161,23 +162,10 @@ impl OutputDoseStateHTML {
         }
         let _ = writeln!(self.writer, "</p>");
 
-        // --- Isosurface plot ---
-        let _ = writeln!(self.writer, "<div class=\"card\">");
-        let _ = writeln!(self.writer, "<h2>3D Dose Distribution</h2>");
-        let _ = writeln!(self.writer, "<div id=\"dose3d\"></div>");
-        let _ = writeln!(
-            self.writer,
-            "<p class=\"info\">Grid: {}x{}x{} voxels ({}x{}x{} original). \
-             Crystal: {:.1} x {:.1} x {:.1} &micro;m. \
-             Max dose: {:.4} MGy.</p>",
-            nx, ny, nz, size[0], size[1], size[2], size_um[0], size_um[1], size_um[2], max_dose,
-        );
-        let _ = writeln!(self.writer, "</div>");
+        // --- Two-column layout: table (left), 3D + histogram (right) ---
+        let _ = writeln!(self.writer, "<div class=\"layout\">");
 
-        // --- Summary table + histogram side by side ---
-        let _ = writeln!(self.writer, "<div class=\"grid\">");
-
-        // Summary table
+        // Left column: summary table
         let _ = writeln!(self.writer, "<div class=\"card\">");
         let _ = writeln!(self.writer, "<h2>Summary Statistics</h2>");
         let _ = writeln!(self.writer, "<table>");
@@ -259,13 +247,30 @@ impl OutputDoseStateHTML {
         }
         let _ = writeln!(self.writer, "</tbody></table></div>");
 
+        // Right column: 3D plot + histogram stacked vertically
+        let _ = writeln!(self.writer, "<div class=\"right-col\">");
+
+        // Isosurface plot
+        let _ = writeln!(self.writer, "<div class=\"card\">");
+        let _ = writeln!(self.writer, "<h2>3D Dose Distribution</h2>");
+        let _ = writeln!(self.writer, "<div id=\"dose3d\"></div>");
+        let _ = writeln!(
+            self.writer,
+            "<p class=\"info\">Grid: {}x{}x{} voxels ({}x{}x{} original). \
+             Crystal: {:.1} x {:.1} x {:.1} &micro;m. \
+             Max dose: {:.4} MGy.</p>",
+            nx, ny, nz, size[0], size[1], size[2], size_um[0], size_um[1], size_um[2], max_dose,
+        );
+        let _ = writeln!(self.writer, "</div>");
+
         // Histogram
         let _ = writeln!(self.writer, "<div class=\"card\">");
         let _ = writeln!(self.writer, "<h2>Dose Histogram</h2>");
         let _ = writeln!(self.writer, "<div id=\"histogram\"></div>");
         let _ = writeln!(self.writer, "</div>");
 
-        let _ = writeln!(self.writer, "</div>"); // close .grid
+        let _ = writeln!(self.writer, "</div>"); // close .right-col
+        let _ = writeln!(self.writer, "</div>"); // close .layout
 
         // --- JavaScript ---
         let _ = writeln!(self.writer, "<script>");
