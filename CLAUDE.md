@@ -182,10 +182,10 @@ PE/FL escape and cryo surrounding are implemented (`crystal/escape.rs`, integrat
 - Bug 1: Hardcoded `muabsIndex = 4` in FL escape distribution (FL Escape now matches Java exactly: 8.23e0 J)
 - Bug 2: `energyPerFluence` scope leak from cryo block (Absorbed Energy now matches Java exactly: 4.05e-9 J)
 
-**Remaining variance (random sampling):**
-- DWD: ~0.3-0.6% (due to random PE track sampling with `PE_ANGLE_RESOLUTION=1`)
+**Remaining variance:**
+- PE Escape: matches within ~2% (random sampling noise at `PE_ANGLE_RESOLUTION=1`)
+- DWD: ~0.5-1% systematic offset — from single-track count difference in `find_voxels_reached_by_pe` (float accumulation at phi loop boundary) and Java recomputing PE tracks per-angle with rotation while Rust computes once
 - Max Dose: high variance in both Java and Rust (±10%) — single random track per voxel
-- PE Escape: ~3% (sampling noise)
 
 **Notes:**
 - `PE_ANGLE_RESOLUTION` (escape.rs line 21) controls track samples per voxel. Java hardcodes 1. Increasing reduces variance but costs O(n²) time.
