@@ -287,7 +287,9 @@ pub fn setup_pe_escape(
     let gumbel_scale = set_gumbel_scale(density, pe_energy);
 
     // 5. Calculate max PE distance
-    let max_pe_dist = get_max_pe_distance(pe_energy, &gumbel_loc, &gumbel_scale);
+    // Java: int maxPEDistance = (int) Math.ceil(getMaxPEDistance(...));
+    let max_pe_dist_f = get_max_pe_distance(pe_energy, &gumbel_loc, &gumbel_scale);
+    let max_pe_dist = max_pe_dist_f.ceil() as i32 as f64;
 
     // 6. Set up distance bins
     let pe_res = pe_resolution.unwrap_or(0);
