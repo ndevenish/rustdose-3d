@@ -729,6 +729,7 @@ fn apply_escape_fl(
 /// Expose surrounding (cryo) voxels for one angle and calculate PE dose
 /// that enters the crystal from surrounding material.
 /// Returns total dose deposited back into crystal from surrounding.
+/// Matches Java Crystal.java lines 1220-1340.
 #[allow(clippy::too_many_arguments)]
 fn expose_cryo_angle(
     crystal: &mut dyn Crystal,
@@ -737,7 +738,7 @@ fn expose_cryo_angle(
     angle: f64,
     _angle_num: usize,
     angle_count: usize,
-    energies_per_angle: usize,
+    _energies_per_angle: usize,
     photon_energy: f64,
     cryo: &escape::CryoEscape,
     _pe: &escape::PeEscape,
@@ -745,21 +746,42 @@ fn expose_cryo_angle(
     use rand::Rng;
 
     let crystal_size = crystal.cryst_size_voxels();
-    let pix_per_um = crystal.crystal_pix_per_um();
+    let crystal_ppm = crystal.crystal_pix_per_um();
+    let cryo_ppm = cryo.cryo_pix_per_um;
     let cc = crystal.coefcalc();
     let cryo_abs_coeff = cc.cryo_absorption_coefficient();
-    let _att_coeff = cc.attenuation_coefficient();
+    let att_coeff = cc.attenuation_coefficient();
     let density = cc.density();
 
     if cryo_abs_coeff <= 0.0 {
         return 0.0;
     }
 
-    let energy_per_fluence = -(-cryo_abs_coeff / pix_per_um).exp_m1();
-    let energy_to_dose_factor = UNIT_CONVERSION * (pix_per_um.powi(-3) * density);
+    // Java line 1236: energyPerFluence uses cryo abs coeff / cryo PPM
+    let energy_per_fluence = -(-cryo_abs_coeff / cryo_ppm).exp_m1();
+    // Java line 1226: fluenceToDoseFactor uses cryo abs coeff / cryo PPM
+    // but crystal PPM and crystal density for mass conversion
+    let _fluence_to_dose_factor = -(-cryo_abs_coeff / cryo_ppm).exp_m1()
+        / (UNIT_CONVERSION * (crystal_ppm.powi(-3) * density))
+        * GY_TO_MGY;
+    // Java line 1241: energyToDoseFactor uses crystal PPM (dose = energy/mass)
+    let energy_to_dose_factor = UNIT_CONVERSION * (crystal_ppm.powi(-3) * density);
+    // Java line 1244: beamAttenuationFactor uses cryo PPM
+    let beam_attenuation_factor = cryo_ppm.powi(-2) * wedge.total_sec() / angle_count as f64;
+    let beam_attenuation_exp_factor = -att_coeff;
 
-    let beam_attenuation_factor =
-        pix_per_um.powi(-2) * wedge.total_sec() / (angle_count * energies_per_angle) as f64;
+    // ppmRatio for converting cryo voxels to crystal voxels (Java line 1252)
+    let ppm_ratio = crystal_ppm / cryo_ppm;
+
+    // Crystal bounding box (for depth clamping, Java lines 1280-1290)
+    let cryst_size_um = crystal.cryst_size_um();
+    let coord_0 = crystal.get_cryst_coord(0, 0, 0);
+    let min_dims = coord_0;
+    let max_dims = [
+        coord_0[0] + cryst_size_um[0],
+        coord_0[1] + cryst_size_um[1],
+        coord_0[2] + cryst_size_um[2],
+    ];
 
     let wedge_start = wedge.start_vector();
     let wedge_translation = wedge.translation_vector(angle);
@@ -770,19 +792,24 @@ fn expose_cryo_angle(
     let mut total_dose_back = 0.0;
     let mut rng = rand::thread_rng();
 
-    // Iterate over cryo voxel grid (larger than crystal)
+    let beam_energy_j = photon_energy * KEV_TO_JOULES;
+
+    crystal.setup_depth_finding(angle, wedge);
+
     for ci in 0..cryo.cryo_size_voxels[0] {
         for cj in 0..cryo.cryo_size_voxels[1] {
             for ck in 0..cryo.cryo_size_voxels[2] {
-                // Convert cryo voxel to crystal voxel coordinates
-                let i_cryst = ci as f64 - extra as f64;
-                let j_cryst = cj as f64 - extra as f64;
-                let k_cryst = ck as f64 - extra as f64;
+                // Java line 1259: convert cryo voxel to crystal voxel coords via ppmRatio
+                let i_cryst = (ci as f64 - extra as f64) * ppm_ratio;
+                let j_cryst = (cj as f64 - extra as f64) * ppm_ratio;
+                let k_cryst = (ck as f64 - extra as f64) * ppm_ratio;
 
-                // Only process voxels OUTSIDE the crystal
+                // Java line 1263: round to crystal voxel indices
                 let ii = i_cryst.round() as i64;
                 let jj = j_cryst.round() as i64;
                 let kk = k_cryst.round() as i64;
+
+                // Java line 1267: only process voxels OUTSIDE the crystal
                 let inside = ii >= 0
                     && jj >= 0
                     && kk >= 0
@@ -794,10 +821,11 @@ fn expose_cryo_angle(
                     continue;
                 }
 
-                // Calculate beam intensity at cryo voxel position
-                let x_um = i_cryst / pix_per_um;
-                let y_um = j_cryst / pix_per_um;
-                let z_um = k_cryst / pix_per_um;
+                // Java line 1268: get physical coords from cryo grid
+                // Cryo coord = crystal_origin + (ci - extra) / cryo_ppm
+                let x_um = coord_0[0] + (ci as f64 - extra as f64) / cryo_ppm;
+                let y_um = coord_0[1] + (cj as f64 - extra as f64) / cryo_ppm;
+                let z_um = coord_0[2] + (ck as f64 - extra as f64) / cryo_ppm;
                 let coords = [x_um, y_um, z_um];
                 let translated = translate_crystal_to_position(
                     &coords,
@@ -813,14 +841,36 @@ fn expose_cryo_angle(
                     continue;
                 }
 
-                let vox_fluence = intensity * beam_attenuation_factor;
+                // Java lines 1280-1290: clamp depth coordinates to crystal bounding box
+                let mut depth_coords = translated;
+                for dim in 0..3 {
+                    if depth_coords[dim] < min_dims[dim] {
+                        depth_coords[dim] = min_dims[dim];
+                    } else if depth_coords[dim] > max_dims[dim] {
+                        depth_coords[dim] = max_dims[dim];
+                    }
+                }
+
+                // Java line 1292: depth uses clamped coordinates
+                let depth = crystal.find_depth(&depth_coords, angle, wedge);
+
+                // Java line 1294: attenuated fluence
+                let vox_fluence = intensity
+                    * beam_attenuation_factor
+                    * (depth * beam_attenuation_exp_factor).exp();
+
+                // Java line 1298-1299
+                let _num_photons = vox_fluence / beam_energy_j;
+
+                // Java line 1301: cryo energy absorbed
                 let cryo_vox_energy = energy_per_fluence * vox_fluence;
 
                 if cryo_vox_energy <= 0.0 {
                     continue;
                 }
 
-                // PE energy from cryo voxel
+                // Java line 1325: PE energy using binding fraction
+                // (when FL escape enabled, uses binding fraction approach)
                 let binding_frac = if photon_energy > 0.0 {
                     cryo.cryo_energy_to_subtract / photon_energy
                 } else {
@@ -832,14 +882,16 @@ fn expose_cryo_angle(
                     continue;
                 }
 
-                // Follow PE tracks from cryo voxel, add dose to crystal voxels they reach
+                // Java line 1329: addDoseAfterPECryo(iCryst, jCryst, kCryst, energyPE, energyToDoseFactor)
+                // Track PE from cryo voxel, depositing dose into crystal voxels.
+                // Base coords (i_cryst, j_cryst, k_cryst) and relative offsets are both
+                // in crystal voxel space (see Java line 1935).
                 if cryo.cryo_track_bias.is_empty() {
                     continue;
                 }
 
                 let pe_dist_bins = cryo.cryo_pe_distances.len();
-                for _ in 0..1 {
-                    // PE_ANGLE_RESOLUTION^2 = 1
+                for _ in 0..(escape::PE_ANGLE_RESOLUTION_PUB * escape::PE_ANGLE_RESOLUTION_PUB) {
                     let random_idx = rng.gen_range(0..cryo.cryo_track_bias.len());
                     let random_track = cryo.cryo_track_bias[random_idx];
 
@@ -849,9 +901,12 @@ fn expose_cryo_angle(
                         }
                         let [rx, ry, rz] = cryo.relative_vox_xyz_cryo[m][random_track];
 
-                        let partial_energy = energy_pe * cryo.propn_dose_at_dist_cryo[m];
+                        let partial_energy = energy_pe * cryo.propn_dose_at_dist_cryo[m]
+                            / (escape::PE_ANGLE_RESOLUTION_PUB * escape::PE_ANGLE_RESOLUTION_PUB)
+                                as f64;
                         let partial_dose = (partial_energy / energy_to_dose_factor) * 1e-6;
 
+                        // i_cryst + rx are both in crystal voxel space
                         let ti = (i_cryst + rx).round() as i64;
                         let tj = (j_cryst + ry).round() as i64;
                         let tk = (k_cryst + rz).round() as i64;

@@ -175,15 +175,19 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - CLI flags: `-o` (custom output module routing — Java's `module:dest` syntax not implemented)
 - WASM: `wasm-pack` toolchain must be installed separately; WASM target not in default `cargo build`
 
-### PE/FL Escape: Known Remaining Issues
-PE/FL escape and cryo surrounding are implemented (`crystal/escape.rs`, integrated into `expose_rd3d()`). Validated on LiFePO₄ test case (1µm sphere, SMALLMOLE, 1.487 keV). Core dose metrics (DWD, avg dose, histogram shape) match Java within 1-3%. Known discrepancies:
+### PE/FL Escape: Validation Status
+PE/FL escape and cryo surrounding are implemented (`crystal/escape.rs`, integrated into `expose_rd3d()`). Validated on LiFePO₄ test case (1µm sphere, SMALLMOLE, 1.487 keV). Two Java bugs are intentionally reproduced for compatibility — see `docs/java-bugs-analysis.md`.
 
-1. **FL Escape value ~57% off**: The FL distance distribution calculation (`calc_fluorescence_distribution` in `escape.rs`) likely has index mapping issues between the Rust and Java `fe_factors` layouts (Java: `[1]=edge, [2]=ion_prob, [3]=fl_yield`; Rust: `[1]=ion_prob, [2]=fl_yield, [3]=edge`). The muabs lookup for FL photon absorption may also differ.
+**Bug compatibility (implemented):**
+- Bug 1: Hardcoded `muabsIndex = 4` in FL escape distribution (FL Escape now matches Java exactly: 8.23e0 J)
+- Bug 2: `energyPerFluence` scope leak from cryo block (Absorbed Energy now matches Java exactly: 4.05e-9 J)
 
-2. **Absorbed Energy ~8x off**: Java likely subtracts escaped PE/FL energy from the reported "Absorbed Energy" in `ExposureSummary`, while Rust reports gross absorbed energy. This is an output accounting difference, not a physics error — the "Dose Inefficiency PE" metric (which uses deposited energy) matches within 2.2%.
+**Remaining variance (random sampling):**
+- DWD: ~0.3-0.6% (due to random PE track sampling with `PE_ANGLE_RESOLUTION=1`)
+- Max Dose: high variance in both Java and Rust (±10%) — single random track per voxel
+- PE Escape: ~3% (sampling noise)
 
-3. **PE Escape ~9% off**: Expected variance from random PE track sampling (`PE_ANGLE_RESOLUTION=1`). May also reflect minor icosphere mesh geometry differences between Java and Rust at low vertex counts.
-
-4. **Gumbel PDF negative beta**: At high density + low PE energy (e.g. ρ=3.6 g/mL, E_pe<0.82 keV), the Gumbel scale parameter goes negative. Java has no guard and relies on sign cancellation in the normalization. Rust matches this by only guarding `beta == 0`, not `beta < 0`. See `gumbel_pdf()` in `escape.rs`.
-
-5. **`Type Spherical` dispatch**: Now maps to `CrystalSphericalNew` (icosphere mesh) matching Java. The analytic `CrystalSpherical` is still available in code but not selectable via input file.
+**Notes:**
+- `PE_ANGLE_RESOLUTION` (escape.rs line 21) controls track samples per voxel. Java hardcodes 1. Increasing reduces variance but costs O(n²) time.
+- Gumbel PDF negative beta: At high density + low PE energy (e.g. ρ=3.6 g/mL, E_pe<0.82 keV), the Gumbel scale parameter goes negative. Java relies on sign cancellation. Rust matches this. See `gumbel_pdf()` in `escape.rs`.
+- `Type Spherical` dispatch: maps to `CrystalSphericalNew` (icosphere mesh) matching Java.
