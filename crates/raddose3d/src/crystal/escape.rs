@@ -475,6 +475,32 @@ pub fn apply_fl_escape(
 
 // ── Cryo (surrounding) PE escape ──────────────────────────────────────────────
 
+/// Compute cryo grid pixels-per-micron, matching Java's `setCryoPPM()`.
+/// Java uses a separate (often coarser) resolution for the surrounding grid.
+fn set_cryo_ppm(
+    max_pe_distance: f64,
+    beam_min_dim: f64,
+    cryst_size_um: [f64; 3],
+    crystal_pix_per_um: f64,
+) -> f64 {
+    let min_dim_cryst = cryst_size_um[0].min(cryst_size_um[1]).min(cryst_size_um[2]);
+
+    let mut multiply_factor = 20i32;
+    if min_dim_cryst >= beam_min_dim {
+        multiply_factor = (multiply_factor as f64 * 1.5) as i32; // Java: *= 1.5 on int
+    }
+
+    // MCSim is always false in normal exposure path
+    let ideal_ppm = (1.0 / max_pe_distance) * 5.0
+        + (1.0 / max_pe_distance) * multiply_factor as f64 * (1.0 / min_dim_cryst);
+
+    if ideal_ppm >= crystal_pix_per_um {
+        (ideal_ppm / crystal_pix_per_um).ceil() * crystal_pix_per_um
+    } else {
+        crystal_pix_per_um / (crystal_pix_per_um / ideal_ppm) as i32 as f64
+    }
+}
+
 /// Set up cryo (surrounding) PE escape parameters.
 pub fn setup_cryo_escape(
     beam_energy: f64,
@@ -483,6 +509,7 @@ pub fn setup_cryo_escape(
     crystal_pix_per_um: f64,
     cryst_size_um: [f64; 3],
     fl_enabled: bool,
+    beam_min_dim: f64,
 ) -> CryoEscape {
     let cryo_energy_to_subtract = calculate_pe_energy_subtraction(cryo_fe_factors);
     let cryo_auger_energy = calculate_auger_energy(cryo_fe_factors);
@@ -500,6 +527,9 @@ pub fn setup_cryo_escape(
 
     let max_pe_dist = get_max_pe_distance(pe_energy, &gumbel_loc, &gumbel_scale);
 
+    // Cryo grid uses its own PPM, matching Java's setCryoPPM()
+    let cryo_ppm = set_cryo_ppm(max_pe_dist, beam_min_dim, cryst_size_um, crystal_pix_per_um);
+
     // Calculate cryo/crystal density blending
     let average_side = (cryst_size_um[0] + cryst_size_um[1] + cryst_size_um[2]) / 3.0;
     let cryo_and_crystal_density = if average_side >= max_pe_dist {
@@ -508,12 +538,12 @@ pub fn setup_cryo_escape(
         max_pe_dist / (max_pe_dist + average_side)
     };
 
-    // Extra voxels for surrounding
-    let cryo_extra_voxels = (max_pe_dist * crystal_pix_per_um).ceil() as usize;
+    // Extra voxels for surrounding (Java uses cryo PPM here)
+    let cryo_extra_voxels = (max_pe_dist * cryo_ppm).ceil() as usize;
     let crystal_size_voxels = [
-        (cryst_size_um[0] * crystal_pix_per_um).round() as usize + 1,
-        (cryst_size_um[1] * crystal_pix_per_um).round() as usize + 1,
-        (cryst_size_um[2] * crystal_pix_per_um).round() as usize + 1,
+        (cryst_size_um[0] * cryo_ppm).round() as usize + 1,
+        (cryst_size_um[1] * cryo_ppm).round() as usize + 1,
+        (cryst_size_um[2] * cryo_ppm).round() as usize + 1,
     ];
     let cryo_size_voxels = [
         crystal_size_voxels[0] + 2 * cryo_extra_voxels,
@@ -522,7 +552,7 @@ pub fn setup_cryo_escape(
     ];
 
     // Reuse same PE distance bins as crystal
-    let pe_dist_bins = calc_pe_dist_bins(max_pe_dist, crystal_pix_per_um, 0);
+    let pe_dist_bins = calc_pe_dist_bins(max_pe_dist, cryo_ppm, 0);
     let bin_interval = max_pe_dist / (pe_dist_bins - 1).max(1) as f64;
     let cryo_pe_distances: Vec<f64> = (0..pe_dist_bins).map(|i| i as f64 * bin_interval).collect();
 
@@ -532,11 +562,8 @@ pub fn setup_cryo_escape(
     // Angular distribution for cryo
     let cryo_angular_distribution = setup_pe_polarisation(coefcalc, beam_energy, cryo_fe_factors);
 
-    let (relative_vox_xyz_cryo, cryo_track_bias) = find_voxels_reached_by_pe(
-        &cryo_pe_distances,
-        crystal_pix_per_um,
-        &cryo_angular_distribution,
-    );
+    let (relative_vox_xyz_cryo, cryo_track_bias) =
+        find_voxels_reached_by_pe(&cryo_pe_distances, cryo_ppm, &cryo_angular_distribution);
 
     CryoEscape {
         cryo_pe_distances,
@@ -548,7 +575,7 @@ pub fn setup_cryo_escape(
         cryo_and_crystal_density,
         cryo_extra_voxels,
         cryo_size_voxels,
-        cryo_pix_per_um: crystal_pix_per_um,
+        cryo_pix_per_um: cryo_ppm,
         cryo_fl_energy_release,
         total_dose_from_surrounding: 0.0,
     }

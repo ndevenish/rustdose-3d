@@ -161,11 +161,17 @@ These comments suggest the code was known to be incomplete for PE/FL escape hand
 
 ### Physical Consequence
 
-For the LiFePO4 test case:
-- **Crystal** (LiFePO4): absorption coefficient ~0.732 /µm, pixPerUM = 10 → `energyPerFluence` ≈ 0.0706
-- **Cryo** (PVDF surrounding: C 15.33 H 2 F 2, density 1.836 g/mL): much lower absorption at 1.487 keV, lower µ_abs → `energyPerFluence` is much smaller
+The leak involves **two** variables — the absorption coefficient AND the pixel resolution. The cryo grid uses a separate pixels-per-micron computed by `setCryoPPM()` (typically coarser or finer than the crystal's PPM depending on geometry). For the LiFePO4 test case:
 
-When the cryo value (~8x smaller) is mistakenly used for crystal absorbed energy, the reported "Absorbed Energy (this Wedge)" is ~8x too small:
+| Parameter | Crystal value | Cryo value (leaked) |
+|-----------|--------------|-------------------|
+| Absorption coeff | 0.732 /µm | 0.174 /µm |
+| Pixels per µm | 10.0 | 20.0 |
+| `energyPerFluence` | 0.0706 | **0.00868** |
+
+The cryo `energyPerFluence` is `1 - exp(-0.174/20) = 0.00868`, which is ~8x smaller than the crystal's `1 - exp(-0.732/10) = 0.0706`.
+
+When this leaked value is used for crystal absorbed energy, the reported "Absorbed Energy (this Wedge)" is ~8x too small:
 - Java (using cryo value): 4.05e-09 J
 - Rust (using crystal value): 3.30e-08 J
 
@@ -174,6 +180,26 @@ This directly propagates into the "Dose Inefficiency" metric, which divides max 
 - Rust: 7.56e11 1/g
 
 Note that the "Dose Inefficiency PE" metric (which uses `totalEnergy` — the deposited energy tracked separately) is **not** affected, which is why it matches within 0.5% between Java and Rust.
+
+### Cryo PPM Calculation
+
+The cryo grid's pixels-per-micron is computed by `CrystalPolyhedron.setCryoPPM()` (lines 773-807). It depends on the max PE distance, crystal dimensions, and beam minimum dimension:
+
+```java
+int multiplyFactor = 20;
+if (minDimCryst >= minDimBeam) {
+    multiplyFactor *= 1.5; // int multiplication: 20 * 1.5 = 30
+}
+double idealPPM = (1.0/maxPEDistance) * 5 + (1.0/maxPEDistance) * multiplyFactor * (1.0/minDimCryst);
+
+if (idealPPM >= crystalPixPerUM) {
+    pixelsPerMicron = ceil(idealPPM / crystalPixPerUM) * crystalPixPerUM;
+} else {
+    pixelsPerMicron = crystalPixPerUM / ((int)(crystalPixPerUM / idealPPM));
+}
+```
+
+For the LiFePO4 test (1 µm sphere, 10 PPM, FWHM 326x579 µm, max PE distance ~1 µm), this yields `cryoPPM = 20.0` — double the crystal PPM. The `fluenceToDoseFactor` variable (line 1226) also leaks from the cryo block but does not affect the output because it is not used in the post-cryo absorbed energy loop.
 
 ### Conditions That Trigger the Bug
 
@@ -186,15 +212,7 @@ When cryo surrounding is disabled, the `if (aSurface)` block at line 1220 is ski
 
 ### Correct Implementation
 
-The Rust implementation avoids this entirely through `let` scoping. The crystal's `energy_per_fluence` is computed as a local variable inside the crystal voxel loop (`mod.rs` line 481):
-
-```rust
-let energy_per_fluence = -(-abs_coeff / pix_per_um).exp_m1();
-let energy_absorbed =
-    energy_per_fluence * vox_fluence + energy_per_fluence * compton_fluence;
-```
-
-The cryo block's `energy_per_fluence` is a separate `let` binding (line 731), local to that scope. No leaking is possible.
+In a correct implementation, the crystal's `energy_per_fluence` would be computed using the crystal's own absorption coefficient and crystal PPM. The Rust code intentionally reproduces this bug for Java compatibility — see the `// Java bug compatibility` comments in `crystal/mod.rs`.
 
 ---
 

@@ -203,6 +203,7 @@ pub fn expose_rd3d(
             crystal.crystal_pix_per_um(),
             crystal.cryst_size_um(),
             fl_enabled,
+            beam.beam_minimum_dimension(),
         ))
     } else {
         None
@@ -249,6 +250,7 @@ pub fn expose_rd3d(
                 photon_energy,
                 pe_escape.as_ref(),
                 fl_escape.as_ref(),
+                cryo_escape.as_ref().map(|c| c.cryo_pix_per_um),
             );
             total_escaped_pe += esc_pe;
             total_escaped_fl += esc_fl;
@@ -361,6 +363,8 @@ fn compute_angles(wedge: &Wedge) -> Vec<f64> {
 }
 
 /// Expose one angle of the crystal. Returns (escaped_pe, escaped_fl).
+/// `cryo_ppm`: if cryo surrounding is active, the cryo grid pixels-per-micron
+/// (may differ from crystal PPM). Used for absorbed energy bug-compat only.
 #[allow(clippy::too_many_arguments)]
 fn expose_angle(
     crystal: &mut dyn Crystal,
@@ -373,6 +377,7 @@ fn expose_angle(
     photon_energy: f64,
     pe_escape: Option<&escape::PeEscape>,
     fl_escape: Option<&escape::FlEscape>,
+    cryo_ppm: Option<f64>,
 ) -> (f64, f64) {
     let crystal_size = crystal.cryst_size_voxels();
 
@@ -391,7 +396,8 @@ fn expose_angle(
     let elastic_coeff = cc.elastic_coefficient();
     let att_coeff = cc.attenuation_coefficient();
     let density = cc.density();
-    // Java bug compat: capture cryo coefficient upfront (see docs/java-bugs-analysis.md §Bug 2)
+    // Java bug compat: capture cryo coefficient and PPM upfront
+    // (see docs/java-bugs-analysis.md §Bug 2)
     let cryo_abs_coeff_if_active = if cc.is_cryo() {
         Some(cc.cryo_absorption_coefficient())
     } else {
@@ -486,16 +492,18 @@ fn expose_angle(
                     let rde = crystal.ddm().calc_decay(total_dose_before);
                     // Java bug compatibility: when cryo surrounding + PE escape are both
                     // active, Crystal.java:1236 overwrites energyPerFluence with the cryo
-                    // absorption coefficient, and that leaked value is used at line 1361 for
-                    // crystal absorbed energy. See docs/java-bugs-analysis.md §Bug 2.
-                    let epf_coeff = if let (Some(cryo_coeff), Some(_)) =
-                        (cryo_abs_coeff_if_active, &pe_escape)
+                    // absorption coefficient AND cryo PPM, and that leaked value is used at
+                    // line 1361 for crystal absorbed energy.
+                    // See docs/java-bugs-analysis.md §Bug 2.
+                    let energy_per_fluence = if let (Some(cryo_coeff), Some(_), Some(cppm)) =
+                        (cryo_abs_coeff_if_active, &pe_escape, cryo_ppm)
                     {
-                        cryo_coeff // Java scope-leak value
+                        // Java scope-leak: uses cryo abs coeff AND cryo PPM
+                        -(-cryo_coeff / cppm).exp_m1()
                     } else {
-                        abs_coeff // correct: crystal absorption coefficient
+                        // correct: crystal absorption coefficient and crystal PPM
+                        -(-abs_coeff / pix_per_um).exp_m1()
                     };
-                    let energy_per_fluence = -(-epf_coeff / pix_per_um).exp_m1();
                     let energy_absorbed =
                         energy_per_fluence * vox_fluence + energy_per_fluence * compton_fluence;
 
