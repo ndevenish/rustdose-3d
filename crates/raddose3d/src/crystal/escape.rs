@@ -512,6 +512,7 @@ pub fn setup_cryo_escape(
     cryst_size_um: [f64; 3],
     fl_enabled: bool,
     beam_min_dim: f64,
+    crystal_pe_dist_bins: usize,
 ) -> CryoEscape {
     let cryo_energy_to_subtract = calculate_pe_energy_subtraction(cryo_fe_factors);
     let cryo_auger_energy = calculate_auger_energy(cryo_fe_factors);
@@ -527,7 +528,9 @@ pub fn setup_cryo_escape(
     let gumbel_loc = set_gumbel_loc(cryo_density, pe_energy);
     let gumbel_scale = set_gumbel_scale(cryo_density, pe_energy);
 
-    let max_pe_dist = get_max_pe_distance(pe_energy, &gumbel_loc, &gumbel_scale);
+    let max_pe_dist_f = get_max_pe_distance(pe_energy, &gumbel_loc, &gumbel_scale);
+    // Java: int maxPEDistance = (int) Math.ceil(getMaxPEDistance(...));
+    let max_pe_dist = max_pe_dist_f.ceil() as i32 as f64;
 
     // Cryo grid uses its own PPM, matching Java's setCryoPPM()
     let cryo_ppm = set_cryo_ppm(max_pe_dist, beam_min_dim, cryst_size_um, crystal_pix_per_um);
@@ -540,8 +543,9 @@ pub fn setup_cryo_escape(
         max_pe_dist / (max_pe_dist + average_side)
     };
 
-    // Extra voxels for surrounding (Java uses cryo PPM here)
-    let cryo_extra_voxels = (max_pe_dist * cryo_ppm).ceil() as usize;
+    // Extra voxels for surrounding: Java line 811: (int)(maxPEDistance / (1/pixelsPerMicron))
+    // = (int)(maxPEDistance * pixelsPerMicron) — integer truncation, not ceil
+    let cryo_extra_voxels = (max_pe_dist * cryo_ppm) as usize;
     let crystal_size_voxels = [
         (cryst_size_um[0] * cryo_ppm).round() as usize + 1,
         (cryst_size_um[1] * cryo_ppm).round() as usize + 1,
@@ -553,8 +557,8 @@ pub fn setup_cryo_escape(
         crystal_size_voxels[2] + 2 * cryo_extra_voxels,
     ];
 
-    // Reuse same PE distance bins as crystal
-    let pe_dist_bins = calc_pe_dist_bins(max_pe_dist, cryo_ppm, 0);
+    // Java reuses the crystal's peDistBins for cryo (not recalculated)
+    let pe_dist_bins = crystal_pe_dist_bins;
     let bin_interval = max_pe_dist / (pe_dist_bins - 1).max(1) as f64;
     let cryo_pe_distances: Vec<f64> = (0..pe_dist_bins).map(|i| i as f64 * bin_interval).collect();
 
@@ -564,8 +568,13 @@ pub fn setup_cryo_escape(
     // Angular distribution for cryo
     let cryo_angular_distribution = setup_pe_polarisation(coefcalc, beam_energy, cryo_fe_factors);
 
-    let (relative_vox_xyz_cryo, cryo_track_bias) =
-        find_voxels_reached_by_pe(&cryo_pe_distances, cryo_ppm, &cryo_angular_distribution);
+    // Java line 1935: cryo PE track offsets use crystal PPM (not cryo PPM),
+    // so that the relative voxel offsets land in crystal voxel space.
+    let (relative_vox_xyz_cryo, cryo_track_bias) = find_voxels_reached_by_pe(
+        &cryo_pe_distances,
+        crystal_pix_per_um,
+        &cryo_angular_distribution,
+    );
 
     CryoEscape {
         cryo_pe_distances,

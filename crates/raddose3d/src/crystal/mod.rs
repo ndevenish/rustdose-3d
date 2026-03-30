@@ -196,6 +196,7 @@ pub fn expose_rd3d(
     };
 
     let cryo_escape = if cryo_enabled && pe_enabled {
+        let crystal_pe_dist_bins = pe_escape.as_ref().map(|p| p.pe_dist_bins).unwrap_or(2);
         Some(escape::setup_cryo_escape(
             beam.photon_energy(),
             crystal.coefcalc(),
@@ -204,6 +205,7 @@ pub fn expose_rd3d(
             crystal.cryst_size_um(),
             fl_enabled,
             beam.beam_minimum_dimension(),
+            crystal_pe_dist_bins,
         ))
     } else {
         None
