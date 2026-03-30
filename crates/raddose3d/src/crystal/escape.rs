@@ -14,9 +14,9 @@ use crate::constants::KEV_TO_JOULES;
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /// Angular resolution limit for PE tracks (matches Java PE_ANGLE_RES_LIMIT).
-const PE_ANGLE_RES_LIMIT: usize = 6;
-/// Angular limit (radians) for PE tracks (matches Java PE_ANGLE_LIMIT).
-const PE_ANGLE_LIMIT: f64 = PI;
+const PE_ANGLE_RES_LIMIT: usize = 100;
+/// Angular limit (radians) for PE tracks. Java: PE_ANGLE_LIMIT = 1*2*Math.PI = 2π.
+const PE_ANGLE_LIMIT: f64 = 2.0 * PI;
 /// Number of random tracks sampled per voxel in addDoseAfterPE.
 const PE_ANGLE_RESOLUTION: usize = 1;
 /// Public alias for use in mod.rs.
@@ -992,7 +992,10 @@ fn find_voxels_reached_by_pe(
         let mut phi = 0.0;
         while phi <= PE_ANGLE_LIMIT / 2.0 {
             // Check for duplicate tracks at poles
-            let replicate = if (theta == 0.0) || ((theta - PE_ANGLE_LIMIT / 2.0).abs() < 1e-12) {
+            // Java: if (theta == 0 || theta == (PE_ANGLE_LIMIT / 2))
+            // Due to float accumulation, theta after 50 steps doesn't exactly equal PI,
+            // so only theta==0 is caught (matching Java behavior).
+            let replicate = if theta == 0.0 || theta == PE_ANGLE_LIMIT / 2.0 {
                 phi != 0.0
             } else {
                 false
