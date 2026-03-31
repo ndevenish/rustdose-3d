@@ -9,55 +9,59 @@
 
     /* ── Design tokens ────────────────────────────────────────────────────── */
     :root {
-      --bg:           #0f1117;
-      --bg-raised:    #141820;
-      --border:       #1e2a3a;
-      --border-hover: #253347;
-      --text:         #e2e8f0;
-      --text-muted:   #94a3b8;
-      --text-dim:     #64748b;
-      --text-faint:   #475569;
-      --text-ghost:   #334155;
-      --accent:       #60a5fa;
-      --accent-bg:    #1e3a5f;
-      --accent-hover: #1d4ed8;
-      --btn-primary:  #2563eb;
-      --btn-secondary-bg: #1e2a3a;
+      --bg:                #0f1117;
+      --bg-raised:         #141820;
+      --border:            #1e2a3a;
+      --border-hover:      #253347;
+      --text:              #e2e8f0;
+      --text-muted:        #94a3b8;
+      --text-dim:          #64748b;
+      --text-faint:        #475569;
+      --text-ghost:        #334155;
+      --accent:            #60a5fa;
+      --accent-bg:         #1e3a5f;
+      --accent-hover:      #1d4ed8;
+      --btn-primary:       #2563eb;
+      --btn-secondary-bg:  #1e2a3a;
       --btn-secondary-hover: #253347;
       --btn-secondary-text: #94a3b8;
-      --textarea-color: #c9d1d9;
-      --spinner-track: #1e3a5f;
-      --error-bg:     #2a1215;
-      --error-border: #7f1d1d;
-      --error-text:   #fca5a5;
-      --metric-value: #60a5fa;
-      --summary-text: #94a3b8;
+      --textarea-color:    #c9d1d9;
+      --spinner-track:     #1e3a5f;
+      --error-bg:          #2a1215;
+      --error-border:      #7f1d1d;
+      --error-text:        #fca5a5;
+      --metric-value:      #60a5fa;
+      --summary-text:      #94a3b8;
+      --tab-active-bg:     #1e2a3a;
+      --tab-active-color:  #e2e8f0;
     }
 
     [data-theme="light"] {
-      --bg:           #f8fafc;
-      --bg-raised:    #ffffff;
-      --border:       #e2e8f0;
-      --border-hover: #cbd5e1;
-      --text:         #0f172a;
-      --text-muted:   #475569;
-      --text-dim:     #64748b;
-      --text-faint:   #94a3b8;
-      --text-ghost:   #cbd5e1;
-      --accent:       #2563eb;
-      --accent-bg:    #dbeafe;
-      --accent-hover: #1d4ed8;
-      --btn-primary:  #2563eb;
-      --btn-secondary-bg: #f1f5f9;
+      --bg:                #f8fafc;
+      --bg-raised:         #ffffff;
+      --border:            #e2e8f0;
+      --border-hover:      #cbd5e1;
+      --text:              #0f172a;
+      --text-muted:        #475569;
+      --text-dim:          #64748b;
+      --text-faint:        #94a3b8;
+      --text-ghost:        #cbd5e1;
+      --accent:            #2563eb;
+      --accent-bg:         #dbeafe;
+      --accent-hover:      #1d4ed8;
+      --btn-primary:       #2563eb;
+      --btn-secondary-bg:  #f1f5f9;
       --btn-secondary-hover: #e2e8f0;
       --btn-secondary-text: #475569;
-      --textarea-color: #1e293b;
-      --spinner-track: #bfdbfe;
-      --error-bg:     #fff1f2;
-      --error-border: #fda4af;
-      --error-text:   #be123c;
-      --metric-value: #2563eb;
-      --summary-text: #475569;
+      --textarea-color:    #1e293b;
+      --spinner-track:     #bfdbfe;
+      --error-bg:          #fff1f2;
+      --error-border:      #fda4af;
+      --error-text:        #be123c;
+      --metric-value:      #2563eb;
+      --summary-text:      #475569;
+      --tab-active-bg:     #e2e8f0;
+      --tab-active-color:  #0f172a;
     }
 
     /* ── Base ─────────────────────────────────────────────────────────────── */
@@ -73,29 +77,30 @@
 
     /* ── Header ───────────────────────────────────────────────────────────── */
     header {
-      padding: 1.5rem 2rem;
+      padding: 1.25rem 2rem;
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       gap: 1rem;
+      flex-shrink: 0;
     }
 
     header h1 {
-      font-size: 1.4rem;
+      font-size: 1.3rem;
       font-weight: 700;
       color: var(--accent);
       letter-spacing: -0.02em;
     }
 
     header p {
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       color: var(--text-dim);
     }
 
     .badge {
       background: var(--accent-bg);
       color: var(--accent);
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       font-weight: 600;
       padding: 0.2rem 0.5rem;
       border-radius: 4px;
@@ -103,59 +108,77 @@
       text-transform: uppercase;
     }
 
-    /* ── Theme toggle ─────────────────────────────────────────────────────── */
     #theme-toggle {
       margin-left: auto;
       background: var(--btn-secondary-bg);
       color: var(--btn-secondary-text);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 0.4rem 0.75rem;
-      font-size: 0.8rem;
+      padding: 0.38rem 0.7rem;
+      font-size: 0.78rem;
       font-weight: 500;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.35rem;
       transition: background 0.15s, border-color 0.15s;
       white-space: nowrap;
     }
     #theme-toggle:hover { background: var(--btn-secondary-hover); border-color: var(--border-hover); }
 
-    /* ── Layout ───────────────────────────────────────────────────────────── */
+    /* ── Three-column grid ────────────────────────────────────────────────── */
+    /*
+      ┌──────────┬─────────────────┬──────────────────────┐
+      │  Input   │  Metrics/Summary│   3D Isosurface      │
+      │  editor  │  (tabs)         │   (Plotly)           │
+      │          │                 │                      │
+      └──────────┴─────────────────┴──────────────────────┘
+    */
     main {
       flex: 1;
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0;
+      grid-template-columns: 1fr 1fr 1.2fr;
+      min-height: 0;
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 1100px) {
+      main {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto auto;
+      }
+      #viz-panel {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 700px) {
       main { grid-template-columns: 1fr; }
+      #viz-panel { grid-column: auto; }
     }
 
+    /* ── Panel base ───────────────────────────────────────────────────────── */
     .panel {
       display: flex;
       flex-direction: column;
       border-right: 1px solid var(--border);
       min-height: 0;
+      min-width: 0;
     }
-
     .panel:last-child { border-right: none; }
 
     .panel-header {
-      padding: 0.75rem 1.25rem;
+      padding: 0.65rem 1.1rem;
       background: var(--bg-raised);
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 0.75rem;
+      gap: 0.6rem;
       flex-shrink: 0;
     }
 
     .panel-header h2 {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 600;
       color: var(--text-muted);
       text-transform: uppercase;
@@ -165,20 +188,20 @@
     .panel-body {
       flex: 1;
       overflow: auto;
-      padding: 1rem 1.25rem;
+      padding: 0.9rem 1.1rem;
     }
 
     /* ── Input textarea ───────────────────────────────────────────────────── */
     textarea {
       width: 100%;
       height: 100%;
-      min-height: 420px;
+      min-height: 380px;
       background: transparent;
       border: none;
       outline: none;
       resize: none;
       font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       line-height: 1.65;
       color: var(--textarea-color);
       caret-color: var(--accent);
@@ -186,12 +209,12 @@
 
     /* ── Toolbar ──────────────────────────────────────────────────────────── */
     .toolbar {
-      padding: 0.75rem 1.25rem;
+      padding: 0.65rem 1.1rem;
       background: var(--bg-raised);
       border-top: 1px solid var(--border);
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.65rem;
       flex-shrink: 0;
     }
 
@@ -199,124 +222,141 @@
       cursor: pointer;
       border: none;
       border-radius: 6px;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       font-weight: 600;
-      padding: 0.5rem 1.1rem;
+      padding: 0.45rem 1rem;
       transition: background 0.15s, opacity 0.15s;
     }
-
     button:disabled { opacity: 0.45; cursor: not-allowed; }
 
-    #run-btn {
-      background: var(--btn-primary);
-      color: #fff;
-    }
+    #run-btn { background: var(--btn-primary); color: #fff; }
     #run-btn:hover:not(:disabled) { background: var(--accent-hover); }
 
-    #reset-btn {
-      background: var(--btn-secondary-bg);
-      color: var(--btn-secondary-text);
-    }
+    #reset-btn { background: var(--btn-secondary-bg); color: var(--btn-secondary-text); }
     #reset-btn:hover:not(:disabled) { background: var(--btn-secondary-hover); }
 
-    .status {
-      font-size: 0.75rem;
-      color: var(--text-dim);
-      margin-left: auto;
+    .status { font-size: 0.72rem; color: var(--text-dim); margin-left: auto; }
+
+    /* ── Tabs (metrics/summary panel) ─────────────────────────────────────── */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-raised);
+      flex-shrink: 0;
     }
 
-    /* ── Results ──────────────────────────────────────────────────────────── */
-    .results-section { margin-bottom: 1.5rem; }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      border-bottom: 2px solid transparent;
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 0.6rem 1rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .tab-btn:hover { color: var(--text-muted); }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
 
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Metrics cards ────────────────────────────────────────────────────── */
+    .results-section { margin-bottom: 1.2rem; }
     .results-section h3 {
-      font-size: 0.7rem;
+      font-size: 0.67rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.1em;
       color: var(--text-faint);
-      margin-bottom: 0.6rem;
+      margin-bottom: 0.55rem;
     }
 
     .metrics-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.6rem;
+      gap: 0.5rem;
     }
 
     .metric-card {
       background: var(--bg-raised);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
+      border-radius: 7px;
+      padding: 0.65rem 0.85rem;
     }
-
     .metric-card .label {
-      font-size: 0.7rem;
+      font-size: 0.67rem;
       color: var(--text-faint);
-      margin-bottom: 0.25rem;
+      margin-bottom: 0.2rem;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-
     .metric-card .value {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 700;
       color: var(--metric-value);
       font-variant-numeric: tabular-nums;
     }
-
     .metric-card .unit {
-      font-size: 0.65rem;
+      font-size: 0.62rem;
       color: var(--text-dim);
-      margin-left: 0.2rem;
+      margin-left: 0.15rem;
     }
 
+    /* ── Summary pre ──────────────────────────────────────────────────────── */
     .summary-pre {
       background: var(--bg-raised);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.85rem 1rem;
+      border-radius: 7px;
+      padding: 0.8rem 0.9rem;
       font-family: 'JetBrains Mono', 'Fira Code', monospace;
-      font-size: 0.75rem;
+      font-size: 0.73rem;
       line-height: 1.7;
       color: var(--summary-text);
       white-space: pre-wrap;
       word-break: break-word;
-      max-height: 280px;
+      max-height: 460px;
       overflow-y: auto;
     }
 
+    /* ── Error / placeholder ──────────────────────────────────────────────── */
     .error-box {
       background: var(--error-bg);
       border: 1px solid var(--error-border);
-      border-radius: 8px;
-      padding: 0.85rem 1rem;
+      border-radius: 7px;
+      padding: 0.8rem 0.9rem;
       color: var(--error-text);
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       white-space: pre-wrap;
       word-break: break-word;
     }
 
     .placeholder {
       color: var(--text-ghost);
-      font-size: 0.85rem;
+      font-size: 0.83rem;
       text-align: center;
-      padding: 3rem 1rem;
+      padding: 2.5rem 1rem;
     }
-
-    .placeholder span { display: block; font-size: 2rem; margin-bottom: 0.5rem; }
+    .placeholder span { display: block; font-size: 1.8rem; margin-bottom: 0.4rem; }
 
     /* ── Spinner / progress ───────────────────────────────────────────────── */
     .spinner {
       display: inline-block;
-      width: 14px; height: 14px;
+      width: 13px; height: 13px;
       border: 2px solid var(--spinner-track);
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
       vertical-align: middle;
-      margin-right: 0.4rem;
+      margin-right: 0.35rem;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -325,16 +365,14 @@
       background: var(--border);
       border-radius: 2px;
       overflow: hidden;
-      margin-top: 0.4rem;
+      margin-top: 0.35rem;
     }
-
     .progress-bar {
       height: 100%;
       background: var(--btn-primary);
       animation: indeterminate 1.4s ease infinite;
       transform-origin: left;
     }
-
     @keyframes indeterminate {
       0%   { transform: scaleX(0) translateX(0); }
       50%  { transform: scaleX(0.6) translateX(70%); }
@@ -347,12 +385,35 @@
       color: var(--text-muted);
       border: 1px solid var(--border);
       border-radius: 6px;
-      font-size: 0.78rem;
-      padding: 0.35rem 0.65rem;
+      font-size: 0.75rem;
+      padding: 0.32rem 0.6rem;
       outline: none;
       cursor: pointer;
     }
     select:focus { border-color: var(--btn-primary); }
+
+    /* ── Viz panel ────────────────────────────────────────────────────────── */
+    #viz-panel { overflow: hidden; }
+
+    #plotly-container {
+      width: 100%;
+      height: 100%;
+      min-height: 400px;
+    }
+
+    .viz-placeholder {
+      width: 100%;
+      height: 100%;
+      min-height: 400px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-ghost);
+      font-size: 0.83rem;
+      gap: 0.4rem;
+    }
+    .viz-placeholder span { font-size: 2.5rem; }
   </style>
 </head>
 <body>
@@ -370,8 +431,8 @@
 </header>
 
 <main>
-  <!-- ── Left panel: input editor ── -->
-  <div class="panel">
+  <!-- ── Col 1: Input editor ── -->
+  <div class="panel" id="input-panel">
     <div class="panel-header">
       <h2>Input</h2>
       <select id="presets">
@@ -392,10 +453,11 @@
     </div>
   </div>
 
-  <!-- ── Right panel: results ── -->
-  <div class="panel">
-    <div class="panel-header">
-      <h2>Results</h2>
+  <!-- ── Col 2: Metrics / Summary tabs ── -->
+  <div class="panel" id="results-panel">
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="metrics">Dose Metrics</button>
+      <button class="tab-btn" data-tab="summary">Summary Output</button>
     </div>
     <div class="panel-body" id="results-body">
       <div class="placeholder">
@@ -404,8 +466,23 @@
       </div>
     </div>
   </div>
+
+  <!-- ── Col 3: Isosurface visualisation ── -->
+  <div class="panel" id="viz-panel">
+    <div class="panel-header">
+      <h2>3D Dose Distribution</h2>
+    </div>
+    <div class="panel-body" style="padding:0; overflow:hidden;">
+      <div class="viz-placeholder" id="viz-placeholder">
+        <span>🔬</span>
+        Run a simulation to see the isosurface
+      </div>
+      <div id="plotly-container" style="display:none;"></div>
+    </div>
+  </div>
 </main>
 
+<!-- Plotly loaded on demand -->
 <script type="module">
 // ── Presets ──────────────────────────────────────────────────────────────────
 
@@ -473,16 +550,18 @@ AngularResolution 2`,
 
 // ── DOM refs ─────────────────────────────────────────────────────────────────
 
-const inputArea   = document.getElementById('input-area');
-const runBtn      = document.getElementById('run-btn');
-const resetBtn    = document.getElementById('reset-btn');
-const statusText  = document.getElementById('status-text');
-const resultsBody = document.getElementById('results-body');
-const presetsEl   = document.getElementById('presets');
-const initSpinner = document.getElementById('init-spinner');
-const themeToggle = document.getElementById('theme-toggle');
-const themeIcon   = document.getElementById('theme-icon');
-const themeLabel  = document.getElementById('theme-label');
+const inputArea      = document.getElementById('input-area');
+const runBtn         = document.getElementById('run-btn');
+const resetBtn       = document.getElementById('reset-btn');
+const statusText     = document.getElementById('status-text');
+const resultsBody    = document.getElementById('results-body');
+const presetsEl      = document.getElementById('presets');
+const initSpinner    = document.getElementById('init-spinner');
+const themeToggle    = document.getElementById('theme-toggle');
+const themeIcon      = document.getElementById('theme-icon');
+const themeLabel     = document.getElementById('theme-label');
+const vizPlaceholder = document.getElementById('viz-placeholder');
+const plotlyContainer= document.getElementById('plotly-container');
 
 // ── Theme toggle ─────────────────────────────────────────────────────────────
 
@@ -490,25 +569,31 @@ const STORAGE_KEY = 'raddose3d-theme';
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  if (theme === 'light') {
-    themeIcon.textContent = '☾';
-    themeLabel.textContent = 'Dark mode';
-  } else {
-    themeIcon.textContent = '☀';
-    themeLabel.textContent = 'Light mode';
-  }
+  themeIcon.textContent  = theme === 'light' ? '☾' : '☀';
+  themeLabel.textContent = theme === 'light' ? 'Dark mode' : 'Light mode';
   try { localStorage.setItem(STORAGE_KEY, theme); } catch (_) {}
 }
 
 function initTheme() {
-  const stored = (() => { try { return localStorage.getItem(STORAGE_KEY); } catch(_) { return null; } })();
+  const stored = (() => { try { return localStorage.getItem(STORAGE_KEY); } catch (_) { return null; } })();
   const preferred = stored ?? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
   applyTheme(preferred);
 }
 
 themeToggle.addEventListener('click', () => {
-  const current = document.documentElement.getAttribute('data-theme');
-  applyTheme(current === 'light' ? 'dark' : 'light');
+  applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+});
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+
+let activeTab = 'metrics';
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeTab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tab === activeTab));
+  });
 });
 
 // ── Load WASM ────────────────────────────────────────────────────────────────
@@ -517,10 +602,9 @@ let wasmModule = null;
 
 async function loadWasm() {
   try {
-    const { default: init, run, runStructured } = await import('../pkg/raddose3d_wasm.js');
+    const { default: init, run, runFull } = await import('../pkg/raddose3d_wasm.js');
     await init();
-    wasmModule = { run, runStructured };
-
+    wasmModule = { run, runFull };
     runBtn.disabled = false;
     runBtn.innerHTML = '▶ Run';
     initSpinner.remove();
@@ -533,14 +617,11 @@ async function loadWasm() {
 
 // ── Preset handling ──────────────────────────────────────────────────────────
 
-function applyPreset(name) {
-  inputArea.value = PRESETS[name] ?? PRESETS.insulin;
-}
-
+function applyPreset(name) { inputArea.value = PRESETS[name] ?? PRESETS.insulin; }
 presetsEl.addEventListener('change', () => applyPreset(presetsEl.value));
 resetBtn.addEventListener('click', () => applyPreset(presetsEl.value));
 
-// ── Run simulation ───────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(n, decimals = 4) {
   if (n === undefined || n === null) return '—';
@@ -550,70 +631,175 @@ function fmt(n, decimals = 4) {
   return n.toFixed(decimals);
 }
 
-function renderResults(structured, summaryText) {
-  const s = structured;
+function escHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
+// ── Render results ────────────────────────────────────────────────────────────
+
+function renderResults(full, summaryText) {
   const metrics = [
-    { label: 'Avg DWD',          value: fmt(s.averageDwd),             unit: 'MGy'     },
-    { label: 'Max Dose',         value: fmt(s.maxDose),                unit: 'MGy'     },
-    { label: 'Avg Dose (whole)', value: fmt(s.avgDoseWholeCrystal),    unit: 'MGy'     },
-    { label: 'Avg Dose (exp)',   value: fmt(s.avgDoseExposedRegion),   unit: 'MGy'     },
-    { label: 'Elastic Yield',    value: fmt(s.elasticYield, 3),        unit: 'photons' },
-    { label: 'Absorbed Energy',  value: fmt(s.absorbedEnergy, 3),      unit: 'J'       },
-    { label: 'Used Volume',      value: fmt(s.usedVolumeFraction, 1),  unit: '%'       },
-    { label: 'Last DWD',         value: fmt(s.lastDwd),                unit: 'MGy'     },
+    { label: 'Avg DWD',          value: fmt(full.averageDwd),            unit: 'MGy'     },
+    { label: 'Max Dose',         value: fmt(full.maxDose),               unit: 'MGy'     },
+    { label: 'Avg Dose (whole)', value: fmt(full.avgDoseWholeCrystal),   unit: 'MGy'     },
+    { label: 'Avg Dose (exp)',   value: fmt(full.avgDoseExposedRegion),  unit: 'MGy'     },
+    { label: 'Elastic Yield',    value: fmt(full.elasticYield, 3),       unit: 'photons' },
+    { label: 'Absorbed Energy',  value: fmt(full.absorbedEnergy, 3),     unit: 'J'       },
+    { label: 'Used Volume',      value: fmt(full.usedVolumeFraction, 1), unit: '%'       },
+    { label: 'Last DWD',         value: fmt(full.lastDwd),               unit: 'MGy'     },
   ];
 
   const cards = metrics.map(m => `
     <div class="metric-card">
       <div class="label">${m.label}</div>
       <div class="value">${m.value}<span class="unit">${m.unit}</span></div>
-    </div>
-  `).join('');
+    </div>`).join('');
 
   resultsBody.innerHTML = `
-    <div class="results-section">
-      <h3>Dose Metrics</h3>
-      <div class="metrics-grid">${cards}</div>
+    <div class="tab-panel ${activeTab === 'metrics' ? 'active' : ''}" data-tab="metrics">
+      <div class="results-section">
+        <h3>Dose Metrics</h3>
+        <div class="metrics-grid">${cards}</div>
+      </div>
     </div>
-    <div class="results-section">
-      <h3>Summary Output</h3>
+    <div class="tab-panel ${activeTab === 'summary' ? 'active' : ''}" data-tab="summary">
       <pre class="summary-pre">${escHtml(summaryText)}</pre>
-    </div>
-  `;
+    </div>`;
+
+  // Re-bind tab buttons to new DOM content
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    document.querySelectorAll('.tab-panel').forEach(p =>
+      p.classList.toggle('active', p.dataset.tab === activeTab));
+  });
 }
 
-function escHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// ── Isosurface levels (mirrors html_report.rs compute_iso_levels) ─────────────
+
+function computeIsoLevels(maxDose) {
+  if (maxDose <= 0) return [];
+  if (maxDose > 30) {
+    return [
+      { value: 0.1,  color: 'lightblue',  opacity: 0.2 },
+      { value: 20.0, color: 'royalblue',  opacity: 0.5 },
+      { value: 30.0, color: 'red',        opacity: 0.9 },
+    ];
+  }
+  return [
+    { value: Math.max(maxDose * 0.10, 1e-6), color: 'lightblue', opacity: 0.2 },
+    { value: maxDose * 0.50,                 color: 'royalblue', opacity: 0.5 },
+    { value: maxDose * 0.85,                 color: 'red',       opacity: 0.9 },
+  ];
 }
+
+// ── Render isosurface ─────────────────────────────────────────────────────────
+
+let plotlyLoaded = false;
+
+async function ensurePlotly() {
+  if (plotlyLoaded) return;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.plot.ly/plotly-2.35.2.min.js';
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  plotlyLoaded = true;
+}
+
+async function renderIsosurface(full) {
+  const { voxelX, voxelY, voxelZ, voxelDose, maxDose, crystalSizeUm } = full;
+
+  if (!voxelDose || voxelDose.length === 0) return;
+
+  await ensurePlotly();
+
+  const levels = computeIsoLevels(maxDose);
+  if (levels.length === 0) return;
+
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const paperBg  = isDark ? '#141820' : '#ffffff';
+  const plotBg   = isDark ? '#0f1117' : '#f8fafc';
+  const textColor = isDark ? '#94a3b8' : '#475569';
+  const gridColor = isDark ? '#1e2a3a' : '#e2e8f0';
+
+  const traces = levels.map((lvl, i) => ({
+    type: 'isosurface',
+    x: voxelX,
+    y: voxelY,
+    z: voxelZ,
+    value: voxelDose,
+    isomin: lvl.value,
+    isomax: lvl.value,
+    surface: { show: true, count: 1 },
+    caps: { x: { show: false }, y: { show: false }, z: { show: false } },
+    colorscale: [[0, lvl.color], [1, lvl.color]],
+    showscale: false,
+    opacity: lvl.opacity,
+    name: `${lvl.value.toFixed(2)} MGy`,
+    showlegend: true,
+  }));
+
+  const layout = {
+    scene: {
+      xaxis: { title: 'X (µm)', color: textColor, gridcolor: gridColor, zerolinecolor: gridColor },
+      yaxis: { title: 'Y (µm)', color: textColor, gridcolor: gridColor, zerolinecolor: gridColor },
+      zaxis: { title: 'Z (µm)', color: textColor, gridcolor: gridColor, zerolinecolor: gridColor },
+      aspectmode: 'data',
+      bgcolor: plotBg,
+    },
+    paper_bgcolor: paperBg,
+    font: { color: textColor },
+    legend: { x: 0, y: 1, font: { size: 11 } },
+    margin: { l: 0, r: 0, t: 30, b: 0 },
+    title: { text: 'Dose Isosurfaces (MGy)', font: { size: 13, color: textColor }, x: 0.5 },
+  };
+
+  vizPlaceholder.style.display = 'none';
+  plotlyContainer.style.display = 'block';
+
+  Plotly.react(plotlyContainer, traces, layout, { responsive: true });
+}
+
+// ── Run simulation ────────────────────────────────────────────────────────────
 
 async function runSimulation() {
   if (!wasmModule) return;
-
   const input = inputArea.value.trim();
   if (!input) return;
 
   runBtn.disabled = true;
   runBtn.textContent = 'Running…';
   statusText.innerHTML = '<span class="spinner"></span> Simulating…';
+
   resultsBody.innerHTML = `
     <div class="placeholder">
-      <span class="spinner" style="width:32px;height:32px;border-width:3px"></span>
+      <span class="spinner" style="width:28px;height:28px;border-width:3px"></span>
       <br><br>Running simulation…
       <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
     </div>`;
 
-  // Yield to the browser to render the above before blocking
+  vizPlaceholder.style.display = 'flex';
+  plotlyContainer.style.display = 'none';
+
   await new Promise(r => setTimeout(r, 0));
 
   const t0 = performance.now();
   try {
-    const structured = wasmModule.runStructured(input);
+    const full        = wasmModule.runFull(input);
     const summaryText = wasmModule.run(input);
-    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+    const elapsed     = ((performance.now() - t0) / 1000).toFixed(2);
 
-    renderResults(structured, summaryText);
+    renderResults(full, summaryText);
     statusText.textContent = `Done in ${elapsed}s`;
+
+    // Render isosurface asynchronously (don't block result display)
+    renderIsosurface(full).catch(err => {
+      console.warn('Isosurface render failed:', err);
+      vizPlaceholder.innerHTML = `<span>⚠</span><span style="font-size:0.8rem">Visualisation unavailable</span>`;
+      vizPlaceholder.style.display = 'flex';
+      plotlyContainer.style.display = 'none';
+    });
   } catch (err) {
     resultsBody.innerHTML = `<div class="error-box">Simulation error:\n\n${escHtml(String(err))}</div>`;
     statusText.textContent = 'Error';
@@ -624,15 +810,11 @@ async function runSimulation() {
 }
 
 runBtn.addEventListener('click', runSimulation);
-
 inputArea.addEventListener('keydown', e => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-    e.preventDefault();
-    runSimulation();
-  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runSimulation(); }
 });
 
-// ── Initialise ───────────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────────────────
 
 initTheme();
 applyPreset('insulin');
