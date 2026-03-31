@@ -167,6 +167,21 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 - XfelSimulation (xfel.rs, ~2500 lines): time-resolved dosimetry, 4D voxel arrays (spatial + time bins), PULSE_LENGTH/PULSE_BIN_LENGTH parameters, same physics as MC
 - MicroEdSimulation (micro_ed.rs, ~1400 lines): electron diffraction, stopping-power slice simulation, CSDA range, optimal voltage/thickness search
 
+### TODO
+
+#### Progress bar refactor + WASM progress callbacks
+
+The progress bar is hardcoded in `expose_rd3d()` (`crystal/mod.rs`) via `print!()` to stdout. This is the wrong layer — progress is a UI concern and belongs outside the core simulation. Two specific problems:
+
+1. **`OutputProgressIndicator` / `ExposeObserver` are not wired up.** The `ExposeObserver` trait (`output/mod.rs`) and `OutputProgressIndicator` (`output/progress.rs`) exist and are correct, but `expose_rd3d` never calls into any `ExposeObserver`. The trait implementations are dead code for their primary purpose; actual progress comes from the hardcoded `print!()`.
+
+2. **Core library has a hidden stdout side-effect.** Any embedder (including WASM) gets this silently. In WASM the `print!()` calls compile but produce no output.
+
+**What needs doing:**
+- Remove the hardcoded `print!()` progress block from `expose_rd3d` and either (a) wire `ExposeObserver` into the simulation loop properly, or (b) accept an optional `Box<dyn FnMut(usize, usize)>` callback (images_complete, images_total).
+- Add `runWithProgress(input: &str, on_progress: js_sys::Function)` to `raddose3d-wasm`, calling the JS function with `(imagesComplete, imagesTotal)` after each angle step.
+- Note: since WASM runs on the main JS thread and blocks it, a live browser progress bar requires running the simulation in a Web Worker and relaying progress via `postMessage`. The callback is still useful for Node.js consumers and as groundwork for the worker approach.
+
 ### What's Not Yet Ported
 - CoefCalc: Raddose (legacy v2 subprocess — stubs to Default)
 - Beam: EnergyDistribution integration with Experimental beam for pink beam multi-energy loop
