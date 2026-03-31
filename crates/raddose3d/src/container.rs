@@ -25,6 +25,8 @@ pub trait Container: std::fmt::Debug + Send + Sync {
 /// linearly interpolates to the requested beam energy.
 ///
 /// Returns None if the download or parsing fails.
+/// Not available on wasm32 (no blocking HTTP).
+#[cfg(not(target_arch = "wasm32"))]
 fn fetch_nist_mass_attenuation(atomic_number: i32, beam_energy_kev: f64) -> Option<f64> {
     let url = format!(
         "https://physics.nist.gov/PhysRefData/XrayMassCoef/ElemTab/z{:02}.html",
@@ -109,6 +111,7 @@ fn fetch_nist_mass_attenuation(atomic_number: i32, beam_energy_kev: f64) -> Opti
 /// Compute the weighted-average mass attenuation coefficient (cm²/g) for a
 /// compound, using NIST data for each element. This matches the Java
 /// RADDOSE-3D approach exactly (ContainerElemental.extractMassAttenuationCoef).
+#[cfg(not(target_arch = "wasm32"))]
 fn compute_nist_mass_attenuation(elements: &[(String, f64)], beam_energy_kev: f64) -> Option<f64> {
     let db = ElementDatabase::instance();
 
@@ -249,6 +252,7 @@ impl Container for ContainerElemental {
             return;
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         match compute_nist_mass_attenuation(&self.elements, beam_energy) {
             Some(mu_rho) => {
                 self.mass_attenuation_coeff = mu_rho;
@@ -262,12 +266,18 @@ impl Container for ContainerElemental {
             }
         }
 
-        // mass_thickness = density (g/cm³) × thickness (cm)
-        let thickness_cm = self.thickness_um * MICRONS_TO_CM;
-        let mass_thickness = self.density_g_per_ml * thickness_cm;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // mass_thickness = density (g/cm³) × thickness (cm)
+            let thickness_cm = self.thickness_um * MICRONS_TO_CM;
+            let mass_thickness = self.density_g_per_ml * thickness_cm;
 
-        // Beer-Lambert law
-        self.attenuation_fraction = 1.0 - (-self.mass_attenuation_coeff * mass_thickness).exp();
+            // Beer-Lambert law
+            self.attenuation_fraction = 1.0 - (-self.mass_attenuation_coeff * mass_thickness).exp();
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        let _ = beam_energy;
     }
 
     fn attenuation_fraction(&self) -> f64 {

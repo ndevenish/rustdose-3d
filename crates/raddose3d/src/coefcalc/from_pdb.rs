@@ -222,6 +222,7 @@ fn parse_seqres(line: &str, compute: &mut CoefCalcCompute) {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn download_pdb(code: &str) -> Result<String, String> {
     let url = format!("https://files.rcsb.org/view/{code}.pdb");
     println!("Downloading PDB from {url}");
@@ -231,6 +232,14 @@ fn download_pdb(code: &str) -> Result<String, String> {
         .body_mut()
         .read_to_string()
         .map_err(|e| format!("Failed to read PDB response: {e}"))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn download_pdb(code: &str) -> Result<String, String> {
+    Err(format!(
+        "PDB download not supported in WASM (code: '{code}'). \
+         Pass PDB file content directly via the PDBFILE keyword."
+    ))
 }
 
 impl CoefCalc for CoefCalcFromPDB {

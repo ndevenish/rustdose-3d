@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RADDOSE-3D — Browser Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid #1e2a3a;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #60a5fa;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+
+    .badge {
+      background: #1e3a5f;
+      color: #60a5fa;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #1e2a3a;
+      min-height: 0;
+    }
+
+    .panel:last-child { border-right: none; }
+
+    .panel-header {
+      padding: 0.75rem 1.25rem;
+      background: #141820;
+      border-bottom: 1px solid #1e2a3a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    .panel-header h2 {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .panel-body {
+      flex: 1;
+      overflow: auto;
+      padding: 1rem 1.25rem;
+    }
+
+    textarea {
+      width: 100%;
+      height: 100%;
+      min-height: 420px;
+      background: transparent;
+      border: none;
+      outline: none;
+      resize: none;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.82rem;
+      line-height: 1.65;
+      color: #c9d1d9;
+      caret-color: #60a5fa;
+    }
+
+    .toolbar {
+      padding: 0.75rem 1.25rem;
+      background: #141820;
+      border-top: 1px solid #1e2a3a;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 0.5rem 1.1rem;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    #run-btn {
+      background: #2563eb;
+      color: #fff;
+    }
+    #run-btn:hover:not(:disabled) { background: #1d4ed8; }
+
+    #reset-btn {
+      background: #1e2a3a;
+      color: #94a3b8;
+    }
+    #reset-btn:hover:not(:disabled) { background: #253347; }
+
+    .status {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-left: auto;
+    }
+
+    /* Results panel */
+    .results-section { margin-bottom: 1.5rem; }
+
+    .results-section h3 {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #475569;
+      margin-bottom: 0.6rem;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+    }
+
+    .metric-card {
+      background: #141820;
+      border: 1px solid #1e2a3a;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+    }
+
+    .metric-card .label {
+      font-size: 0.7rem;
+      color: #475569;
+      margin-bottom: 0.25rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .metric-card .value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #60a5fa;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric-card .unit {
+      font-size: 0.65rem;
+      color: #64748b;
+      margin-left: 0.2rem;
+    }
+
+    .summary-pre {
+      background: #141820;
+      border: 1px solid #1e2a3a;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 0.75rem;
+      line-height: 1.7;
+      color: #94a3b8;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .error-box {
+      background: #2a1215;
+      border: 1px solid #7f1d1d;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      color: #fca5a5;
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .placeholder {
+      color: #334155;
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 3rem 1rem;
+    }
+
+    .placeholder span { display: block; font-size: 2rem; margin-bottom: 0.5rem; }
+
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #1e3a5f;
+      border-top-color: #60a5fa;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.4rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .progress-bar-wrap {
+      height: 3px;
+      background: #1e2a3a;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 0.4rem;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: #2563eb;
+      animation: indeterminate 1.4s ease infinite;
+      transform-origin: left;
+    }
+
+    @keyframes indeterminate {
+      0%   { transform: scaleX(0) translateX(0); }
+      50%  { transform: scaleX(0.6) translateX(70%); }
+      100% { transform: scaleX(0) translateX(200%); }
+    }
+
+    /* Presets */
+    select {
+      background: #1e2a3a;
+      color: #94a3b8;
+      border: 1px solid #253347;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      padding: 0.35rem 0.65rem;
+      outline: none;
+      cursor: pointer;
+    }
+    select:focus { border-color: #2563eb; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>RADDOSE-3D</h1>
+    <p>Radiation dose modelling for macromolecular crystallography</p>
+  </div>
+  <span class="badge">WebAssembly</span>
+</header>
+
+<main>
+  <!-- ── Left panel: input editor ── -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Input</h2>
+      <select id="presets">
+        <option value="insulin">Preset: Insulin (cuboid, Gaussian)</option>
+        <option value="tophat">Preset: Tophat beam</option>
+        <option value="cylinder">Preset: Cylinder crystal</option>
+      </select>
+    </div>
+    <div class="panel-body">
+      <textarea id="input-area" spellcheck="false"></textarea>
+    </div>
+    <div class="toolbar">
+      <button id="run-btn" disabled>
+        <span class="spinner" id="init-spinner"></span>Initialising…
+      </button>
+      <button id="reset-btn">Reset</button>
+      <span class="status" id="status-text">Loading WASM…</span>
+    </div>
+  </div>
+
+  <!-- ── Right panel: results ── -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Results</h2>
+    </div>
+    <div class="panel-body" id="results-body">
+      <div class="placeholder">
+        <span>⚛</span>
+        Run a simulation to see results
+      </div>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+// ── Presets ──────────────────────────────────────────────────────────────────
+
+const PRESETS = {
+  insulin: `Crystal
+Type Cuboid
+Dimensions 100 100 100
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 24
+NumResidues 51
+
+Beam
+Type Gaussian
+Flux 2e12
+FWHM 100 100
+Energy 12.1
+Collimation Rectangular 100 100
+
+Wedge 0 360
+ExposureTime 100
+AngularResolution 2`,
+
+  tophat: `Crystal
+Type Cuboid
+Dimensions 60 60 80
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 24
+NumResidues 51
+
+Beam
+Type Tophat
+Flux 5e12
+FWHM 50 50
+Energy 12.4
+Collimation Rectangular 50 50
+
+Wedge 0 180
+ExposureTime 60
+AngularResolution 2`,
+
+  cylinder: `Crystal
+Type Cylinder
+Dimensions 80 80 120
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 24
+NumResidues 51
+
+Beam
+Type Gaussian
+Flux 3e12
+FWHM 80 80
+Energy 13.0
+Collimation Circular 80
+
+Wedge 0 360
+ExposureTime 90
+AngularResolution 2`,
+};
+
+// ── DOM refs ─────────────────────────────────────────────────────────────────
+
+const inputArea    = document.getElementById('input-area');
+const runBtn       = document.getElementById('run-btn');
+const resetBtn     = document.getElementById('reset-btn');
+const statusText   = document.getElementById('status-text');
+const resultsBody  = document.getElementById('results-body');
+const presetsEl    = document.getElementById('presets');
+const initSpinner  = document.getElementById('init-spinner');
+
+// ── Load WASM ────────────────────────────────────────────────────────────────
+
+let wasmModule = null;
+
+async function loadWasm() {
+  try {
+    // pkg/ is served alongside index.html
+    const { default: init, run, runStructured } = await import('../pkg/raddose3d_wasm.js');
+    await init();
+    wasmModule = { run, runStructured };
+
+    runBtn.disabled = false;
+    runBtn.innerHTML = '▶ Run';
+    initSpinner.remove();
+    statusText.textContent = 'Ready';
+  } catch (err) {
+    statusText.textContent = 'Failed to load WASM';
+    resultsBody.innerHTML = `<div class="error-box">Failed to load WebAssembly module:\n\n${err}</div>`;
+  }
+}
+
+// ── Preset handling ──────────────────────────────────────────────────────────
+
+function applyPreset(name) {
+  inputArea.value = PRESETS[name] ?? PRESETS.insulin;
+}
+
+presetsEl.addEventListener('change', () => applyPreset(presetsEl.value));
+resetBtn.addEventListener('click', () => applyPreset(presetsEl.value));
+
+// ── Run simulation ───────────────────────────────────────────────────────────
+
+function fmt(n, decimals = 4) {
+  if (n === undefined || n === null) return '—';
+  const abs = Math.abs(n);
+  if (abs === 0) return '0';
+  if (abs >= 1e6 || (abs < 1e-3 && abs > 0)) return n.toExponential(3);
+  return n.toFixed(decimals);
+}
+
+function renderResults(structured, summaryText) {
+  const s = structured;
+
+  const metrics = [
+    { label: 'Avg DWD',         value: fmt(s.averageDwd),        unit: 'MGy' },
+    { label: 'Max Dose',        value: fmt(s.maxDose),           unit: 'MGy' },
+    { label: 'Avg Dose (whole)',value: fmt(s.avgDoseWholeCrystal),unit: 'MGy' },
+    { label: 'Avg Dose (exp)',  value: fmt(s.avgDoseExposedRegion),unit: 'MGy' },
+    { label: 'Elastic Yield',   value: fmt(s.elasticYield, 3),   unit: 'photons' },
+    { label: 'Absorbed Energy', value: fmt(s.absorbedEnergy, 3), unit: 'J' },
+    { label: 'Used Volume',     value: fmt(s.usedVolumeFraction, 1), unit: '%' },
+    { label: 'Last DWD',        value: fmt(s.lastDwd),           unit: 'MGy' },
+  ];
+
+  const cards = metrics.map(m => `
+    <div class="metric-card">
+      <div class="label">${m.label}</div>
+      <div class="value">${m.value}<span class="unit">${m.unit}</span></div>
+    </div>
+  `).join('');
+
+  resultsBody.innerHTML = `
+    <div class="results-section">
+      <h3>Dose Metrics</h3>
+      <div class="metrics-grid">${cards}</div>
+    </div>
+    <div class="results-section">
+      <h3>Summary Output</h3>
+      <pre class="summary-pre">${escHtml(summaryText)}</pre>
+    </div>
+  `;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function runSimulation() {
+  if (!wasmModule) return;
+
+  const input = inputArea.value.trim();
+  if (!input) return;
+
+  runBtn.disabled = true;
+  runBtn.textContent = 'Running…';
+  statusText.innerHTML = '<span class="spinner"></span> Simulating…';
+  resultsBody.innerHTML = `
+    <div class="placeholder">
+      <span class="spinner" style="width:32px;height:32px;border-width:3px"></span>
+      <br><br>Running simulation…
+      <div class="progress-bar-wrap"><div class="progress-bar"></div></div>
+    </div>`;
+
+  // Yield to the browser to render the above before blocking
+  await new Promise(r => setTimeout(r, 0));
+
+  const t0 = performance.now();
+  try {
+    const structured = wasmModule.runStructured(input);
+    const summaryText = wasmModule.run(input);
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+
+    renderResults(structured, summaryText);
+    statusText.textContent = `Done in ${elapsed}s`;
+  } catch (err) {
+    resultsBody.innerHTML = `<div class="error-box">Simulation error:\n\n${escHtml(String(err))}</div>`;
+    statusText.textContent = 'Error';
+  } finally {
+    runBtn.disabled = false;
+    runBtn.textContent = '▶ Run';
+  }
+}
+
+runBtn.addEventListener('click', runSimulation);
+
+inputArea.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    runSimulation();
+  }
+});
+
+// ── Initialise ───────────────────────────────────────────────────────────────
+
+applyPreset('insulin');
+loadWasm();
+</script>
+</body>
+</html>
