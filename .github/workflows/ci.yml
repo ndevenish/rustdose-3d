@@ -33,16 +33,14 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            raddose3d/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('raddose3d/Cargo.lock') }}
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Build
-        working-directory: raddose3d
         run: cargo build --release --workspace
 
       - name: Test
-        working-directory: raddose3d
         run: cargo test --release --workspace
 
   # ── Lint ──────────────────────────────────────────────────────────────────
@@ -65,16 +63,14 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            raddose3d/target
-          key: ubuntu-lint-${{ hashFiles('raddose3d/Cargo.lock') }}
+            target
+          key: ubuntu-lint-${{ hashFiles('Cargo.lock') }}
           restore-keys: ubuntu-lint-
 
       - name: fmt
-        working-directory: raddose3d
         run: cargo fmt --all -- --check
 
       - name: clippy
-        working-directory: raddose3d
         run: cargo clippy --release --workspace -- -D warnings
 
   # ── WASM build & test ─────────────────────────────────────────────────────
@@ -97,25 +93,24 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            raddose3d/target
-          key: ubuntu-wasm-${{ hashFiles('raddose3d/Cargo.lock') }}
+            target
+          key: ubuntu-wasm-${{ hashFiles('Cargo.lock') }}
           restore-keys: ubuntu-wasm-
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-
       - name: Build WASM package
-        working-directory: raddose3d/crates/raddose3d-wasm
+        working-directory: crates/raddose3d-wasm
         run: wasm-pack build --target web --out-dir pkg
 
       - name: Test WASM (Node.js)
-        working-directory: raddose3d/crates/raddose3d-wasm
+        working-directory: crates/raddose3d-wasm
         run: wasm-pack test --node
 
       - name: Upload WASM package
         uses: actions/upload-artifact@v4
         with:
           name: raddose3d-wasm-pkg
-          path: raddose3d/crates/raddose3d-wasm/pkg/
+          path: crates/raddose3d-wasm/pkg/
           retention-days: 7
