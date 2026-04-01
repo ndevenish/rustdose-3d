@@ -104,8 +104,6 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-      - name: Install wasm-opt
-        run: cargo install wasm-opt --locked
 
       - name: Build WASM package
         working-directory: raddose3d/crates/raddose3d-wasm
