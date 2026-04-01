@@ -11,8 +11,8 @@ use crate::beam::Beam;
 use crate::coefcalc::CoefCalc;
 use crate::wedge::Wedge;
 
-// Re-use embedded file loader from mc module.
-use super::mc::get_embedded_file;
+// Re-use binary data loaders from mc module.
+use super::mc::{get_transition_bin, parse_elsepa_bin, parse_transition_bin};
 
 /// Speed of light (m/s).
 pub const C: f64 = 299_792_458.0;
@@ -2449,96 +2449,44 @@ impl XfelSimulation {
     }
 }
 
-// ── Standalone CSV data loading ────────────────────────────────────────────────
+// ── Data loading (delegates to mc binary loaders) ─────────────────────────────
 
-fn load_xfel_auger_csv(dir: &str, filename: &str) -> Option<XfelTransitionData> {
-    let content = get_embedded_file(dir, filename)?;
-    parse_xfel_transition_csv(content, true)
+fn load_xfel_auger_csv(_dir: &str, filename: &str) -> Option<XfelTransitionData> {
+    let stem = filename.trim_end_matches(".csv");
+    let td = parse_transition_bin(get_transition_bin("auger", stem)?)?;
+    Some(XfelTransitionData {
+        linewidths: td.linewidths,
+        probs: td.probs,
+        energies: td.energies,
+        cumulative_probs: td.cumulative_probs,
+        exit_index: td.exit_index,
+        drop_index: td.drop_index,
+    })
 }
 
-fn load_xfel_fl_csv(dir: &str, filename: &str) -> Option<XfelTransitionData> {
-    let content = get_embedded_file(dir, filename)?;
-    parse_xfel_transition_csv(content, false)
-}
-
-fn parse_xfel_transition_csv(content: &str, is_auger: bool) -> Option<XfelTransitionData> {
-    let mut td = XfelTransitionData::default();
-    let mut sum_prob = 0.0_f64;
-    for line in content.lines() {
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() < 4 {
-            continue;
-        }
-        let lw: f64 = parts[1].trim().parse().ok()?;
-        let prob: f64 = parts[2].trim().parse().ok()?;
-        let energy: f64 = parts[3].trim().parse().ok()?;
-        td.linewidths.push(lw);
-        td.probs.push(prob);
-        td.energies.push(energy);
-        sum_prob += prob;
-        td.cumulative_probs.push(sum_prob);
-        if is_auger && parts.len() >= 6 {
-            let exit: f64 = parts[4].trim().parse().unwrap_or(0.0);
-            let drop: f64 = parts[5].trim().parse().unwrap_or(0.0);
-            td.exit_index.push(exit);
-            td.drop_index.push(drop);
-        } else if !is_auger && parts.len() >= 5 {
-            let drop: f64 = parts[4].trim().parse().unwrap_or(0.0);
-            td.drop_index.push(drop);
-            td.exit_index.push(0.0);
-        } else {
-            td.exit_index.push(0.0);
-            td.drop_index.push(0.0);
-        }
-    }
-    if sum_prob > 0.0 {
-        for p in &mut td.cumulative_probs {
-            *p /= sum_prob;
-        }
-    }
-    if td.linewidths.is_empty() {
-        None
-    } else {
-        Some(td)
-    }
+fn load_xfel_fl_csv(_dir: &str, filename: &str) -> Option<XfelTransitionData> {
+    let stem = filename.trim_end_matches(".csv");
+    let td = parse_transition_bin(get_transition_bin("fl", stem)?)?;
+    Some(XfelTransitionData {
+        linewidths: td.linewidths,
+        probs: td.probs,
+        energies: td.energies,
+        cumulative_probs: td.cumulative_probs,
+        exit_index: td.exit_index,
+        drop_index: td.drop_index,
+    })
 }
 
 fn load_xfel_angle_file(high_energy: bool, atomic_num: usize) -> Option<BTreeMap<u64, Vec<f64>>> {
-    let dir = if high_energy {
-        "above_20000"
+    let data: &[u8] = if high_energy {
+        super::mc::ELSEPA_ABOVE.get(atomic_num)?
     } else {
-        "below_20000"
+        super::mc::ELSEPA_BELOW.get(atomic_num)?
     };
-    let filename = format!("{}.csv", atomic_num);
-    let content = get_embedded_file(dir, &filename)?;
-    let mut map = BTreeMap::new();
-    let mut first = true;
-    for line in content.lines() {
-        if first {
-            first = false;
-            continue;
-        }
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() < 2 {
-            continue;
-        }
-        let energy: f64 = match parts[0].trim().parse() {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        let probs: Vec<f64> = parts[1..]
-            .iter()
-            .filter_map(|s| s.trim().parse().ok())
-            .collect();
-        if !probs.is_empty() {
-            map.insert(f64_key(energy), probs);
-        }
+    if data.is_empty() {
+        return None;
     }
-    if map.is_empty() {
-        None
-    } else {
-        Some(map)
-    }
+    Some(parse_elsepa_bin(data))
 }
 
 fn sample_normal_energies(mean: f64, fwhm: f64, n: u64) -> Vec<f64> {
