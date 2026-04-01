@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ── Native build & test (Linux, macOS, Windows) ───────────────────────────
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            raddose3d/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('raddose3d/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build
+        working-directory: raddose3d
+        run: cargo build --release --workspace
+
+      - name: Test
+        working-directory: raddose3d
+        run: cargo test --release --workspace
+
+  # ── Lint ──────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable + fmt + clippy
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            raddose3d/target
+          key: ubuntu-lint-${{ hashFiles('raddose3d/Cargo.lock') }}
+          restore-keys: ubuntu-lint-
+
+      - name: fmt
+        working-directory: raddose3d
+        run: cargo fmt --all -- --check
+
+      - name: clippy
+        working-directory: raddose3d
+        run: cargo clippy --release --workspace -- -D warnings
+
+  # ── WASM build & test ─────────────────────────────────────────────────────
+  wasm:
+    name: WASM
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable + wasm32 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            raddose3d/target
+          key: ubuntu-wasm-${{ hashFiles('raddose3d/Cargo.lock') }}
+          restore-keys: ubuntu-wasm-
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install wasm-opt
+        run: cargo install wasm-opt --locked
+
+      - name: Build WASM package
+        working-directory: raddose3d/crates/raddose3d-wasm
+        run: wasm-pack build --target web --out-dir pkg
+
+      - name: Test WASM (Node.js)
+        working-directory: raddose3d/crates/raddose3d-wasm
+        run: wasm-pack test --node
+
+      - name: Upload WASM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: raddose3d-wasm-pkg
+          path: raddose3d/crates/raddose3d-wasm/pkg/
+          retention-days: 7
