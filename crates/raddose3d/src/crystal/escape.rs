@@ -18,9 +18,17 @@ const PE_ANGLE_RES_LIMIT: usize = 100;
 /// Angular limit (radians) for PE tracks. Java: PE_ANGLE_LIMIT = 1*2*Math.PI = 2π.
 const PE_ANGLE_LIMIT: f64 = 2.0 * PI;
 /// Number of random tracks sampled per voxel in addDoseAfterPE.
-const PE_ANGLE_RESOLUTION: usize = 1;
-/// Public alias for use in mod.rs.
-pub const PE_ANGLE_RESOLUTION_PUB: usize = PE_ANGLE_RESOLUTION;
+/// Reads `PE_ANGLE_RESOLUTION` env var at first call; defaults to 1.
+/// Higher values reduce variance but cost O(n²) time.
+pub(super) fn pe_angle_resolution() -> usize {
+    static VAL: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *VAL.get_or_init(|| {
+        std::env::var("PE_ANGLE_RESOLUTION")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1)
+    })
+}
 /// Angular resolution limit for FL tracks (matches Java FL_ANGLE_RES_LIMIT).
 const FL_ANGLE_RES_LIMIT: usize = 6;
 /// Number of FL angular samples per voxel in addDoseAfterFL.
@@ -373,7 +381,7 @@ pub fn apply_pe_escape(
         return dose_lost;
     }
 
-    for _ in 0..(PE_ANGLE_RESOLUTION * PE_ANGLE_RESOLUTION) {
+    for _ in 0..(pe_angle_resolution() * pe_angle_resolution()) {
         let random_idx = rng.gen_range(0..pe.track_bias.len());
         let random_track = pe.track_bias[random_idx];
 
@@ -384,7 +392,7 @@ pub fn apply_pe_escape(
             let [rx, ry, rz] = pe.relative_vox_xyz[m][random_track];
 
             let partial_dose = dose_pe * pe.propn_dose_at_dist[m]
-                / (PE_ANGLE_RESOLUTION * PE_ANGLE_RESOLUTION) as f64;
+                / (pe_angle_resolution() * pe_angle_resolution()) as f64;
 
             let ti = (i as f64 + rx).round() as i64;
             let tj = (j as f64 + ry).round() as i64;
@@ -615,7 +623,7 @@ pub fn apply_cryo_pe_escape(
         return dose_back;
     }
 
-    for _ in 0..(PE_ANGLE_RESOLUTION * PE_ANGLE_RESOLUTION) {
+    for _ in 0..(pe_angle_resolution() * pe_angle_resolution()) {
         let random_idx = rng.gen_range(0..cryo.cryo_track_bias.len());
         let random_track = cryo.cryo_track_bias[random_idx];
 
@@ -626,7 +634,7 @@ pub fn apply_cryo_pe_escape(
             let [rx, ry, rz] = cryo.relative_vox_xyz_cryo[m][random_track];
 
             let partial_energy = energy_pe * cryo.propn_dose_at_dist_cryo[m]
-                / (PE_ANGLE_RESOLUTION * PE_ANGLE_RESOLUTION) as f64;
+                / (pe_angle_resolution() * pe_angle_resolution()) as f64;
             let partial_dose = (partial_energy / energy_to_dose_factor) * 1e-6; // Energy to Dose in MGy
 
             let ti = (ci + rx).round() as i64;

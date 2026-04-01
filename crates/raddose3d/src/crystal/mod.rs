@@ -632,7 +632,7 @@ fn apply_escape_pe(
         return dose_lost;
     }
 
-    for _ in 0..(escape::PE_ANGLE_RESOLUTION_PUB * escape::PE_ANGLE_RESOLUTION_PUB) {
+    for _ in 0..(escape::pe_angle_resolution() * escape::pe_angle_resolution()) {
         let random_idx = rng.gen_range(0..pe.track_bias.len());
         let random_track = pe.track_bias[random_idx];
 
@@ -642,7 +642,7 @@ fn apply_escape_pe(
             }
             let [rx, ry, rz] = pe.relative_vox_xyz[m][random_track];
             let partial_dose = dose_pe * pe.propn_dose_at_dist[m]
-                / (escape::PE_ANGLE_RESOLUTION_PUB * escape::PE_ANGLE_RESOLUTION_PUB) as f64;
+                / (escape::pe_angle_resolution() * escape::pe_angle_resolution()) as f64;
 
             let ti = (i as f64 + rx).round() as i64;
             let tj = (j as f64 + ry).round() as i64;
@@ -891,7 +891,7 @@ fn expose_cryo_angle(
                 }
 
                 let pe_dist_bins = cryo.cryo_pe_distances.len();
-                for _ in 0..(escape::PE_ANGLE_RESOLUTION_PUB * escape::PE_ANGLE_RESOLUTION_PUB) {
+                for _ in 0..(escape::pe_angle_resolution() * escape::pe_angle_resolution()) {
                     let random_idx = rng.gen_range(0..cryo.cryo_track_bias.len());
                     let random_track = cryo.cryo_track_bias[random_idx];
 
@@ -902,7 +902,7 @@ fn expose_cryo_angle(
                         let [rx, ry, rz] = cryo.relative_vox_xyz_cryo[m][random_track];
 
                         let partial_energy = energy_pe * cryo.propn_dose_at_dist_cryo[m]
-                            / (escape::PE_ANGLE_RESOLUTION_PUB * escape::PE_ANGLE_RESOLUTION_PUB)
+                            / (escape::pe_angle_resolution() * escape::pe_angle_resolution())
                                 as f64;
                         let partial_dose = (partial_energy / energy_to_dose_factor) * 1e-6;
 
