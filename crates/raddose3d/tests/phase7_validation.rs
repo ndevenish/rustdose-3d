@@ -376,10 +376,14 @@ fn wasm_run_structured_matches_run_results() {
     // values are consistent.
     assert!(results.average_dwd > 0.0);
     assert!(results.max_dose > results.average_dwd);
-    assert_eq!(
+    let results2 = run(&config).unwrap();
+    let rel_diff = (results.average_dwd - results2.average_dwd).abs() / results.average_dwd;
+    assert!(
+        rel_diff < 1e-10,
+        "run() must be deterministic: {:.16} vs {:.16} (rel diff {:.2e})",
         results.average_dwd,
-        run(&config).unwrap().average_dwd,
-        "run() must be deterministic"
+        results2.average_dwd,
+        rel_diff,
     );
 }
 

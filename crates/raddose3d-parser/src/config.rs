@@ -266,10 +266,9 @@ mod tests {
             ..Default::default()
         };
         config.resolve_paths(&PathBuf::from("/some/base/dir"));
-        assert_eq!(
-            config.crystals[0].pdb.as_deref(),
-            Some("/some/base/dir/data/model.pdb")
-        );
+        let resolved = config.crystals[0].pdb.as_deref().map(Path::new);
+        let expected = PathBuf::from("/some/base/dir").join("data/model.pdb");
+        assert_eq!(resolved, Some(expected.as_path()));
     }
 
     #[test]
@@ -282,9 +281,8 @@ mod tests {
             ..Default::default()
         };
         config.resolve_paths(&PathBuf::from("/base"));
-        assert_eq!(
-            config.crystals[0].cif.as_deref(),
-            Some("/base/molecule.cif")
-        );
+        let resolved = config.crystals[0].cif.as_deref().map(Path::new);
+        let expected = PathBuf::from("/base").join("molecule.cif");
+        assert_eq!(resolved, Some(expected.as_path()));
     }
 }
