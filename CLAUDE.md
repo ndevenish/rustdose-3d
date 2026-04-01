@@ -11,6 +11,14 @@ cargo run -- -i tests/fixtures/insulin_test.txt  # Run CLI
 cargo test                               # Run all tests
 ```
 
+WASM is a separate build step and intentionally not part of `cargo build` — it requires `wasm-pack` (which bundles `wasm-opt`) and the `wasm32-unknown-unknown` rustup target:
+
+```bash
+rustup target add wasm32-unknown-unknown
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+cd crates/raddose3d-wasm && wasm-pack build --target web
+```
+
 ## Workspace Layout
 
 Three crates in a Cargo workspace:
@@ -188,7 +196,6 @@ The progress bar is hardcoded in `expose_rd3d()` (`crystal/mod.rs`) via `print!(
 - Container: Mixture/Elemental NIST mass-attenuation lookup (structure done, lookup not implemented)
 - Crystal dispatch for MONTECARLO/GOS/XFEL/EMSP/EMED subprograms (wiring MC/XFEL/MicroED into expose())
 - CLI flags: `-o` (custom output module routing — Java's `module:dest` syntax not implemented)
-- WASM: `wasm-pack` toolchain must be installed separately; WASM target not in default `cargo build`
 
 ### PE/FL Escape: Validation Status
 PE/FL escape and cryo surrounding are implemented (`crystal/escape.rs`, integrated into `expose_rd3d()`). Validated on LiFePO₄ test case (1µm sphere, SMALLMOLE, 1.487 keV). Two Java bugs are intentionally reproduced for compatibility — see `docs/java-bugs-analysis.md`.
