@@ -196,6 +196,11 @@ impl CrystalPolyhedron {
 
     /// Create from config for OBJ-loaded polyhedron ("polyhedron" / "obj" type).
     pub fn from_config(config: &CrystalConfig) -> Result<Self, String> {
+        // Dimensions must be specified explicitly (matches Java behaviour).
+        if config.dim_x.is_none() {
+            return Err("Polyhedron crystal requires Dimensions to be specified".to_string());
+        }
+
         let model_file = config
             .model_file
             .as_deref()
@@ -203,9 +208,9 @@ impl CrystalPolyhedron {
 
         let (vertices, indices) = load_obj(model_file)?;
 
-        // OBJ vertices are in absolute µm coordinates (matching Java behavior).
-        // No scaling by dim_x — dimensions are derived from vertex bounding box
-        // in from_geometry_and_config.
+        // OBJ vertices are in absolute µm coordinates (matching Java behaviour).
+        // Dimensions from config define the bounding box; no auto-derivation
+        // from vertex coordinates (Java does not do this either).
         Self::from_geometry_and_config(vertices, indices, config, "Polyhedron")
     }
 
