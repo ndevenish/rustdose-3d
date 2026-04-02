@@ -121,27 +121,28 @@ fn main() {
     let mut experiment = Experiment::new();
     add_default_observers(&mut experiment, prefix);
 
-    for crystal_config in &config.crystals {
-        match crystal::create_crystal(crystal_config) {
-            Ok(c) => experiment.set_crystal(c),
-            Err(e) => {
-                eprintln!("Crystal error: {}", e);
-                std::process::exit(1);
+    use raddose3d::parser::config::ConfigItem;
+    for item in &config.items {
+        match item {
+            ConfigItem::Crystal(c) => match crystal::create_crystal(c) {
+                Ok(crystal) => experiment.set_crystal(crystal),
+                Err(e) => {
+                    eprintln!("Crystal error: {}", e);
+                    std::process::exit(1);
+                }
+            },
+            ConfigItem::Beam(b) => match beam::create_beam(b) {
+                Ok(beam) => experiment.set_beam(beam),
+                Err(e) => {
+                    eprintln!("Beam error: {}", e);
+                    std::process::exit(1);
+                }
+            },
+            ConfigItem::Wedge(w) => {
+                let wedge = Wedge::from_config(w);
+                experiment.expose_wedge(&wedge);
             }
         }
-    }
-    for beam_config in &config.beams {
-        match beam::create_beam(beam_config) {
-            Ok(b) => experiment.set_beam(b),
-            Err(e) => {
-                eprintln!("Beam error: {}", e);
-                std::process::exit(1);
-            }
-        }
-    }
-    for wedge_config in &config.wedges {
-        let wedge = Wedge::from_config(wedge_config);
-        experiment.expose_wedge(&wedge);
     }
 
     experiment.close();

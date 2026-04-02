@@ -20,9 +20,21 @@ pub fn parse(input: &str) -> Result<Config, ParseError> {
         if pair.as_rule() == Rule::configfile {
             for inner in pair.into_inner() {
                 match inner.as_rule() {
-                    Rule::crystal => config.crystals.push(parse_crystal(inner)?),
-                    Rule::beam => config.beams.push(parse_beam(inner)?),
-                    Rule::wedge => config.wedges.push(parse_wedge(inner)?),
+                    Rule::crystal => {
+                        let c = parse_crystal(inner)?;
+                        config.items.push(ConfigItem::Crystal(Box::new(c.clone())));
+                        config.crystals.push(c);
+                    }
+                    Rule::beam => {
+                        let b = parse_beam(inner)?;
+                        config.items.push(ConfigItem::Beam(Box::new(b.clone())));
+                        config.beams.push(b);
+                    }
+                    Rule::wedge => {
+                        let w = parse_wedge(inner)?;
+                        config.items.push(ConfigItem::Wedge(Box::new(w.clone())));
+                        config.wedges.push(w);
+                    }
                     _ => {}
                 }
             }

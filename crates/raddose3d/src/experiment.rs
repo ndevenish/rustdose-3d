@@ -93,20 +93,24 @@ impl Experiment {
         let summary_text = crate::output::OutputSummaryText::new(Box::new(std::io::stdout()));
         experiment.add_observer(Box::new(summary_text));
 
-        // Process each crystal/beam/wedge
-        for crystal_config in &config.crystals {
-            let crystal = crystal::create_crystal(crystal_config)?;
-            experiment.set_crystal(crystal);
-        }
-
-        for beam_config in &config.beams {
-            let beam = beam::create_beam(beam_config)?;
-            experiment.set_beam(beam);
-        }
-
-        for wedge_config in &config.wedges {
-            let wedge = Wedge::from_config(wedge_config);
-            experiment.expose_wedge(&wedge);
+        // Process items in declaration order so each beam applies to the
+        // wedges that follow it (not all wedges using the last beam).
+        use crate::parser::config::ConfigItem;
+        for item in &config.items {
+            match item {
+                ConfigItem::Crystal(c) => {
+                    let crystal = crystal::create_crystal(c)?;
+                    experiment.set_crystal(crystal);
+                }
+                ConfigItem::Beam(b) => {
+                    let beam = beam::create_beam(b)?;
+                    experiment.set_beam(beam);
+                }
+                ConfigItem::Wedge(w) => {
+                    let wedge = Wedge::from_config(w);
+                    experiment.expose_wedge(&wedge);
+                }
+            }
         }
 
         experiment.close();

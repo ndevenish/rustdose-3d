@@ -563,6 +563,116 @@ fn extract_percent(text: &str, label: &str) -> f64 {
     panic!("label '{label}' not found in output")
 }
 
+// ── Multi-beam / multi-wedge tests ───────────────────────────────────────────
+//
+// Regression test for the bug where all wedges ran with the last beam instead
+// of the beam that preceded each wedge in declaration order.
+
+const MULTI_BEAM_GOLDEN_DIR: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/golden/multi_beam");
+
+fn run_multi_beam() -> std::collections::HashMap<&'static str, String> {
+    use raddose3d::parser::config::ConfigItem;
+
+    let path = format!("{}/multi_beam_test.txt", FIXTURES_DIR);
+    let config = raddose3d::parse_input_file(std::path::Path::new(&path))
+        .expect("multi_beam fixture parse failed");
+
+    let (w_sumtxt, b_sumtxt) = shared_string_writer();
+    let (w_sumcsv, b_sumcsv) = shared_string_writer();
+
+    let mut exp = Experiment::new();
+    exp.add_observer(Box::new(OutputSummaryText::new(w_sumtxt)));
+    exp.add_observer(Box::new(OutputSummaryCSV::new(w_sumcsv)));
+
+    for item in &config.items {
+        match item {
+            ConfigItem::Crystal(c) => {
+                let crystal = raddose3d::crystal::create_crystal(c).unwrap();
+                exp.set_crystal(crystal);
+            }
+            ConfigItem::Beam(b) => {
+                let beam = raddose3d::beam::create_beam(b).unwrap();
+                exp.set_beam(beam);
+            }
+            ConfigItem::Wedge(w) => {
+                let wedge = raddose3d::wedge::Wedge::from_config(w);
+                exp.expose_wedge(&wedge);
+            }
+        }
+    }
+    exp.close();
+
+    let to_string = |buf: std::sync::Arc<std::sync::Mutex<Vec<u8>>>| {
+        String::from_utf8(buf.lock().unwrap().clone()).unwrap()
+    };
+
+    let mut out = std::collections::HashMap::new();
+    out.insert("Summary.txt", to_string(b_sumtxt));
+    out.insert("Summary.csv", to_string(b_sumcsv));
+    out
+}
+
+fn multi_beam_golden(name: &str) -> String {
+    let path = format!("{}/multi_beam_{}", MULTI_BEAM_GOLDEN_DIR, name);
+    std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("golden file missing: {}", path))
+}
+
+/// Extract the metric from the Nth wedge section (1-indexed) of a Summary.txt.
+fn extract_metric_wedge(text: &str, wedge: usize, label: &str) -> f64 {
+    let marker = format!("Wedge {}:", wedge);
+    let section = text
+        .find(&marker)
+        .unwrap_or_else(|| panic!("'{}' not found in output", marker));
+    let rest = &text[section..];
+    extract_metric(rest, label)
+}
+
+/// Wedge 1 must use the first beam (23.749 keV). The photoelectric coefficient
+/// at 23.749 keV is ~8.10e-4 /um; at 8.478 keV it is ~7.31e-3 /um (10× higher).
+/// Before the fix, Rust used the second beam for both wedges.
+#[test]
+fn multi_beam_wedge1_uses_first_beam() {
+    let out = run_multi_beam();
+    let rust = &out["Summary.txt"];
+    let java = multi_beam_golden("Summary.txt");
+
+    let rust_max = extract_metric_wedge(rust, 1, "Max Dose");
+    let java_max = extract_metric_wedge(&java, 1, "Max Dose");
+    assert!(
+        (rust_max - java_max).abs() / java_max < 0.001,
+        "Wedge 1 Max Dose: rust={rust_max} java={java_max} (>0.1% diff — beam assignment wrong?)"
+    );
+}
+
+#[test]
+fn multi_beam_wedge2_max_dose() {
+    let out = run_multi_beam();
+    let rust = &out["Summary.txt"];
+    let java = multi_beam_golden("Summary.txt");
+
+    let rust_max = extract_metric_wedge(rust, 2, "Max Dose");
+    let java_max = extract_metric_wedge(&java, 2, "Max Dose");
+    assert!(
+        (rust_max - java_max).abs() / java_max < 0.001,
+        "Wedge 2 Max Dose: rust={rust_max} java={java_max} (>0.1% diff)"
+    );
+}
+
+#[test]
+fn multi_beam_csv_has_two_wedge_rows() {
+    let out = run_multi_beam();
+    let rust = &out["Summary.csv"];
+    let java = multi_beam_golden("Summary.csv");
+
+    let rust_rows = rust.lines().count();
+    let java_rows = java.lines().count();
+    assert_eq!(
+        rust_rows, java_rows,
+        "Summary.csv row count: rust={rust_rows} java={java_rows} (expected header + 2 wedge rows)"
+    );
+}
+
 /// Extract the numeric value after `: ` on the first line matching `label`.
 fn extract_metric(text: &str, label: &str) -> f64 {
     for line in text.lines() {

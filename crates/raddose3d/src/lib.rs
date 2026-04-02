@@ -122,17 +122,22 @@ pub fn run(config: &parser::Config) -> Result<RunResults, String> {
     let mut exp = experiment::Experiment::new();
     exp.add_observer(Box::new(collector));
 
-    for crystal_config in &config.crystals {
-        let crystal = crystal::create_crystal(crystal_config)?;
-        exp.set_crystal(crystal);
-    }
-    for beam_config in &config.beams {
-        let beam = beam::create_beam(beam_config)?;
-        exp.set_beam(beam);
-    }
-    for wedge_config in &config.wedges {
-        let wedge = wedge::Wedge::from_config(wedge_config);
-        exp.expose_wedge(&wedge);
+    use parser::config::ConfigItem;
+    for item in &config.items {
+        match item {
+            ConfigItem::Crystal(c) => {
+                let crystal = crystal::create_crystal(c)?;
+                exp.set_crystal(crystal);
+            }
+            ConfigItem::Beam(b) => {
+                let beam = beam::create_beam(b)?;
+                exp.set_beam(beam);
+            }
+            ConfigItem::Wedge(w) => {
+                let wdg = wedge::Wedge::from_config(w);
+                exp.expose_wedge(&wdg);
+            }
+        }
     }
     exp.close();
 

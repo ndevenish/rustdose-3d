@@ -156,6 +156,7 @@ fn run_no_wedge_returns_error() {
         crystals: vec![CrystalConfig::default()],
         beams: vec![BeamConfig::default()],
         wedges: vec![],
+        items: vec![],
     };
     // run() with no wedges should return Err because nothing is exposed.
     assert!(run(&config).is_err(), "expected error with no wedges");

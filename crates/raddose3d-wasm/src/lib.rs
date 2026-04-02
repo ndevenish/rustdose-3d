@@ -26,6 +26,7 @@ pub fn run(input: &str) -> Result<String, JsValue> {
     use raddose3d::crystal;
     use raddose3d::experiment::Experiment;
     use raddose3d::output::OutputSummaryText;
+    use raddose3d::parser::config::ConfigItem;
     use raddose3d::wedge::Wedge;
     use raddose3d::writer::shared_string_writer;
 
@@ -36,17 +37,21 @@ pub fn run(input: &str) -> Result<String, JsValue> {
     let mut exp = Experiment::new();
     exp.add_observer(Box::new(OutputSummaryText::new(writer)));
 
-    for crystal_config in &config.crystals {
-        let crystal = crystal::create_crystal(crystal_config).map_err(|e| JsValue::from_str(&e))?;
-        exp.set_crystal(crystal);
-    }
-    for beam_config in &config.beams {
-        let beam = beam::create_beam(beam_config).map_err(|e| JsValue::from_str(&e))?;
-        exp.set_beam(beam);
-    }
-    for wedge_config in &config.wedges {
-        let wedge = Wedge::from_config(wedge_config);
-        exp.expose_wedge(&wedge);
+    for item in &config.items {
+        match item {
+            ConfigItem::Crystal(c) => {
+                let crystal = crystal::create_crystal(c).map_err(|e| JsValue::from_str(&e))?;
+                exp.set_crystal(crystal);
+            }
+            ConfigItem::Beam(b) => {
+                let beam = beam::create_beam(b).map_err(|e| JsValue::from_str(&e))?;
+                exp.set_beam(beam);
+            }
+            ConfigItem::Wedge(w) => {
+                let wedge = Wedge::from_config(w);
+                exp.expose_wedge(&wedge);
+            }
+        }
     }
     exp.close();
 
@@ -127,6 +132,7 @@ pub fn run_full(input: &str) -> Result<JsValue, JsValue> {
     use raddose3d::beam;
     use raddose3d::crystal;
     use raddose3d::experiment::Experiment;
+    use raddose3d::parser::config::ConfigItem;
     use raddose3d::wedge::Wedge;
     use std::sync::{Arc, Mutex};
 
@@ -136,17 +142,21 @@ pub fn run_full(input: &str) -> Result<JsValue, JsValue> {
     let mut exp = Experiment::new();
     exp.add_observer(Box::new(FullCollector(Arc::clone(&shared))));
 
-    for crystal_config in &config.crystals {
-        let crystal = crystal::create_crystal(crystal_config).map_err(|e| JsValue::from_str(&e))?;
-        exp.set_crystal(crystal);
-    }
-    for beam_config in &config.beams {
-        let beam = beam::create_beam(beam_config).map_err(|e| JsValue::from_str(&e))?;
-        exp.set_beam(beam);
-    }
-    for wedge_config in &config.wedges {
-        let wedge = Wedge::from_config(wedge_config);
-        exp.expose_wedge(&wedge);
+    for item in &config.items {
+        match item {
+            ConfigItem::Crystal(c) => {
+                let crystal = crystal::create_crystal(c).map_err(|e| JsValue::from_str(&e))?;
+                exp.set_crystal(crystal);
+            }
+            ConfigItem::Beam(b) => {
+                let beam = beam::create_beam(b).map_err(|e| JsValue::from_str(&e))?;
+                exp.set_beam(beam);
+            }
+            ConfigItem::Wedge(w) => {
+                let wedge = Wedge::from_config(w);
+                exp.expose_wedge(&wedge);
+            }
+        }
     }
     exp.close();
 

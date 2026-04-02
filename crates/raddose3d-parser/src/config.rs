@@ -1,12 +1,27 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+/// An item in a RADDOSE-3D input file, preserving declaration order.
+///
+/// The simulation must process items in the order they appear: a Beam applies
+/// to all Wedges that follow it until the next Beam block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ConfigItem {
+    Crystal(Box<CrystalConfig>),
+    Beam(Box<BeamConfig>),
+    Wedge(Box<WedgeConfig>),
+}
+
 /// Top-level configuration parsed from a RADDOSE-3D input file.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     pub crystals: Vec<CrystalConfig>,
     pub beams: Vec<BeamConfig>,
     pub wedges: Vec<WedgeConfig>,
+    /// Items in declaration order. Use this for simulation to correctly
+    /// associate each beam with the wedges that follow it.
+    pub items: Vec<ConfigItem>,
 }
 
 impl Config {
@@ -46,6 +61,20 @@ impl Config {
         }
         for bc in &mut self.beams {
             resolve(&mut bc.file);
+        }
+        for item in &mut self.items {
+            match item {
+                ConfigItem::Crystal(cc) => {
+                    resolve(&mut cc.seq_file);
+                    resolve_if_path(&mut cc.pdb);
+                    resolve(&mut cc.cif);
+                    resolve(&mut cc.model_file);
+                }
+                ConfigItem::Beam(bc) => {
+                    resolve(&mut bc.file);
+                }
+                ConfigItem::Wedge(_) => {}
+            }
         }
     }
 }
