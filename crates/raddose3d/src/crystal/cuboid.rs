@@ -391,8 +391,10 @@ impl super::Crystal for CrystalCuboid {
         }
 
         distances.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        // Remove duplicates
-        distances.dedup_by(|a, b| (*a - *b).abs() < 1e-10);
+        // Java bug compat: Java's CrystalPolyhedron.findDepth dedup uses `==` on boxed
+        // Double (reference equality), which never matches — dedup is a no-op.
+        // A ray hitting a shared triangle edge registers in both triangles, giving an
+        // even intersection count and depth=0. We must NOT deduplicate to match Java.
 
         // Even number of intersections (or none) = outside crystal, return 0
         if distances.is_empty() || distances.len() % 2 == 0 {

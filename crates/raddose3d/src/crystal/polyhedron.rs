@@ -721,7 +721,11 @@ impl super::Crystal for CrystalPolyhedron {
         }
 
         distances.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        distances.dedup_by(|a, b| (*a - *b).abs() < 1e-10);
+        // Java bug compat: Java's dedup uses `==` on boxed Double (reference equality),
+        // which is always false for distinct objects — so dedup is effectively a no-op.
+        // Do NOT deduplicate here: when a ray hits a shared triangle edge, both triangles
+        // register an intersection at the same distance. Keeping both gives an even count,
+        // causing findDepth to return 0 (the "sanity check" fallback). This matches Java.
 
         if distances.is_empty() || distances.len() % 2 == 0 {
             return 0.0;

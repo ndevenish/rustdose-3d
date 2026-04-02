@@ -467,7 +467,6 @@ fn expose_angle(
                 }
 
                 let depth = crystal.find_depth(&translated, angle, wedge);
-
                 // Attenuated fluence (J)
                 let vox_fluence = unattenuated_intensity
                     * beam_attenuation_factor
