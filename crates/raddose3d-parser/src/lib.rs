@@ -60,21 +60,16 @@ fn parse_long(pair: &Pairs<'_>) -> Result<i64, ParseError> {
 
 fn parse_element_counts(pair: Pairs<'_>) -> Result<Vec<ElementCount>, ParseError> {
     let mut result = Vec::new();
-    let inner: Vec<_> = pair.into_inner().collect();
-    let mut i = 0;
-    while i < inner.len() {
-        if inner[i].as_rule() == Rule::element {
-            let symbol = inner[i].as_str().to_string();
-            // Count is optional — default to 1.0 if next token isn't a float
-            let count = if i + 1 < inner.len() && inner[i + 1].as_rule() == Rule::float_val {
-                i += 1;
-                parse_float(&inner[i])?
-            } else {
-                1.0
-            };
+    let mut inner = pair.into_inner();
+    while let Some(elem) = inner.next() {
+        if elem.as_rule() == Rule::element {
+            let symbol = elem.as_str().to_string();
+            let count_tok = inner
+                .next()
+                .ok_or_else(|| ParseError::Grammar(format!("element '{}' has no count", symbol)))?;
+            let count = parse_float(&count_tok)?;
             result.push(ElementCount { symbol, count });
         }
-        i += 1;
     }
     Ok(result)
 }

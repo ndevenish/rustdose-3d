@@ -59,11 +59,9 @@ fn test_average_coefficients() {
 ///   Attenuation:   4.60e-4 /um
 ///   Density:       0.81 g/ml
 ///
-/// Note: The original SMXray_example_input.txt fixture uses `SmallMoleAtoms Mg  O 3`
-/// (Mg with no count). Java's ANTLR parser applies error recovery that skips the
-/// "O" token and uses "3" as the Mg count, giving 3 Mg per monomer (no oxygen).
-/// Rust parses the same input correctly as 1 Mg + 3 O, which matches Java when
-/// explicit counts are given. The explicit form is used here.
+/// The SMXray_example_input.txt fixture has been corrected to `SmallMoleAtoms Mg 1 O 3`.
+/// Element counts are mandatory — omitting a count is a parse error in both Java
+/// (reported as "extraneous input") and Rust.
 #[test]
 fn test_small_molecules_mgo3() {
     let config = CrystalConfig {

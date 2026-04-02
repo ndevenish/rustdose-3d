@@ -17,12 +17,40 @@ fn test_smxray_example() {
     assert_eq!(c.coefcalc, Some(CoefCalcType::SmallMole));
     assert_eq!(c.dim_x, Some(0.2));
     assert_eq!(c.pixels_per_micron, Some(100.0));
-    // "SmallMoleAtoms Mg  O 3" — Mg has no explicit count, defaults to 1
     assert_eq!(c.small_mole_atoms.len(), 2);
     assert_eq!(c.small_mole_atoms[0].symbol, "Mg");
     assert_eq!(c.small_mole_atoms[0].count, 1.0);
     assert_eq!(c.small_mole_atoms[1].symbol, "O");
     assert_eq!(c.small_mole_atoms[1].count, 3.0);
+}
+
+#[test]
+fn test_small_mole_atoms_missing_count_is_rejected() {
+    // Java's ANTLR parser silently deletes the second element symbol and assigns
+    // its count to the first element (e.g. "Fe O 4" → Fe×4, O dropped entirely).
+    // Rust must reject this outright — element counts are mandatory.
+    let input = "
+Crystal
+Type Cuboid
+Dimensions 10.0
+AbsCoefCalc SmallMole
+UnitCell 25.354 40.668 20.605
+SmallMoleAtoms Fe O 4
+NumMonomers 5
+
+Beam
+Type Tophat
+Energy 12.4
+Flux 1e12
+FWHM 10 10
+
+Wedge 0 90
+ExposureTime 1
+";
+    assert!(
+        parse(input).is_err(),
+        "SmallMoleAtoms with missing count must be a parse error"
+    );
 }
 
 #[test]
