@@ -31,7 +31,7 @@ impl OutputSummaryText {
 impl super::Output for OutputSummaryText {
     fn publish_crystal(&mut self, crystal: &dyn Crystal) {
         let _ = writeln!(self.writer, "{}", crystal.crystal_info());
-        let _ = writeln!(self.writer, "{}.", crystal.ddm().name());
+        let _ = writeln!(self.writer, "{}", crystal.ddm().description());
     }
 
     fn publish_beam(&mut self, beam: &dyn Beam) {

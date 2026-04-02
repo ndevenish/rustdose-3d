@@ -177,6 +177,13 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 
 ### TODO
 
+#### Leal DDM golden test
+
+The Leal DDM (`DdmLeal` in `ddm.rs`) was rewritten to implement the correct Leal et al. (2012) model with BEST_DATA + gamma/b0/beta parameters. There is currently no golden validation test covering this model — the existing unit tests only check generic properties (range, monotonicity, zero-dose = 1) rather than bit-identical Java output. A proper golden test needs a fixture where:
+- DDM Leal is used with non-trivial DecayParam values
+- The doses are low enough that `calcDecay` is not numerically zero (i.e. avoid extreme doses where floating-point underflow makes both Java and Rust DWD = 0)
+- The Java golden Summary.txt output is captured and committed
+
 #### Progress bar refactor + WASM progress callbacks
 
 The progress bar is hardcoded in `expose_rd3d()` (`crystal/mod.rs`) via `print!()` to stdout. This is the wrong layer — progress is a UI concern and belongs outside the core simulation. Two specific problems:
