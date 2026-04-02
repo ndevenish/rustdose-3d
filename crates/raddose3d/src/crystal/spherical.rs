@@ -76,7 +76,7 @@ impl CrystalSpherical {
         match subprogram.as_str() {
             "RD3D" | "" | "MONTECARLO" | "GOS" | "XFEL" | "EMSP" | "EMED" => {}
             other => {
-                return Err(format!("Unimplemented subprogram '{other}'"));
+                return Err(format!("Unrecognised subprogram '{other}'"));
             }
         }
 
