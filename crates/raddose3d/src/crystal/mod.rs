@@ -492,8 +492,12 @@ fn expose_angle(
                 if vox_dose > 0.0 {
                     let total_dose_before = crystal.get_dose(i, j, k);
                     // Match Java: interpolatedVoxelDose = getDose(after) + voxImageDose/2
-                    // = (total_before + vox_dose) + vox_dose/2 = total_before + 1.5*vox_dose
-                    let rde = crystal.ddm().calc_decay(total_dose_before + 1.5 * vox_dose);
+                    // Java's DWD loop runs after addDose, so getDose(after) = total_before + PE + Compton.
+                    // interpolatedVoxelDose = (total_before + PE + Compton) + PE/2
+                    //                      = total_before + 1.5*PE + Compton
+                    let rde = crystal
+                        .ddm()
+                        .calc_decay(total_dose_before + 1.5 * vox_dose + vox_dose_compton);
                     // Java bug compatibility: when cryo surrounding + PE escape are both
                     // active, Crystal.java:1236 overwrites energyPerFluence with the cryo
                     // absorption coefficient AND cryo PPM, and that leaked value is used at
@@ -511,13 +515,15 @@ fn expose_angle(
                     let energy_absorbed =
                         energy_per_fluence * vox_fluence + energy_per_fluence * compton_fluence;
 
-                    // Notify exposure summary
+                    // Notify exposure summary.
+                    // added_dose includes both PE and Compton, matching Java's
+                    // addedDose = totalVoxelDose - voxImageDoseLast (which includes Compton).
                     crystal.exposure_summary_mut().exposure_observation(
                         angle_num,
                         i,
                         j,
                         k,
-                        vox_dose,
+                        vox_dose + vox_dose_compton,
                         total_dose_before,
                         vox_fluence,
                         rde,
