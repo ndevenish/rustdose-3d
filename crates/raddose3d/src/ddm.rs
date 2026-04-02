@@ -433,17 +433,23 @@ impl DdmModel for DdmLeal {
     }
 }
 
-/// B-factor DDM: uses temperature factor model.
+/// B-factor DDM: matches Java DDMBfactor (Leal et al. 2012).
+///
+/// Java formula (DDMBfactor.calcDecay):
+///   frequency = 1/gamma
+///   weight = exp( -(dose * b0 / beta) / 2 * frequency² )
+///          = exp( -dose * b0 / (2 * beta * gamma²) )
 #[derive(Debug, Clone)]
 pub struct DdmBfactor {
+    pub gamma: f64,
     pub b0: f64,
     pub beta: f64,
 }
 
 impl DdmModel for DdmBfactor {
     fn calc_decay(&self, dose: f64) -> f64 {
-        let b = self.b0 + self.beta * dose;
-        (-b).exp()
+        let frequency = 1.0 / self.gamma;
+        (-(dose * self.b0 / self.beta) / 2.0 * frequency * frequency).exp()
     }
     fn name(&self) -> &str {
         "B-factor DDM"
@@ -469,8 +475,9 @@ pub fn create_ddm(
             beta.unwrap_or(0.0),
         )),
         Some(DdmType::Bfactor) => Box::new(DdmBfactor {
-            b0: b0.unwrap_or(0.0),
-            beta: beta.unwrap_or(1.0),
+            gamma: gamma.unwrap_or(9.0),
+            b0: b0.unwrap_or(9.0),
+            beta: beta.unwrap_or(9.0),
         }),
     }
 }
