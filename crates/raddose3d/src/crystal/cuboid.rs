@@ -355,6 +355,8 @@ impl super::Crystal for CrystalCuboid {
     }
 
     fn find_depth(&self, vox_coord: &[f64; 3], _delta_phi: f64, _wedge: &Wedge) -> f64 {
+        // NOTE: Nearly identical to CrystalPolyhedron::find_depth in polyhedron.rs.
+        // Could be extracted into a shared free function.
         // Cast ray in -Z direction (towards beam source) to measure depth from entry face
         let dir = [0.0, 0.0, -1.0];
         let mut distances = Vec::new();
