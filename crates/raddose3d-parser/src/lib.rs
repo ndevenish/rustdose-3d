@@ -123,7 +123,7 @@ fn parse_crystal(pair: Pairs<'_>) -> Result<CrystalConfig, ParseError> {
                     "sequence" => CoefCalcType::Sequence,
                     "saxsseq" => CoefCalcType::SaxsSeq,
                     "smallmole" => CoefCalcType::SmallMole,
-                    "expsm" | "cif" => CoefCalcType::Cif,
+                    "expsm" => CoefCalcType::Cif,
                     "microed" => CoefCalcType::MicroED,
                     _ => CoefCalcType::Default,
                 });
@@ -610,6 +610,32 @@ ExposureTime 2
         let c = &config.crystals[0];
         assert_eq!(c.coefcalc, Some(CoefCalcType::Cif));
         assert_eq!(c.cif.as_deref(), Some("Fe3O4"));
+    }
+
+    #[test]
+    fn test_abscoefcalc_cif_keyword_rejected() {
+        // Java's grammar token named CIF matches the text "EXPSM", not "CIF".
+        // "AbsCoefCalc CIF" is therefore a Java parse error and must be rejected here too.
+        let input = r#"
+Crystal
+Type Cuboid
+Dimensions 20 20 20
+AbsCoefCalc CIF
+CIF Fe3O4
+
+Beam
+Type Tophat
+Flux 2e12
+Energy 12.4
+Collimation Rectangular 5 5
+
+Wedge 0 0
+ExposureTime 1
+"#;
+        assert!(
+            parse(input).is_err(),
+            "AbsCoefCalc CIF must be rejected; Java keyword is EXPSM"
+        );
     }
 
     #[test]

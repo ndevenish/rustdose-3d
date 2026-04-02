@@ -67,7 +67,7 @@ crystal_coefcalc = { (^"abscoefcalc" | ^"coefcalc") ~ coefcalc_keyword }
 coefcalc_keyword = {
     ^"dummy" | ^"average" | ^"default" | ^"rdjava" | ^"rd3d" | ^"rd3"
   | ^"rdv3" | ^"rdv2"
-  | ^"expsm" | ^"cif"
+  | ^"expsm"
   | ^"exp"
   | ^"saxsseq" | ^"saxs"
   | ^"sequence"
