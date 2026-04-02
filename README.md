@@ -168,8 +168,8 @@ Java can shell out to the old RADDOSE v2 binary to compute absorption coefficien
 **Custom output routing (`-o module:dest`)**
 Java's `-o` flag allows routing specific output modules to specific files. Not implemented; the eight default output files are always written to `{prefix}{Name}.{ext}`.
 
-**Monte Carlo / XFEL / MicroED dispatch**
-`MonteCarloSimulation`, `XfelSimulation`, and `MicroEdSimulation` are fully implemented internally but are not yet wired into `crystal.expose()`. Input files requesting `MONTECARLO`, `GOS`, `XFEL`, `EMSP`, or `EMED` subprograms will silently run the standard RD3D dose calculation instead.
+**Monte Carlo / XFEL / MicroED: Cuboid only**
+`MonteCarloSimulation`, `XfelSimulation`, and `MicroEdSimulation` are fully wired for `Type Cuboid`. Requesting these subprograms with `Type Polyhedron`, `Type Cylinder`, or `Type Spherical` produces an error at crystal construction time. There is no silent fallback.
 
 **Progress bar architecture**
 The progress indicator (`[ 0%....100% ]`) is printed directly inside the simulation loop via `print!()` rather than being routed through the `OutputProgressIndicator` observer. This is a layering violation — the observer exists and is correct but is not called. Embedders and WASM consumers get the print side-effect silently (no output in WASM).

@@ -74,7 +74,12 @@ impl CrystalSpherical {
 
         let subprogram = config.program.as_deref().unwrap_or("RD3D").to_uppercase();
         match subprogram.as_str() {
-            "RD3D" | "" | "MONTECARLO" | "GOS" | "XFEL" | "EMSP" | "EMED" => {}
+            "RD3D" | "" => {}
+            "MONTECARLO" | "GOS" | "XFEL" | "EMSP" | "EMED" => {
+                return Err(format!(
+                    "Subprogram '{subprogram}' is not supported for Spherical crystals; use Type Cuboid"
+                ));
+            }
             other => {
                 return Err(format!("Unrecognised subprogram '{other}'"));
             }
@@ -256,7 +261,7 @@ impl super::Crystal for CrystalSpherical {
             }
             other => {
                 unreachable!(
-                    "unrecognised subprogram '{}' should have been caught at construction",
+                    "subprogram '{}' should have been rejected at construction",
                     other
                 );
             }
