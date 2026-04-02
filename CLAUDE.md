@@ -204,6 +204,18 @@ The progress bar is hardcoded in `expose_rd3d()` (`crystal/mod.rs`) via `print!(
 - Crystal dispatch for MONTECARLO/GOS/XFEL/EMSP/EMED subprograms (wiring MC/XFEL/MicroED into expose())
 - CLI flags: `-o` (custom output module routing — Java's `module:dest` syntax not implemented)
 
+### Java Bug Compatibility: findDepth Deduplication
+
+Java's `CrystalPolyhedron.findDepth` has a deduplication loop that is effectively a no-op: it uses `==` on boxed `Double` objects (reference equality, always false for distinct objects). This means when a ray hits a shared triangle edge, both adjacent triangles register an intersection at the same distance. The even intersection count triggers the "sanity check" fallback, returning depth=0 instead of the actual depth.
+
+**Rust compatibility:** We do NOT deduplicate intersection distances in `find_depth` (both `cuboid.rs` and `polyhedron.rs`), matching Java's accidental behavior. This causes voxels on rotated crystal face boundaries to get depth=0 at certain angles.
+
+**Remaining variance (~0.3% Max Dose for coarse cuboids):** The exact set of boundary voxels that get depth=0 depends on whether near-zero intersection distances (~1e-14) are positive or negative — which varies between Java and Rust FP paths. This is inherent to the broken dedup and cannot be fixed without matching every FP operation exactly. It primarily affects coarse grids (low PixelsPerMicron) where boundary voxels are a larger fraction of the total.
+
+### Java Bug Compatibility: Gaussian Beam Circular Collimation
+
+Java's `BeamGaussian.bivariateGaussianVolume` uses a polar coordinate integration (100 angular trapezoid steps with analytical radial integral) for circular/elliptical apertures. Rust matches this algorithm exactly. A previous Cartesian grid (100×100 midpoint Riemann sum) approach was more accurate but produced a ~0.047% normalization difference that was amplified to ~2.75% in DWD by steeply-decaying DDM models (Leal/Bfactor).
+
 ### PE/FL Escape: Validation Status
 PE/FL escape and cryo surrounding are implemented (`crystal/escape.rs`, integrated into `expose_rd3d()`). Validated on LiFePO₄ test case (1µm sphere, SMALLMOLE, 1.487 keV). Two Java bugs are intentionally reproduced for compatibility — see `docs/java-bugs-analysis.md`.
 
