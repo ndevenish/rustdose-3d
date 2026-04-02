@@ -460,7 +460,8 @@ pub fn create_ddm(
     match ddm_type {
         None | Some(DdmType::Simple) => Box::new(DdmSimple),
         Some(DdmType::Linear) => Box::new(DdmLinear {
-            gamma: gamma.unwrap_or(0.01),
+            // Java DDMLinear: DDM_FACTOR_OWEN_2006 = 2*43 = 86, formula = 1 - dose/86
+            gamma: gamma.unwrap_or(1.0 / (2.0 * 43.0)),
         }),
         Some(DdmType::Leal) => Box::new(DdmLeal::new(
             gamma.unwrap_or(0.0),
