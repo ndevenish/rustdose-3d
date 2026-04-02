@@ -73,6 +73,12 @@ impl CrystalSpherical {
         );
 
         let subprogram = config.program.as_deref().unwrap_or("RD3D").to_uppercase();
+        match subprogram.as_str() {
+            "RD3D" | "" | "MONTECARLO" | "GOS" | "XFEL" | "EMSP" | "EMED" => {}
+            other => {
+                return Err(format!("Unimplemented subprogram '{other}'"));
+            }
+        }
 
         let photo_electron_escape = config
             .calculate_pe_escape
@@ -249,11 +255,10 @@ impl super::Crystal for CrystalSpherical {
                 self.container = container;
             }
             other => {
-                println!("Subprogram '{}' not yet implemented, using RD3D", other);
-                let mut container: Box<dyn Container> =
-                    std::mem::replace(&mut self.container, Box::new(ContainerTransparent));
-                super::expose_rd3d(self, beam, wedge, &mut *container);
-                self.container = container;
+                unreachable!(
+                    "unrecognised subprogram '{}' should have been caught at construction",
+                    other
+                );
             }
         }
     }
