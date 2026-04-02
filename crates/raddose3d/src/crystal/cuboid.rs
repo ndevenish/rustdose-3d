@@ -289,22 +289,23 @@ impl CrystalCuboid {
 
     /// Check if voxel is inside the cuboid using ray-casting.
     fn is_inside_polyhedron(&self, coord: &[f64; 3]) -> bool {
-        // Ray direction along Z axis
+        // Ray direction along +Z axis
         let dir = [0.0, 0.0, 1.0];
         let mut crossings = 0;
 
-        for (t, tri) in self.indices.iter().enumerate() {
-            let n = &self.normals[t];
-            let d = self.origin_distances[t];
+        for (t_idx, tri) in self.indices.iter().enumerate() {
+            let n = &self.normals[t_idx];
+            let d = self.origin_distances[t_idx];
 
-            // Ray-plane intersection
+            // Ray-plane intersection: t = -(n·coord + d) / (n·dir)
+            // Matches Java's Vector.rayTraceDistance convention.
             let denom = n[0] * dir[0] + n[1] * dir[1] + n[2] * dir[2];
             if denom.abs() < 1e-12 {
                 continue;
             }
 
-            let t_val = (n[0] * coord[0] + n[1] * coord[1] + n[2] * coord[2] + d) / denom;
-            if t_val <= 0.0 || t_val.is_nan() || t_val.is_infinite() {
+            let t_val = -(n[0] * coord[0] + n[1] * coord[1] + n[2] * coord[2] + d) / denom;
+            if t_val < 0.0 || t_val.is_nan() || t_val.is_infinite() {
                 continue;
             }
 
@@ -315,7 +316,7 @@ impl CrystalCuboid {
                 coord[2] + t_val * dir[2],
             ];
 
-            // Check if point is inside triangle
+            // Check if point is inside triangle (2D X-Y ray-casting)
             if point_in_triangle(
                 &p,
                 &self.vertices[tri[0]],
@@ -326,7 +327,7 @@ impl CrystalCuboid {
             }
         }
 
-        // Odd number of crossings = inside
+        // Odd number of crossings = inside (matches Java's toggle-based logic)
         crossings % 2 == 1
     }
 }
