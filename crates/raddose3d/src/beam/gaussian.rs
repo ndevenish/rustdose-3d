@@ -61,7 +61,15 @@ impl BeamGaussian {
         };
 
         // Calculate normalization factor
-        let norm_factor = Self::calc_norm_factor(&g_x, &g_y, coll_x_um, coll_y_um, is_circular);
+        let norm_factor = Self::calc_norm_factor(
+            &g_x,
+            &g_y,
+            coll_x_um,
+            coll_y_um,
+            is_circular,
+            sigma_x,
+            sigma_y,
+        );
 
         let scale_factor = photon_energy * KEV_TO_JOULES * photons_per_sec / norm_factor;
 
@@ -89,10 +97,11 @@ impl BeamGaussian {
         coll_x_um: Option<f64>,
         coll_y_um: Option<f64>,
         is_circular: bool,
+        sigma_x: f64,
+        sigma_y: f64,
     ) -> f64 {
         if is_circular {
-            // Numerical integration for circular aperture
-            Self::bivariate_gaussian_volume_circular(g_x, g_y, coll_x_um, coll_y_um)
+            Self::bivariate_gaussian_volume_circular(sigma_x, sigma_y, coll_x_um, coll_y_um)
         } else {
             Self::bivariate_gaussian_volume_rect(g_x, g_y, coll_x_um, coll_y_um)
         }
@@ -117,32 +126,49 @@ impl BeamGaussian {
     }
 
     fn bivariate_gaussian_volume_circular(
-        g_x: &Normal,
-        g_y: &Normal,
+        sx: f64,
+        sy: f64,
         coll_x: Option<f64>,
         coll_y: Option<f64>,
     ) -> f64 {
-        // Numerical integration via Riemann sum for circular/elliptical aperture
+        // Match Java's polar integration for circular/elliptical aperture.
+        // Java uses 100 angular steps with trapezoidal rule, integrating
+        // the analytical radial integral of the 2D Gaussian over the ellipse.
         let half_x = coll_x.unwrap_or(100.0) / 2.0;
         let half_y = coll_y.unwrap_or(100.0) / 2.0;
 
-        let steps = 100;
-        let dx = 2.0 * half_x / steps as f64;
-        let dy = 2.0 * half_y / steps as f64;
-        let mut volume = 0.0;
+        let a_const = 1.0 / (2.0 * std::f64::consts::PI * sx * sy);
+        let step_theta = 2.0 * std::f64::consts::PI / 100.0;
 
-        for ix in 0..steps {
-            let x = -half_x + (ix as f64 + 0.5) * dx;
-            for iy in 0..steps {
-                let y = -half_y + (iy as f64 + 0.5) * dy;
-                // Check if inside ellipse
-                if (x / half_x).powi(2) + (y / half_y).powi(2) <= 1.0 {
-                    volume += Self::gaussian_2d_value(g_x, g_y, x, y) * dx * dy;
-                }
+        let mut last_held_height = 0.0;
+        let mut last_held_theta = 0.0;
+        let mut overall_sum = 0.0;
+
+        let mut theta = 0.0;
+        while theta <= 2.0 * std::f64::consts::PI {
+            let cos_t = theta.cos();
+            let sin_t = theta.sin();
+            let r =
+                (half_x * half_y) / ((half_y * cos_t).powi(2) + (half_x * sin_t).powi(2)).sqrt();
+            let cos_squared = cos_t * cos_t;
+            let sin_squared = sin_t * sin_t;
+            let cos_s_plus_sin_s_term =
+                cos_squared / (2.0 * sx * sx) + sin_squared / (2.0 * sy * sy);
+            let one_over = a_const / (2.0 * cos_s_plus_sin_s_term);
+            let other_term = 1.0 - (-r * r * cos_s_plus_sin_s_term).exp();
+            let overall_term = one_over * other_term;
+
+            if theta != 0.0 {
+                let area = (theta - last_held_theta) * ((last_held_height + overall_term) / 2.0);
+                overall_sum += area;
             }
+            last_held_theta = theta;
+            last_held_height = overall_term;
+
+            theta += step_theta;
         }
 
-        volume
+        overall_sum
     }
 
     fn gaussian_2d_value(g_x: &Normal, g_y: &Normal, x: f64, y: f64) -> f64 {
