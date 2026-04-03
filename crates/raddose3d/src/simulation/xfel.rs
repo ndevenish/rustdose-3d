@@ -1926,13 +1926,11 @@ impl XfelSimulation {
                         } else {
                             Self::get_energy_loss_distant(wdis, uk) / 1000.0
                         }
+                    } else if plasmon {
+                        wk / 1000.0
                     } else {
-                        if plasmon {
-                            wk / 1000.0
-                        } else {
-                            let k = Self::sample_k(electron_energy, uk);
-                            k * (electron_energy + uk / 1000.0)
-                        }
+                        let k = Self::sample_k(electron_energy, uk);
+                        k * (electron_energy + uk / 1000.0)
                     };
 
                     let scatter_theta = match col_type {

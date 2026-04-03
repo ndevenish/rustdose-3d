@@ -359,12 +359,10 @@ impl MonteCarloSimulation {
                 self.rotated_normals = Some(n);
                 self.rotated_origin_distances = Some(d);
             }
-        } else {
-            if self.normals.is_none() {
-                let (n, d) = Self::calculate_normals_for(&self.vertices, &self.indices);
-                self.normals = Some(n);
-                self.origin_distances = Some(d);
-            }
+        } else if self.normals.is_none() {
+            let (n, d) = Self::calculate_normals_for(&self.vertices, &self.indices);
+            self.normals = Some(n);
+            self.origin_distances = Some(d);
         }
     }
 
@@ -821,10 +819,8 @@ impl MonteCarloSimulation {
             if self.high_energy_angles[atomic_number].is_none() {
                 self.high_energy_angles[atomic_number] = load_angle_file(true, atomic_number);
             }
-        } else {
-            if self.low_energy_angles[atomic_number].is_none() {
-                self.low_energy_angles[atomic_number] = load_angle_file(false, atomic_number);
-            }
+        } else if self.low_energy_angles[atomic_number].is_none() {
+            self.low_energy_angles[atomic_number] = load_angle_file(false, atomic_number);
         }
 
         let table = if high_energy {
@@ -2065,13 +2061,11 @@ impl MonteCarloSimulation {
                         } else {
                             Self::get_energy_loss_distant(wdis, uk) / 1000.0
                         }
+                    } else if plasmon {
+                        wk / 1000.0
                     } else {
-                        if plasmon {
-                            wk / 1000.0
-                        } else {
-                            let k = Self::sample_k(electron_energy, uk);
-                            k * (electron_energy + uk / 1000.0)
-                        }
+                        let k = Self::sample_k(electron_energy, uk);
+                        k * (electron_energy + uk / 1000.0)
                     };
 
                     let scatter_theta = match col_type {

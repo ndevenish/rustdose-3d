@@ -282,10 +282,8 @@ impl super::Beam for BeamExperimental {
             if (dx / hx).powi(2) + (coord_y / hy).powi(2) > 1.0 {
                 return 0.0;
             }
-        } else {
-            if (coord_x - off_axis_um).abs() > hx || coord_y.abs() > hy {
-                return 0.0;
-            }
+        } else if (coord_x - off_axis_um).abs() > hx || coord_y.abs() > hy {
+            return 0.0;
         }
         self.do_bilinear(coord_x, coord_y, off_axis_um)
     }
