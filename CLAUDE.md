@@ -201,7 +201,6 @@ The progress bar is hardcoded in `expose_rd3d()` (`crystal/mod.rs`) via `print!(
 - CoefCalc: Raddose (legacy v2 subprocess — stubs to Default)
 - Beam: EnergyDistribution integration with Experimental beam for pink beam multi-energy loop
 - Container: Mixture/Elemental NIST mass-attenuation lookup (structure done, lookup not implemented)
-- Crystal dispatch for MONTECARLO/GOS/XFEL/EMSP/EMED subprograms (wiring MC/XFEL/MicroED into expose())
 - CLI flags: `-o` (custom output module routing — Java's `module:dest` syntax not implemented)
 
 ### Java Bug Compatibility: findDepth Deduplication
