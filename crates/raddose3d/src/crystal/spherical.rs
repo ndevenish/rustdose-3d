@@ -261,7 +261,7 @@ impl super::Crystal for CrystalSpherical {
             }
             other => {
                 unreachable!(
-                    "subprogram '{}' should have been rejected at construction",
+                    "unrecognised subprogram '{}' should have been caught at construction",
                     other
                 );
             }

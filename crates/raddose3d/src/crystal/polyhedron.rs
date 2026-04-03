@@ -4,6 +4,7 @@ use crate::container::{self, Container, ContainerTransparent};
 use crate::ddm::{self, DdmModel};
 use crate::output::ExposureSummary;
 use crate::parser::config::CrystalConfig;
+use crate::simulation::{MicroEdSimulation, MonteCarloSimulation, XfelSimulation};
 use crate::wedge::Wedge;
 
 /// General polyhedron crystal: arbitrary vertices and triangulated faces.
@@ -44,6 +45,11 @@ pub struct CrystalPolyhedron {
     crystal_name: String,
     angle_p: f64,
     angle_l: f64,
+    runs: usize,
+    vertical_goniometer: bool,
+    vertical_polarisation: bool,
+    surrounding_thickness: [f64; 3],
+    crystal_type: String,
 }
 
 impl CrystalPolyhedron {
@@ -144,12 +150,7 @@ impl CrystalPolyhedron {
 
         let subprogram = config.program.as_deref().unwrap_or("RD3D").to_uppercase();
         match subprogram.as_str() {
-            "RD3D" | "" => {}
-            "MONTECARLO" | "GOS" | "XFEL" | "EMSP" | "EMED" => {
-                return Err(format!(
-                    "Subprogram '{subprogram}' is not supported for Polyhedron/Cylinder/Spherical crystals; use Type Cuboid"
-                ));
-            }
+            "RD3D" | "" | "MONTECARLO" | "GOS" | "XFEL" | "EMSP" | "EMED" => {}
             other => {
                 return Err(format!("Unrecognised subprogram '{other}'"));
             }
@@ -170,6 +171,17 @@ impl CrystalPolyhedron {
             .is_some_and(|s| s.eq_ignore_ascii_case("true"));
 
         let container = container::create_container(config);
+
+        let runs = config.runs.unwrap_or(1).max(1) as usize;
+        let vertical_goniometer = config
+            .goniometer_axis
+            .map(|v| (v - 90.0).abs() < 1e-6)
+            .unwrap_or(false);
+        let vertical_polarisation = config
+            .polarisation_direction
+            .map(|v| (v - 90.0).abs() < 1e-6)
+            .unwrap_or(false);
+        let surrounding_thickness = config.surrounding_thickness.unwrap_or([0.0; 3]);
 
         let rotated_normals = normals.clone();
         let rotated_origin_distances = origin_distances.clone();
@@ -202,6 +214,11 @@ impl CrystalPolyhedron {
             crystal_name: name.to_string(),
             angle_p,
             angle_l,
+            runs,
+            vertical_goniometer,
+            vertical_polarisation,
+            surrounding_thickness,
+            crystal_type: name.to_string(),
         })
     }
 
@@ -887,9 +904,83 @@ impl super::Crystal for CrystalPolyhedron {
                 super::expose_rd3d(self, beam, wedge, &mut *container);
                 self.container = container;
             }
+            "MONTECARLO" | "GOS" => {
+                let gos = self.subprogram == "GOS";
+                let vertices: Vec<[f64; 3]> = self.vertices.clone();
+                let indices: Vec<[usize; 3]> = self.indices.clone();
+                let n = self.cryst_size_voxels[0]
+                    * self.cryst_size_voxels[1]
+                    * self.cryst_size_voxels[2];
+                let cryst_occ = vec![true; n];
+                for run_idx in 0..self.runs {
+                    let mut mc = MonteCarloSimulation::new(
+                        vertices.clone(),
+                        indices.clone(),
+                        self.cryst_coord.clone(),
+                        self.pix_per_um,
+                        self.cryst_size_voxels,
+                        cryst_occ.clone(),
+                        run_idx + 1,
+                        self.vertical_goniometer,
+                        false,
+                        gos,
+                        self.surrounding_thickness,
+                        self.vertical_polarisation,
+                    );
+                    mc.populate_auger_linewidths();
+                    mc.populate_fluorescence_linewidths();
+                    mc.populate_angular_emission_probs();
+                    mc.calculate_xfel(beam, wedge, &mut *self.coefcalc);
+                }
+            }
+            "XFEL" => {
+                let vertices: Vec<[f64; 3]> = self.vertices.clone();
+                let indices: Vec<[usize; 3]> = self.indices.clone();
+                let n = self.cryst_size_voxels[0]
+                    * self.cryst_size_voxels[1]
+                    * self.cryst_size_voxels[2];
+                let cryst_occ = vec![true; n];
+                for run_idx in 0..self.runs {
+                    let mut xfel = XfelSimulation::new(
+                        vertices.clone(),
+                        indices.clone(),
+                        self.cryst_coord.clone(),
+                        self.pix_per_um,
+                        self.cryst_size_voxels,
+                        cryst_occ.clone(),
+                        run_idx + 1,
+                        self.vertical_goniometer,
+                        true,
+                        true,
+                        wedge.total_sec(),
+                        self.vertical_polarisation,
+                    );
+                    xfel.populate_auger_linewidths();
+                    xfel.populate_fluorescence_linewidths();
+                    xfel.calculate_xfel(beam, wedge, &mut *self.coefcalc);
+                }
+            }
+            "EMSP" | "EMED" => {
+                let vertices: Vec<[f64; 3]> = self.vertices.clone();
+                let indices: Vec<[usize; 3]> = self.indices.clone();
+                let n = self.cryst_size_voxels[0]
+                    * self.cryst_size_voxels[1]
+                    * self.cryst_size_voxels[2];
+                let cryst_occ = vec![(true, true); n];
+                let mut micro_ed = MicroEdSimulation::new(
+                    vertices,
+                    indices,
+                    self.cryst_coord.clone(),
+                    self.pix_per_um,
+                    self.cryst_size_voxels,
+                    cryst_occ,
+                    self.crystal_type.clone(),
+                );
+                micro_ed.calculate_em(beam, wedge, &mut *self.coefcalc);
+            }
             other => {
                 unreachable!(
-                    "subprogram '{}' should have been rejected at construction",
+                    "unrecognised subprogram '{}' should have been caught at construction",
                     other
                 );
             }
