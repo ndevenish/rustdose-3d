@@ -1,0 +1,12 @@
+[package]
+name = "raddose3d-isomesh"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "raddose3d-isomesh"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+flate2 = "1"
+meshopt = "0.3"
