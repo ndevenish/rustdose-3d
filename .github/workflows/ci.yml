@@ -114,3 +114,52 @@ jobs:
           name: raddose3d-wasm-pkg
           path: crates/raddose3d-wasm/pkg/
           retention-days: 7
+
+  # ── GitHub Pages ──────────────────────────────────────────────────────────
+  pages:
+    name: Assemble Pages site
+    needs: wasm
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download WASM package
+        uses: actions/download-artifact@v4
+        with:
+          name: raddose3d-wasm-pkg
+          path: pkg
+
+      - name: Assemble site
+        run: |
+          mkdir -p site
+          cp crates/raddose3d-wasm/web/index.html site/index.html
+          # Fix the relative import path used during local dev: ../pkg/ → ./pkg/
+          sed -i "s|'../pkg/|'./pkg/|g" site/index.html
+          cp -r pkg site/pkg
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: pages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
