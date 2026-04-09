@@ -1,0 +1,20 @@
+Crystal
+Type Spherical
+Dimensions 80
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 60.0 60.0 80.0
+NumMonomers 8
+NumResidues 120
+SolventFraction 0.55
+
+Beam
+Type Gaussian
+Flux 3e12
+FWHM 80 80
+Energy 13.0
+Collimation Rectangular 100 100
+
+Wedge 0 180
+ExposureTime 60
+AngularResolution 2

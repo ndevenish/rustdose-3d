@@ -1,0 +1,19 @@
+Crystal
+Type Cuboid
+Dimensions 0.2 0.2 0.2
+PixelsPerMicron 100
+AbsCoefCalc SMALLMOLE
+UnitCell 10.012 18.808 6.334
+SmallMoleAtoms Mg 1 O 3
+NumMonomers 8
+
+Beam
+Type Gaussian
+Flux 3.8e12
+FWHM 10 10
+Energy 12.4
+Collimation Circular 30 30
+
+Wedge 0 360
+ExposureTime 60
+AngularResolution 2

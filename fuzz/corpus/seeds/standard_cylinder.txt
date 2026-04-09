@@ -1,0 +1,22 @@
+Crystal
+Type Cylinder
+Dimensions 1700 1000
+PixelsPerMicron 0.01
+AbsCoefCalc SAXSseq
+SeqFile /workspace/raddose3d/tests/fixtures/rcsb_pdb_4OR0.fasta
+ProteinConc 2
+ContainerMaterialType elemental
+MaterialElements Si 1 O 2
+ContainerThickness 50
+ContainerDensity 2.648
+
+Beam
+Type Gaussian
+Flux 2e12
+FWHM 700 700
+Energy 12.1
+Collimation Rectangular 1000 1000
+
+Wedge 0 0
+ExposureTime 50
+AngularResolution 1
