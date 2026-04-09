@@ -381,59 +381,54 @@ class GrammarGenerator:
         cfg = Config()
 
         # ---- Subprogram (controls major simulation mode) ----
-        cfg.subprogram = self._c(["", "", "", "", "MONTECARLO", "XFEL", "EMSP"])
+        cfg.subprogram = self._c(["", "", "MONTECARLO", "XFEL", "EMSP"])
 
         # ---- Crystal type ----
         if cfg.subprogram == "EMSP":
             cfg.crystal_type = "Cuboid"
         else:
-            cfg.crystal_type = self._c(["Cuboid", "Cuboid", "Cuboid",
+            cfg.crystal_type = self._c(["Cuboid", "Cuboid",
                                          "Cylinder", "Spherical", "Polyhedron"])
 
         # ---- CoefCalc (must match crystal type and subprogram) ----
         if cfg.subprogram == "EMSP":
             cfg.coefcalc = "MicroED"
         elif cfg.crystal_type == "Cylinder":
-            cfg.coefcalc = "SAXSseq"
+            cfg.coefcalc = self._c(["SAXSseq", "SAXSseq", "RD3D", "CIF"])
         elif cfg.crystal_type == "Polyhedron":
-            cfg.coefcalc = "RD3D"
+            cfg.coefcalc = self._c(["RD3D", "RD3D", "SMALLMOLE", "CIF"])
         else:
-            cfg.coefcalc = self._c(["RD3D", "RD3D", "RD3D", "SMALLMOLE", "CIF"])
+            cfg.coefcalc = self._c(["RD3D", "RD3D", "SMALLMOLE", "CIF"])
 
         # ---- Crystal dimensions ----
         if cfg.crystal_type == "Cuboid":
-            cfg.dim_x = round(self._u(5, 300), 2)
-            cfg.dim_y = round(self._u(5, 300), 2)
-            cfg.dim_z = round(self._u(5, 300), 2)
+            cfg.dim_x = round(self._u(0.5, 2000), 2)
+            cfg.dim_y = round(self._u(0.5, 2000), 2)
+            cfg.dim_z = round(self._u(0.5, 2000), 2)
         elif cfg.crystal_type == "Cylinder":
-            cfg.dim_x = round(self._u(200, 3000), 1)   # height
-            cfg.dim_y = round(self._u(100, 2000), 1)   # diameter
+            cfg.dim_x = round(self._u(10, 10000), 1)   # height
+            cfg.dim_y = round(self._u(5, 5000), 1)     # diameter
             cfg.dim_z = cfg.dim_y
         elif cfg.crystal_type == "Spherical":
-            d = round(self._u(5, 300), 2)
+            d = round(self._u(0.5, 2000), 2)
             cfg.dim_x = cfg.dim_y = cfg.dim_z = d
-        else:  # Polyhedron — cube.obj defines geometry, dims are ignored
-            cfg.dim_x = cfg.dim_y = cfg.dim_z = 30.0
+        else:  # Polyhedron — cube.obj defines geometry; dims set bounding box for cost model
+            d = round(self._u(5, 500), 2)
+            cfg.dim_x = cfg.dim_y = cfg.dim_z = d
 
-        # ---- PixelsPerMicron (major cost driver — keep within budget) ----
-        if cfg.crystal_type == "Cylinder":
-            cfg.pixels_per_micron = self._c([0.005, 0.01, 0.02, 0.05])
-        elif cfg.coefcalc == "SMALLMOLE":
-            # Small molecules are tiny; needs high ppm
-            cfg.pixels_per_micron = self._c([1.0, 2.0, 5.0])
-        else:
-            cfg.pixels_per_micron = self._c([0.1, 0.2, 0.5, 1.0, 2.0])
+        # ---- PixelsPerMicron (major cost driver — budget enforced by retry loop) ----
+        cfg.pixels_per_micron = round(self._u(0.001, 10.0), 4)
 
         # ---- Composition ----
         if cfg.coefcalc in ("RD3D", "MicroED"):
-            cfg.unit_cell_a = round(self._u(20, 200), 2)
-            cfg.unit_cell_b = round(self._u(20, 200), 2)
-            cfg.unit_cell_c = round(self._u(20, 200), 2)
-            cfg.num_monomers = self._i(1, 48)
-            cfg.num_residues = self._i(20, 500)
+            cfg.unit_cell_a = round(self._u(3, 800), 2)
+            cfg.unit_cell_b = round(self._u(3, 800), 2)
+            cfg.unit_cell_c = round(self._u(3, 800), 2)
+            cfg.num_monomers = self._i(1, 200)
+            cfg.num_residues = self._i(1, 5000)
             cfg.num_rna = self._i(0, 5) if self._flip(0.1) else 0
             cfg.num_dna = self._i(0, 5) if self._flip(0.1) else 0
-            cfg.solvent_fraction = round(self._u(0.3, 0.85), 4)
+            cfg.solvent_fraction = round(self._u(0.01, 0.99), 4)
             cfg.heavy_protein_atoms = (
                 _element_counts_str(self.rng, HEAVY_PROTEIN_ELEMENT_POOL, 1, 3, 0.1, 10.0, integer_counts=False)
                 if self._flip(0.5) else ""
@@ -456,15 +451,15 @@ class GrammarGenerator:
             cfg.seq_file = str(FIXTURES_DIR / self._c(["rcsb_pdb_4OR0.fasta",
                                                          "insulin_seq.fasta",
                                                          "bsa_fragment.fasta"]))
-            cfg.protein_conc = round(self._u(0.5, 50.0), 3)
+            cfg.protein_conc = round(self._u(0.01, 500.0), 3)
             cfg.saxs_container = self._flip(0.5)
 
         # ---- Dose decay model ----
-        cfg.ddm = self._c(["Simple", "Simple", "Linear", "Leal", "Bfactor"])
+        cfg.ddm = self._c(["Simple", "Linear", "Leal", "Bfactor"])
         if cfg.ddm in ("Leal", "Bfactor"):
-            cfg.gamma_param = round(self._u(0.1, 2.0), 4)
-            cfg.b0_param = round(self._u(0.1, 10.0), 4)
-            cfg.beta_param = round(self._u(0.01, 2.0), 4)  # must stay positive
+            cfg.gamma_param = round(self._u(0.001, 100.0), 4)
+            cfg.b0_param = round(self._u(0.001, 500.0), 4)
+            cfg.beta_param = round(max(0.001, self._u(0.001, 50.0)), 4)  # must stay positive
 
         # ---- Subprogram parameters ----
         if cfg.subprogram == "MONTECARLO":
@@ -492,18 +487,19 @@ class GrammarGenerator:
         beam = BeamConfig()
 
         if cfg.subprogram == "EMSP":
-            beam.energy = float(self._c([100, 200, 300, 400]))
+            beam.energy = round(self._u(20, 1000), 1)
             beam.beam_type = "Gaussian"
-            beam.flux = 10 ** self._u(5, 8)
+            beam.flux = 10 ** self._u(3, 10)
         else:
-            beam.energy = round(self._u(5.0, 25.0), 3)
-            beam.flux = 10 ** self._u(10, 14)
+            beam.energy = round(self._u(1.0, 100.0), 3)
+            beam.flux = 10 ** self._u(6, 16)
             beam.beam_type = self._c(["Gaussian", "Tophat"])
 
         if cfg.crystal_type == "Cylinder":
-            hw = round(self._u(100, min(cfg.dim_y, 1000)), 1)
+            max_fwhm = max(1.0, cfg.dim_y * 0.5)
+            hw = round(self._u(max(0.5, cfg.dim_y * 0.05), max_fwhm), 1)
             beam.fwhm_x = beam.fwhm_y = hw
-            beam.collimation_x = round(self._u(hw, cfg.dim_y * 0.8), 1)
+            beam.collimation_x = round(self._u(hw, max(hw + 1.0, cfg.dim_y * 0.8)), 1)
             beam.collimation_y = beam.collimation_x
         else:
             beam.fwhm_x = round(self._u(5, max(10, cfg.dim_x * 1.5)), 2)
@@ -547,7 +543,7 @@ class GrammarGenerator:
         if cfg.subprogram == "MONTECARLO":
             beam = self._sample_beam(cfg)
             wedge_end = float(self._c([0, 45, 90, 180, 360]))
-            res = float(self._c([0.5, 1.0, 2.0, 5.0, 10.0])) if wedge_end > 0 else 1.0
+            res = round(self._u(0.1, 90.0), 2) if wedge_end > 0 else 1.0
             wedge = WedgeConfig(
                 start=0.0, end=wedge_end, angular_resolution=res,
                 exposure_time=round(self._u(1.0, 200.0), 2),
@@ -555,10 +551,9 @@ class GrammarGenerator:
             return [(beam, [wedge])]
 
         # Standard mode: 1–3 beam segments with consecutive angle ranges.
-        # Weighted heavily toward 1 segment so multi-segment cases are occasional.
-        n_segs = self._c([1, 1, 1, 2, 2, 3])
+        n_segs = self._c([1, 1, 2, 2, 3])
         total_end = float(self._c([0, 45, 90, 180, 360]))
-        res = float(self._c([0.5, 1.0, 2.0, 5.0, 10.0]))
+        res = round(self._u(0.1, 90.0), 2)
 
         if n_segs == 1 or total_end == 0:
             boundaries = [0.0, total_end]
