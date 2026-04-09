@@ -83,7 +83,7 @@ def raddose_config(draw, budget: float = DEFAULT_BUDGET) -> Config:
 
     # ---- Subprogram (controls major simulation mode) ----
     cfg.subprogram = draw(st.sampled_from(
-        ["", "", "", "", "MONTECARLO", "XFEL", "EMSP"]
+        ["", "", "MONTECARLO", "XFEL", "EMSP"]
     ))
 
     # ---- Crystal type ----
@@ -91,52 +91,48 @@ def raddose_config(draw, budget: float = DEFAULT_BUDGET) -> Config:
         cfg.crystal_type = "Cuboid"
     else:
         cfg.crystal_type = draw(st.sampled_from(
-            ["Cuboid", "Cuboid", "Cuboid", "Cylinder", "Spherical", "Polyhedron"]
+            ["Cuboid", "Cuboid", "Cylinder", "Spherical", "Polyhedron"]
         ))
 
     # ---- CoefCalc ----
     if cfg.subprogram == "EMSP":
         cfg.coefcalc = "MicroED"
     elif cfg.crystal_type == "Cylinder":
-        cfg.coefcalc = "SAXSseq"
+        cfg.coefcalc = draw(st.sampled_from(["SAXSseq", "SAXSseq", "RD3D", "CIF"]))
     elif cfg.crystal_type == "Polyhedron":
-        cfg.coefcalc = "RD3D"
+        cfg.coefcalc = draw(st.sampled_from(["RD3D", "RD3D", "SMALLMOLE", "CIF"]))
     else:
-        cfg.coefcalc = draw(st.sampled_from(["RD3D", "RD3D", "RD3D", "SMALLMOLE", "CIF"]))
+        cfg.coefcalc = draw(st.sampled_from(["RD3D", "RD3D", "SMALLMOLE", "CIF"]))
 
     # ---- Crystal dimensions ----
     if cfg.crystal_type == "Cuboid":
-        cfg.dim_x = draw(st.floats(5, 300, allow_nan=False, allow_infinity=False))
-        cfg.dim_y = draw(st.floats(5, 300, allow_nan=False, allow_infinity=False))
-        cfg.dim_z = draw(st.floats(5, 300, allow_nan=False, allow_infinity=False))
+        cfg.dim_x = draw(st.floats(0.5, 2000, allow_nan=False, allow_infinity=False))
+        cfg.dim_y = draw(st.floats(0.5, 2000, allow_nan=False, allow_infinity=False))
+        cfg.dim_z = draw(st.floats(0.5, 2000, allow_nan=False, allow_infinity=False))
     elif cfg.crystal_type == "Cylinder":
-        cfg.dim_x = draw(st.floats(200, 3000, allow_nan=False, allow_infinity=False))
-        cfg.dim_y = draw(st.floats(100, 2000, allow_nan=False, allow_infinity=False))
+        cfg.dim_x = draw(st.floats(10, 10000, allow_nan=False, allow_infinity=False))
+        cfg.dim_y = draw(st.floats(5, 5000, allow_nan=False, allow_infinity=False))
         cfg.dim_z = cfg.dim_y
     elif cfg.crystal_type == "Spherical":
-        d = draw(st.floats(5, 300, allow_nan=False, allow_infinity=False))
+        d = draw(st.floats(0.5, 2000, allow_nan=False, allow_infinity=False))
         cfg.dim_x = cfg.dim_y = cfg.dim_z = d
-    else:  # Polyhedron — geometry from cube.obj, dims ignored
-        cfg.dim_x = cfg.dim_y = cfg.dim_z = 30.0
+    else:  # Polyhedron — geometry from cube.obj, dims set bounding box for cost model
+        d = draw(st.floats(5, 500, allow_nan=False, allow_infinity=False))
+        cfg.dim_x = cfg.dim_y = cfg.dim_z = d
 
     # ---- PixelsPerMicron ----
-    if cfg.crystal_type == "Cylinder":
-        cfg.pixels_per_micron = draw(st.sampled_from([0.005, 0.01, 0.02, 0.05]))
-    elif cfg.coefcalc == "SMALLMOLE":
-        cfg.pixels_per_micron = draw(st.sampled_from([1.0, 2.0, 5.0]))
-    else:
-        cfg.pixels_per_micron = draw(st.sampled_from([0.1, 0.2, 0.5, 1.0, 2.0]))
+    cfg.pixels_per_micron = draw(st.floats(0.001, 10.0, allow_nan=False, allow_infinity=False))
 
     # ---- Composition ----
     if cfg.coefcalc in ("RD3D", "MicroED"):
-        cfg.unit_cell_a = draw(st.floats(20, 200, allow_nan=False, allow_infinity=False))
-        cfg.unit_cell_b = draw(st.floats(20, 200, allow_nan=False, allow_infinity=False))
-        cfg.unit_cell_c = draw(st.floats(20, 200, allow_nan=False, allow_infinity=False))
-        cfg.num_monomers = draw(st.integers(1, 48))
-        cfg.num_residues = draw(st.integers(20, 500))
+        cfg.unit_cell_a = draw(st.floats(3, 800, allow_nan=False, allow_infinity=False))
+        cfg.unit_cell_b = draw(st.floats(3, 800, allow_nan=False, allow_infinity=False))
+        cfg.unit_cell_c = draw(st.floats(3, 800, allow_nan=False, allow_infinity=False))
+        cfg.num_monomers = draw(st.integers(1, 200))
+        cfg.num_residues = draw(st.integers(1, 5000))
         cfg.num_rna = draw(st.integers(0, 5)) if draw(st.booleans()) else 0
         cfg.num_dna = draw(st.integers(0, 5)) if draw(st.booleans()) else 0
-        cfg.solvent_fraction = draw(st.floats(0.3, 0.85, allow_nan=False, allow_infinity=False))
+        cfg.solvent_fraction = draw(st.floats(0.01, 0.99, allow_nan=False, allow_infinity=False))
         cfg.heavy_protein_atoms = draw(st.one_of(st.just(""), _ELEMENTS_WITH_COUNTS))
         cfg.solvent_heavy_conc = draw(_SOLVENT_HEAVY)
     elif cfg.coefcalc == "SMALLMOLE":
@@ -149,15 +145,15 @@ def raddose_config(draw, budget: float = DEFAULT_BUDGET) -> Config:
         cfg.cif = draw(_CIF_CHOICES)
     elif cfg.coefcalc == "SAXSseq":
         cfg.seq_file = draw(_FASTA_CHOICES)
-        cfg.protein_conc = draw(st.floats(0.5, 50.0, allow_nan=False, allow_infinity=False))
+        cfg.protein_conc = draw(st.floats(0.01, 500.0, allow_nan=False, allow_infinity=False))
         cfg.saxs_container = draw(st.booleans())
 
     # ---- Dose decay model ----
-    cfg.ddm = draw(st.sampled_from(["Simple", "Simple", "Linear", "Leal", "Bfactor"]))
+    cfg.ddm = draw(st.sampled_from(["Simple", "Linear", "Leal", "Bfactor"]))
     if cfg.ddm in ("Leal", "Bfactor"):
-        cfg.gamma_param = draw(st.floats(0.1, 2.0, allow_nan=False, allow_infinity=False))
-        cfg.b0_param = draw(st.floats(0.1, 10.0, allow_nan=False, allow_infinity=False))
-        cfg.beta_param = draw(st.floats(0.01, 2.0, allow_nan=False, allow_infinity=False))
+        cfg.gamma_param = draw(st.floats(0.001, 100.0, allow_nan=False, allow_infinity=False))
+        cfg.b0_param = draw(st.floats(0.001, 500.0, allow_nan=False, allow_infinity=False))
+        cfg.beta_param = draw(st.floats(0.001, 50.0, allow_nan=False, allow_infinity=False))
 
     # ---- Subprogram parameters ----
     if cfg.subprogram == "MONTECARLO":
@@ -175,21 +171,24 @@ def raddose_config(draw, budget: float = DEFAULT_BUDGET) -> Config:
     def _draw_beam() -> BeamConfig:
         beam = BeamConfig()
         if cfg.subprogram == "EMSP":
-            beam.energy = float(draw(st.sampled_from([100, 200, 300, 400])))
+            beam.energy = draw(st.floats(20, 1000, allow_nan=False, allow_infinity=False))
             beam.beam_type = "Gaussian"
-            beam.flux = draw(st.floats(1e5, 1e8, allow_nan=False, allow_infinity=False))
+            beam.flux = draw(st.floats(1e3, 1e10, allow_nan=False, allow_infinity=False))
         else:
-            beam.energy = draw(st.floats(5.0, 25.0, allow_nan=False, allow_infinity=False))
-            beam.flux = draw(st.floats(1e10, 1e14, allow_nan=False, allow_infinity=False))
+            beam.energy = draw(st.floats(1.0, 100.0, allow_nan=False, allow_infinity=False))
+            beam.flux = draw(st.floats(1e6, 1e16, allow_nan=False, allow_infinity=False))
             beam.beam_type = draw(st.sampled_from(["Gaussian", "Tophat"]))
 
-        max_dim = max(cfg.dim_x, cfg.dim_y)
         if cfg.crystal_type == "Cylinder":
-            hw = draw(st.floats(100, min(cfg.dim_y, 1000), allow_nan=False, allow_infinity=False))
+            max_fwhm = max(1.0, cfg.dim_y * 0.5)
+            hw = draw(st.floats(max(0.5, cfg.dim_y * 0.05), max_fwhm,
+                                allow_nan=False, allow_infinity=False))
             beam.fwhm_x = beam.fwhm_y = hw
-            beam.collimation_x = draw(st.floats(hw, cfg.dim_y * 0.9, allow_nan=False, allow_infinity=False))
+            beam.collimation_x = draw(st.floats(hw, max(hw + 1.0, cfg.dim_y * 0.8),
+                                                 allow_nan=False, allow_infinity=False))
             beam.collimation_y = beam.collimation_x
         else:
+            max_dim = max(cfg.dim_x, cfg.dim_y)
             beam.fwhm_x = draw(st.floats(5, max(10, max_dim * 1.5), allow_nan=False, allow_infinity=False))
             beam.fwhm_y = draw(st.floats(5, max(10, max_dim * 1.5), allow_nan=False, allow_infinity=False))
             beam.collimation_x = draw(st.floats(5, max(10, max_dim * 2), allow_nan=False, allow_infinity=False))
@@ -223,7 +222,7 @@ def raddose_config(draw, budget: float = DEFAULT_BUDGET) -> Config:
         # Single segment for MC
         beam = _draw_beam()
         wedge_end = float(draw(st.sampled_from([0, 45, 90, 180, 360])))
-        res = float(draw(st.sampled_from([0.5, 1.0, 2.0, 5.0, 10.0]))) if wedge_end > 0 else 1.0
+        res = draw(st.floats(0.1, 90.0, allow_nan=False, allow_infinity=False)) if wedge_end > 0 else 1.0
         wedge = WedgeConfig(
             start=0.0, end=wedge_end, angular_resolution=res,
             exposure_time=draw(st.floats(1.0, 200.0, allow_nan=False, allow_infinity=False)),
@@ -232,9 +231,9 @@ def raddose_config(draw, budget: float = DEFAULT_BUDGET) -> Config:
 
     else:
         # Standard mode: 1–3 beam segments with consecutive angle ranges.
-        n_segs = draw(st.integers(min_value=1, max_value=3))
+        n_segs = draw(st.sampled_from([1, 1, 2, 2, 3]))
         total_end = float(draw(st.sampled_from([0, 45, 90, 180, 360])))
-        res = float(draw(st.sampled_from([0.5, 1.0, 2.0, 5.0, 10.0])))
+        res = draw(st.floats(0.1, 90.0, allow_nan=False, allow_infinity=False))
 
         if n_segs == 1 or total_end == 0:
             n_segs = 1
