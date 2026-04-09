@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from compare import Category, compare
 from generate import (
     DEFAULT_BUDGET, Config, BeamConfig, WedgeConfig, GrammarGenerator,
-    estimate_cost, mutate_text, render,
+    estimate_cost, mutate_text, render, generate_chaos, CoverageTracker,
 )
 from harness import (
     DEFAULT_JAVA_JAR, DEFAULT_RUST_BIN, DEFAULT_TIMEOUT, run_both,
@@ -119,7 +119,8 @@ def main():
     ap = argparse.ArgumentParser(description="RADDOSE-3D differential fuzzer")
     ap.add_argument("--iterations", "-n", type=int, default=100,
                     help="Number of fuzz iterations (default: 100)")
-    ap.add_argument("--strategy", choices=["grammar", "mutate", "both"],
+    ap.add_argument("--strategy",
+                    choices=["grammar", "mutate", "both", "structural", "chaos"],
                     default="both", help="Input generation strategy (default: both)")
     ap.add_argument("--budget", type=float, default=DEFAULT_BUDGET,
                     help=f"Max cost relative to insulin (default: {DEFAULT_BUDGET})")
@@ -156,6 +157,7 @@ def main():
     total_java_time = 0.0
     total_rust_time = 0.0
     skip_counter = SkipCounter()
+    coverage_tracker = CoverageTracker(bias_after=50)
 
     print(f"RADDOSE-3D differential fuzzer  |  {args.iterations} iterations  |  "
           f"strategy={args.strategy}  |  budget={args.budget}x  |  "
@@ -166,7 +168,7 @@ def main():
     print()
 
     def _run_one(item):
-        i, source, input_text, cfg_cost = item
+        i, source, input_text, cfg_cost, coverage_key = item
         with tempfile.TemporaryDirectory(prefix="raddose_fuzz_") as tmp:
             tmp_path = Path(tmp)
             input_path = tmp_path / "input.txt"
@@ -178,16 +180,17 @@ def main():
                 timeout=args.timeout,
             )
             result = compare(java_r, rust_r)
-        return i, result, java_r, rust_r, source, cfg_cost, input_text
+        return i, result, java_r, rust_r, source, cfg_cost, input_text, coverage_key
 
     def _next_item(i: int) -> tuple:
         """Generate the i-th work item, using skip-counter-adjusted budget."""
-        triple_budget = None   # determined after generation for grammar items
         source, input_text, cfg_cost = _generate(
             args.strategy, grammar_gen, seeds, rng, args.budget,
             skip_counter=skip_counter,
+            coverage_tracker=coverage_tracker,
         )
-        return (i, source, input_text, cfg_cost)
+        coverage_key = _coverage_key_from_text(input_text)
+        return (i, source, input_text, cfg_cost, coverage_key)
 
     with open(log_path, "w") as log_f, \
          ThreadPoolExecutor(max_workers=args.workers) as pool:
@@ -209,8 +212,11 @@ def main():
 
             for fut in finished:
                 item = active.pop(fut)
-                i, result, java_r, rust_r, source, cfg_cost, input_text = fut.result()
+                i, result, java_r, rust_r, source, cfg_cost, input_text, coverage_key = fut.result()
                 done_count += 1
+
+                # ---- Update coverage tracker ----
+                coverage_tracker.record_key(coverage_key)
 
                 # ---- Update skip counter ----
                 triple = _triple_from_text(input_text)
@@ -284,6 +290,7 @@ def main():
             {"triple": list(t), "multiplier": m, "timeouts": n}
             for t, m, n in skip_summary
         ],
+        "coverage": coverage_tracker.summary(),
     }
     stats_path.write_text(json.dumps(stats, indent=2))
 
@@ -307,6 +314,24 @@ def main():
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _coverage_key_from_text(text: str) -> tuple:
+    """Extract (subprogram, crystal_type, coefcalc, ddm, has_container, n_segments)."""
+    sub = re.search(r'Subprogram\s+(\w+)', text, re.IGNORECASE)
+    coef = re.search(r'(?:AbsCoefCalc|CoefCalc)\s+(\w+)', text, re.IGNORECASE)
+    ctype = re.search(r'Type\s+(\w+)', text, re.IGNORECASE)
+    ddm_m = re.search(r'\bDDM\s+(\w+)', text, re.IGNORECASE)
+    has_container = bool(re.search(r'ContainerMaterialType', text, re.IGNORECASE))
+    n_segs = max(1, len(re.findall(r'^Beam\s*$', text, re.IGNORECASE | re.MULTILINE)))
+    return (
+        sub.group(1).upper() if sub else "",
+        ctype.group(1).capitalize() if ctype else "Cuboid",
+        coef.group(1).upper() if coef else "RD3D",
+        ddm_m.group(1).capitalize() if ddm_m else "Simple",
+        has_container,
+        n_segs,
+    )
+
+
 def _generate(
     strategy: str,
     grammar_gen: GrammarGenerator,
@@ -314,32 +339,48 @@ def _generate(
     rng: random.Random,
     budget: float,
     skip_counter: "SkipCounter | None" = None,
+    coverage_tracker: "CoverageTracker | None" = None,
 ) -> tuple[str, str, float]:
     """Return (source_description, input_text, estimated_cost)."""
+
+    # ---- Chaos mode (dedicated or ~10% of "both") ----
+    if strategy == "chaos" or (strategy == "both" and rng.random() < 0.10):
+        text = generate_chaos(rng)
+        return "chaos", text, _estimate_cost_from_text(text)
+
+    # ---- Structural mode (dedicated) ----
+    if strategy == "structural":
+        forced = None
+        if coverage_tracker and coverage_tracker.should_bias() and rng.random() < 0.3:
+            forced = coverage_tracker.least_covered_subprogram()
+        cfg = grammar_gen.generate(forced_subprogram=forced)
+        cfg = grammar_gen._structural_mutate(cfg)
+        return "structural", render(cfg), estimate_cost(cfg)
+
     use_grammar = (
         strategy == "grammar"
         or (strategy == "both" and rng.random() < 0.5)
         or not seeds
     )
 
+    # ---- Coverage-biased generation ----
+    forced_subprogram = None
+    if (use_grammar and coverage_tracker and coverage_tracker.should_bias()
+            and rng.random() < 0.3):
+        forced_subprogram = coverage_tracker.least_covered_subprogram()
+
     if use_grammar:
         if skip_counter is not None:
-            # Temporarily tighten the generator's budget for penalised triples.
-            # GrammarGenerator.generate() retries until cost <= budget, so we
-            # set the budget to the worst effective budget for the next sample,
-            # let it generate, then restore.  Because the Config is sampled
-            # before we know its triple, we generate once, check the triple,
-            # and regenerate with the tighter budget if needed.
-            cfg = grammar_gen.generate()
+            cfg = grammar_gen.generate(forced_subprogram=forced_subprogram)
             triple = (cfg.subprogram, cfg.coefcalc, cfg.crystal_type)
             eff = skip_counter.effective_budget(triple, budget)
             if eff < budget and estimate_cost(cfg) > eff:
                 old = grammar_gen.budget
                 grammar_gen.budget = eff
-                cfg = grammar_gen.generate()
+                cfg = grammar_gen.generate(forced_subprogram=forced_subprogram)
                 grammar_gen.budget = old
         else:
-            cfg = grammar_gen.generate()
+            cfg = grammar_gen.generate(forced_subprogram=forced_subprogram)
         text = render(cfg)
         cost = estimate_cost(cfg)
         return "grammar", text, cost
