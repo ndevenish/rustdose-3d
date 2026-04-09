@@ -1,0 +1,16 @@
+Crystal
+Type Cuboid
+Dimensions 20 20 20
+PixelsPerMicron 0.5
+AbsCoefCalc EXPSM
+CIF Fe3O4
+
+Beam
+Type Tophat
+Flux 2e12
+Energy 30
+Collimation Rectangular 5 5
+
+Wedge 0 0
+ExposureTime 2
+AngularResolution 1

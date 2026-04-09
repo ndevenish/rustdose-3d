@@ -1,0 +1,36 @@
+Crystal
+Type Polyhedron
+Dimensions 30.0 30.0 30.0
+Wireframetype obj
+ModelFile /workspace/raddose3d/tests/fixtures/cube.obj
+PixelsPerMicron 0.2
+AbsCoefCalc RD3D
+UnitCell 29.15 196.19 42.87
+NumMonomers 25
+NumResidues 439
+SolventHeavyConc Rb 1390 Se 1557 Mn 1801
+SolventFraction 0.7063
+DDM Bfactor
+DecayParam 1.0921 0.9872 0.1459
+
+Beam
+Type Gaussian
+Energy 23.749
+Flux 1.177e+13
+FWHM 11.8 38.5
+Collimation Circular 21.17 46.42
+
+Wedge 0.0 14.4
+ExposureTime 196.32
+AngularResolution 2.0
+
+Beam
+Type Gaussian
+Energy 8.478
+Flux 1.587e+13
+FWHM 16.88 11.39
+Collimation Circular 21.76 42.86
+
+Wedge 14.4 45.0
+ExposureTime 47.64
+AngularResolution 2.0

@@ -1,0 +1,20 @@
+Crystal
+Type Cuboid
+Dimensions 300 300 300
+PixelsPerMicron 0.1
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 24
+NumResidues 51
+SolventFraction 0.64
+
+Beam
+Type Gaussian
+Flux 2e12
+FWHM 300 300
+Energy 12.1
+Collimation Rectangular 300 300
+
+Wedge 0 90
+ExposureTime 30
+AngularResolution 5

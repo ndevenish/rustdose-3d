@@ -1,0 +1,21 @@
+Crystal
+Type Cuboid
+Dimensions 100 100 100
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 24
+NumResidues 51
+Subprogram MONTECARLO
+Runs 1
+
+Beam
+Type Gaussian
+Flux 2e12
+FWHM 100 100
+Energy 12.1
+Collimation Rectangular 100 100
+
+Wedge 0 90
+ExposureTime 10
+AngularResolution 10

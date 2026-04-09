@@ -1,0 +1,20 @@
+Crystal
+Type Cuboid
+Dimensions 2 2 1
+PixelsPerMicron 2
+AbsCoefCalc MicroED
+UnitCell 78.0 78.0 78.0
+NumMonomers 24
+NumResidues 51
+Subprogram EMSP
+
+Beam
+Type Gaussian
+Flux 1e6
+FWHM 2 2
+Energy 300
+Collimation Rectangular 2 2
+
+Wedge 0 60
+ExposureTime 60
+AngularResolution 2
