@@ -11,7 +11,7 @@ from hypothesis import strategies as st
 from generate import (
     BeamConfig, WedgeConfig, Config, estimate_cost, DEFAULT_BUDGET,
     FIXTURES_DIR, INSULIN_BASE_COST, MC_COST_PER_ELECTRON, XFEL_PER_VOXEL_PER_SECOND,
-    _pe_cost_factor,
+    _pe_cost_factor, GrammarGenerator,
     SMALL_MOLE_ELEMENT_POOL, HEAVY_PROTEIN_ELEMENT_POOL, SOLVENT_HEAVY_ELEMENT_POOL,
 )
 
@@ -148,6 +148,22 @@ def raddose_config(draw, budget: float = DEFAULT_BUDGET) -> Config:
         cfg.protein_conc = draw(st.floats(0.01, 500.0, allow_nan=False, allow_infinity=False))
         cfg.saxs_container = draw(st.booleans())
 
+    # ---- Container block (non-SAXS, ~25% probability) ----
+    if cfg.coefcalc != "SAXSseq":
+        cfg.has_container = draw(st.sampled_from([False, False, False, True]))
+        if cfg.has_container:
+            cfg.container_thickness = draw(st.floats(1.0, 1000.0, allow_nan=False, allow_infinity=False))
+            cfg.container_density = draw(st.floats(0.5, 5.0, allow_nan=False, allow_infinity=False))
+            cfg.container_material_type = draw(st.sampled_from(["elemental", "mixture"]))
+            if cfg.container_material_type == "elemental":
+                cfg.container_elements = draw(st.sampled_from([
+                    "H 2 O 1", "Si 1 O 2", "C 22 H 10 N 2 O 5", "C 2 H 4", "C 3 H 6",
+                ]))
+            else:
+                cfg.container_mixture_name = draw(st.sampled_from([
+                    "alanine", "pyrex", "water", "polystyrene", "nylon",
+                ]))
+
     # ---- Dose decay model ----
     cfg.ddm = draw(st.sampled_from(["Simple", "Linear", "Leal", "Bfactor"]))
     if cfg.ddm in ("Leal", "Bfactor"):
@@ -256,6 +272,11 @@ def raddose_config(draw, budget: float = DEFAULT_BUDGET) -> Config:
                 exposure_time=draw(st.floats(1.0, 200.0, allow_nan=False, allow_infinity=False)),
             )
             cfg.segments.append((beam, [wedge]))
+
+    # ---- Optional boundary perturbation (~30%) ----
+    if draw(st.sampled_from([False, False, False, True, True, True, False, False, False, False])):
+        _gen = GrammarGenerator(budget=budget)
+        cfg = _gen._boundary_perturb(cfg)
 
     # ---- Enforce budget ----
     assume(estimate_cost(cfg) <= budget)

@@ -152,6 +152,11 @@ class Config:
     container_thickness: float = 50.0
     container_density: float = 2.648
 
+    # Non-SAXS container block (rendered as crystal_line keywords inside Crystal block)
+    has_container: bool = False
+    container_material_type: str = "elemental"   # "elemental" | "mixture"
+    container_mixture_name: str = "alanine"      # NIST compound name for mixture type
+
     # Dose decay model
     ddm: str = "Simple"        # Simple | Linear | Leal | Bfactor
     gamma_param: float = 0.5
@@ -290,6 +295,16 @@ def render(cfg: Config) -> str:
         if cfg.ddm in ("Leal", "Bfactor"):
             lines.append(f"DecayParam {cfg.gamma_param} {cfg.b0_param} {cfg.beta_param}")
 
+    # Non-SAXS container block (inside Crystal block per grammar.pest)
+    if cfg.has_container and cfg.coefcalc != "SAXSseq":
+        lines.append(f"ContainerMaterialType {cfg.container_material_type}")
+        if cfg.container_material_type == "mixture":
+            lines.append(f"MaterialMixture {cfg.container_mixture_name}")
+        else:
+            lines.append(f"MaterialElements {cfg.container_elements}")
+        lines.append(f"ContainerThickness {cfg.container_thickness}")
+        lines.append(f"ContainerDensity {cfg.container_density}")
+
     if cfg.subprogram:
         lines.append(f"Subprogram {cfg.subprogram}")
         if cfg.subprogram == "MONTECARLO":
@@ -366,9 +381,14 @@ class GrammarGenerator:
     # Public API
     # ------------------------------------------------------------------
 
-    def generate(self, max_retries: int = 200) -> Config:
+    def generate(self, max_retries: int = 200,
+                 forced_subprogram: "Optional[str]" = None) -> Config:
         for _ in range(max_retries):
-            cfg = self._sample()
+            cfg = self._sample(forced_subprogram=forced_subprogram)
+            if self._flip(0.3):
+                cfg = self._boundary_perturb(cfg)
+            if self._flip(0.2):
+                cfg = self._structural_mutate(cfg)
             if estimate_cost(cfg) <= self.budget:
                 return cfg
         return self._minimal_fallback()
@@ -377,11 +397,14 @@ class GrammarGenerator:
     # Sampling
     # ------------------------------------------------------------------
 
-    def _sample(self) -> Config:
+    def _sample(self, forced_subprogram: "Optional[str]" = None) -> Config:
         cfg = Config()
 
         # ---- Subprogram (controls major simulation mode) ----
-        cfg.subprogram = self._c(["", "", "MONTECARLO", "XFEL", "EMSP"])
+        if forced_subprogram is not None:
+            cfg.subprogram = forced_subprogram
+        else:
+            cfg.subprogram = self._c(["", "", "MONTECARLO", "XFEL", "EMSP"])
 
         # ---- Crystal type ----
         if cfg.subprogram == "EMSP":
@@ -477,8 +500,268 @@ class GrammarGenerator:
         elif cfg.subprogram == "XFEL":
             cfg.runs = self._i(1, 3)
 
+        # ---- Container (30% chance for non-SAXS crystals) ----
+        self._sample_container(cfg)
+
         # ---- Segments (Beam+Wedge) ----
         cfg.segments = self._sample_segments(cfg)
+
+        return cfg
+
+    def _boundary_perturb(self, cfg: Config) -> Config:
+        """
+        Replace 1-3 config fields with boundary/extreme values.
+        Uses explicit dispatch (not lambdas) to avoid Python closure issues.
+        Returns the modified config (modified in-place then returned).
+        """
+        import copy
+        cfg = copy.copy(cfg)
+        # Deep-copy segments so mutations don't alias the original
+        cfg.segments = copy.deepcopy(cfg.segments)
+
+        # Build list of applicable (tag, apply) pairs for this config.
+        # Each apply() takes cfg and modifies it in-place.
+        candidates = []
+
+        # -- Dimension extremes --
+        if cfg.crystal_type == "Cuboid":
+            candidates.append(("dim_tiny", lambda c: (
+                setattr(c, "dim_x", self._c([0.1, 0.5, 1.0])),
+                setattr(c, "dim_y", self._c([0.1, 0.5, 1.0])),
+                setattr(c, "dim_z", self._c([0.1, 0.5, 1.0])),
+            )))
+            candidates.append(("dim_huge", lambda c: (
+                setattr(c, "dim_x", self._c([1000.0, 5000.0])),
+                setattr(c, "dim_y", self._c([1000.0, 5000.0])),
+                setattr(c, "dim_z", self._c([1000.0, 5000.0])),
+            )))
+        elif cfg.crystal_type == "Spherical":
+            d_tiny = self._c([0.1, 0.5, 1.0])
+            candidates.append(("dim_tiny", lambda c, d=d_tiny: (
+                setattr(c, "dim_x", d), setattr(c, "dim_y", d), setattr(c, "dim_z", d),
+            )))
+            d_huge = self._c([1000.0, 5000.0])
+            candidates.append(("dim_huge", lambda c, d=d_huge: (
+                setattr(c, "dim_x", d), setattr(c, "dim_y", d), setattr(c, "dim_z", d),
+            )))
+        elif cfg.crystal_type == "Cylinder":
+            candidates.append(("cyl_tiny", lambda c: (
+                setattr(c, "dim_x", 10.0),
+                setattr(c, "dim_y", 5.0),
+                setattr(c, "dim_z", 5.0),
+            )))
+            candidates.append(("cyl_huge", lambda c: (
+                setattr(c, "dim_x", self._c([5000.0, 10000.0])),
+                setattr(c, "dim_y", self._c([1000.0, 5000.0])),
+            )))
+
+        # -- PixelsPerMicron extremes --
+        candidates.append(("ppm_coarse", lambda c: setattr(c, "pixels_per_micron", 0.001)))
+        candidates.append(("ppm_fine",   lambda c: setattr(c, "pixels_per_micron", 10.0)))
+
+        # -- Energy extremes (non-EMSP only) --
+        if cfg.subprogram != "EMSP":
+            candidates.append(("energy_low",  lambda c: [setattr(b, "energy", 1.0)  for b, _ in c.segments]))
+            candidates.append(("energy_high", lambda c: [setattr(b, "energy", 50.0) for b, _ in c.segments]))
+
+        # -- Flux extremes (non-EMSP only) --
+        if cfg.subprogram != "EMSP":
+            candidates.append(("flux_low",  lambda c: [setattr(b, "flux", 1e6)  for b, _ in c.segments]))
+            candidates.append(("flux_high", lambda c: [setattr(b, "flux", 1e16) for b, _ in c.segments]))
+
+        # -- Wedge extremes --
+        candidates.append(("wedge_zero", lambda c: [
+            (setattr(w, "start", 0.0), setattr(w, "end", 0.0))
+            for _, ws in c.segments for w in ws
+        ]))
+        candidates.append(("wedge_full", lambda c: [
+            (setattr(w, "end", 360.0), setattr(w, "angular_resolution", 0.1))
+            for _, ws in c.segments for w in ws
+        ]))
+
+        # -- FWHM extremes (non-EMSP only) --
+        if cfg.subprogram != "EMSP":
+            candidates.append(("fwhm_pencil", lambda c: [
+                (setattr(b, "fwhm_x", 0.1), setattr(b, "fwhm_y", 0.1))
+                for b, _ in c.segments
+            ]))
+            candidates.append(("fwhm_flood", lambda c: [
+                (setattr(b, "fwhm_x", 10000.0), setattr(b, "fwhm_y", 10000.0))
+                for b, _ in c.segments
+            ]))
+
+        # -- Composition extremes --
+        if cfg.coefcalc == "RD3D":
+            candidates.append(("solvent_low",  lambda c: setattr(c, "solvent_fraction", 0.01)))
+            candidates.append(("solvent_high", lambda c: setattr(c, "solvent_fraction", 0.99)))
+
+        if cfg.coefcalc in ("RD3D", "MicroED"):
+            candidates.append(("cell_tiny", lambda c: (
+                setattr(c, "unit_cell_a", 1.0),
+                setattr(c, "unit_cell_b", 1.0),
+                setattr(c, "unit_cell_c", 1.0),
+            )))
+            candidates.append(("cell_huge", lambda c: (
+                setattr(c, "unit_cell_a", 500.0),
+                setattr(c, "unit_cell_b", 500.0),
+                setattr(c, "unit_cell_c", 500.0),
+            )))
+            candidates.append(("residues_one",  lambda c: setattr(c, "num_residues", 1)))
+            candidates.append(("residues_many", lambda c: setattr(c, "num_residues", 2000)))
+            candidates.append(("monomers_one",  lambda c: setattr(c, "num_monomers", 1)))
+            candidates.append(("monomers_many", lambda c: setattr(c, "num_monomers", 200)))
+
+        # -- DDM param extremes --
+        if cfg.ddm in ("Leal", "Bfactor"):
+            candidates.append(("ddm_tiny", lambda c: (
+                setattr(c, "gamma_param", 0.001),
+                setattr(c, "b0_param",    0.001),
+                setattr(c, "beta_param",  0.001),  # must stay positive
+            )))
+            candidates.append(("ddm_huge", lambda c: (
+                setattr(c, "gamma_param", 100.0),
+                setattr(c, "b0_param",    100.0),
+                # beta_param left unchanged to avoid sign issues
+            )))
+
+        # -- MC electrons --
+        if cfg.subprogram == "MONTECARLO":
+            candidates.append(("mc_min", lambda c: setattr(c, "sim_electrons", 100)))
+
+        # -- XFEL exposure --
+        if cfg.subprogram == "XFEL":
+            candidates.append(("xfel_tiny_exp", lambda c: [
+                setattr(w, "exposure_time", 1e-8)
+                for _, ws in c.segments for w in ws
+            ]))
+
+        # -- SAXS protein conc --
+        if cfg.coefcalc == "SAXSseq":
+            candidates.append(("saxs_conc_low",  lambda c: setattr(c, "protein_conc", 0.01)))
+            candidates.append(("saxs_conc_high", lambda c: setattr(c, "protein_conc", 500.0)))
+
+        if not candidates:
+            return cfg
+
+        n_perturbs = self._i(1, min(3, len(candidates)))
+        chosen = self.rng.sample(candidates, n_perturbs)
+        for _tag, apply_fn in chosen:
+            apply_fn(cfg)
+
+        return cfg
+
+    def _structural_mutate(self, cfg: Config) -> Config:
+        """
+        Apply 1-2 structural transforms to a Config.
+        Returns the modified config.
+        """
+        import copy
+        cfg = copy.copy(cfg)
+        cfg.segments = copy.deepcopy(cfg.segments)
+
+        # Build list of applicable transforms
+        transforms = []
+
+        # Add extra wedge to a random segment
+        transforms.append("add_extra_wedge")
+
+        # Add extra segment (standard mode only)
+        if cfg.subprogram not in ("XFEL", "EMSP") and cfg.crystal_type != "Cylinder":
+            transforms.append("add_extra_segment")
+
+        # Remove optional fields
+        if cfg.heavy_protein_atoms or cfg.solvent_heavy_conc:
+            transforms.append("remove_heavy_atoms")
+        if cfg.ddm != "Simple":
+            transforms.append("remove_ddm")
+        if cfg.num_rna > 0 or cfg.num_dna > 0:
+            transforms.append("remove_rna_dna")
+
+        # Duplicate a segment
+        if cfg.segments:
+            transforms.append("duplicate_segment")
+
+        # Swap crystal type (safe: Cuboid↔Spherical)
+        if cfg.crystal_type in ("Cuboid", "Spherical") and cfg.coefcalc not in ("SAXSseq",):
+            transforms.append("swap_crystal_type")
+
+        # Add container
+        transforms.append("add_container")
+
+        # Multi-wedge for restricted modes (duplicate single wedge)
+        if (cfg.subprogram in ("XFEL", "EMSP") or cfg.crystal_type == "Cylinder"):
+            transforms.append("multi_wedge_restricted")
+
+        if not transforms:
+            return cfg
+
+        n_transforms = self._i(1, min(2, len(transforms)))
+        chosen = self.rng.sample(transforms, n_transforms)
+
+        for t in chosen:
+            if t == "add_extra_wedge" and cfg.segments:
+                seg_idx = self._i(0, len(cfg.segments) - 1)
+                beam, wedges = cfg.segments[seg_idx]
+                last_w = wedges[-1]
+                delta = round(self._u(10.0, 90.0), 1)
+                new_w = WedgeConfig(
+                    start=last_w.end,
+                    end=last_w.end + delta,
+                    exposure_time=round(self._u(1.0, 100.0), 2),
+                    angular_resolution=round(self._u(0.5, 10.0), 1),
+                )
+                cfg.segments[seg_idx] = (beam, wedges + [new_w])
+
+            elif t == "add_extra_segment" and cfg.segments:
+                last_beam, last_wedges = cfg.segments[-1]
+                last_end = last_wedges[-1].end
+                delta = round(self._u(10.0, 90.0), 1)
+                new_beam = self._sample_beam(cfg)
+                new_wedge = WedgeConfig(
+                    start=last_end,
+                    end=last_end + delta,
+                    exposure_time=round(self._u(1.0, 100.0), 2),
+                    angular_resolution=round(self._u(0.5, 10.0), 1),
+                )
+                cfg.segments.append((new_beam, [new_wedge]))
+
+            elif t == "remove_heavy_atoms":
+                cfg.heavy_protein_atoms = ""
+                cfg.solvent_heavy_conc = ""
+
+            elif t == "remove_ddm":
+                cfg.ddm = "Simple"
+
+            elif t == "remove_rna_dna":
+                cfg.num_rna = 0
+                cfg.num_dna = 0
+
+            elif t == "duplicate_segment" and cfg.segments:
+                seg = copy.deepcopy(self.rng.choice(cfg.segments))
+                cfg.segments.append(seg)
+
+            elif t == "swap_crystal_type":
+                if cfg.crystal_type == "Cuboid":
+                    cfg.crystal_type = "Spherical"
+                    # Spherical uses single dim; set to average of cuboid dims
+                    cfg.dim_x = cfg.dim_y = cfg.dim_z = round(
+                        (cfg.dim_x + cfg.dim_y + cfg.dim_z) / 3.0, 2
+                    )
+                else:
+                    cfg.crystal_type = "Cuboid"
+
+            elif t == "add_container":
+                self._sample_container(cfg)
+
+            elif t == "multi_wedge_restricted" and cfg.segments:
+                beam, wedges = cfg.segments[0]
+                w = wedges[0]
+                half_exp = round(w.exposure_time / 2.0, 4)
+                w1 = WedgeConfig(start=0.0, end=0.0, exposure_time=half_exp,
+                                 angular_resolution=w.angular_resolution)
+                w2 = WedgeConfig(start=0.0, end=0.0, exposure_time=half_exp,
+                                 angular_resolution=w.angular_resolution)
+                cfg.segments[0] = (beam, [w1, w2])
 
         return cfg
 
@@ -575,6 +858,36 @@ class GrammarGenerator:
             segments.append((beam, [wedge]))
         return segments
 
+    def _sample_container(self, cfg: Config) -> None:
+        """
+        Possibly add a container to the config (30% chance).
+        Skips SAXSseq (handled by existing saxs_container logic).
+        Modifies cfg in-place.
+        """
+        if cfg.coefcalc == "SAXSseq":
+            return
+        if not self._flip(0.3):
+            return
+
+        cfg.has_container = True
+        cfg.container_thickness = round(self._u(1.0, 1000.0), 2)
+        cfg.container_density = round(self._u(0.5, 5.0), 4)
+
+        if self._flip(0.5):
+            cfg.container_material_type = "elemental"
+            cfg.container_elements = self._c([
+                "H 2 O 1",           # water
+                "Si 1 O 2",          # quartz/silica
+                "C 22 H 10 N 2 O 5", # Kapton
+                "C 2 H 4",           # polyethylene
+                "C 3 H 6",           # polypropylene
+            ])
+        else:
+            cfg.container_material_type = "mixture"
+            cfg.container_mixture_name = self._c([
+                "alanine", "pyrex", "water", "polystyrene", "nylon",
+            ])
+
     def _minimal_fallback(self) -> Config:
         """Guaranteed-cheap config used when retries are exhausted."""
         cfg = Config(
@@ -605,16 +918,34 @@ _NUMBER_RE = re.compile(
 )
 
 
+# Keyword swap pools for text mutation
+_CRYSTAL_TYPE_KEYWORDS = ["Cuboid", "Cylinder", "Spherical", "Polyhedron"]
+_BEAM_TYPE_KEYWORDS = ["Gaussian", "Tophat"]
+_DDM_TYPE_KEYWORDS = ["Simple", "Linear", "Leal", "Bfactor"]
+
+# RADDOSE-3D keywords for case mutation
+_RD3D_KEYWORDS = [
+    "Crystal", "Beam", "Wedge", "Type", "Energy", "Flux", "FWHM",
+    "Collimation", "PixelsPerMicron", "AbsCoefCalc", "CoefCalc",
+    "UnitCell", "NumMonomers", "NumResidues", "SolventFraction",
+    "Subprogram", "Runs", "SimElectrons", "ExposureTime",
+    "AngularResolution", "DDM", "DecayParam", "Dimensions",
+]
+
+
 def mutate_text(text: str, mutation_rate: float = 0.25,
                 rng: Optional[random.Random] = None) -> str:
     """
-    Perturb numeric values in a seed input file.
-    Uses log-normal noise so values stay in the same order of magnitude.
+    Perturb a seed input file using numeric and structural mutations.
+    Numeric: log-normal noise on all numeric values.
+    Structural: keyword swap, line deletion/duplication, comment injection,
+                case mutation, whitespace mutation, block reordering.
     Returns the mutated text; does not check cost budgets.
     """
     if rng is None:
         rng = random.Random()
 
+    # ---- 1. Numeric perturbation ----
     def perturb(m: re.Match) -> str:
         if rng.random() > mutation_rate:
             return m.group(0)
@@ -633,4 +964,226 @@ def mutate_text(text: str, mutation_rate: float = 0.25,
             return f"{new_val:.3e}"
         return f"{new_val:.4g}"
 
-    return _NUMBER_RE.sub(perturb, text)
+    text = _NUMBER_RE.sub(perturb, text)
+
+    # ---- 2. Keyword swap (10% per keyword occurrence) ----
+    def _maybe_swap_keyword(m: re.Match, pool: list[str]) -> str:
+        if rng.random() < 0.10:
+            return rng.choice(pool)
+        return m.group(0)
+
+    crystal_pat = re.compile(r'\b(Cuboid|Cylinder|Spherical|Polyhedron)\b', re.IGNORECASE)
+    text = crystal_pat.sub(lambda m: _maybe_swap_keyword(m, _CRYSTAL_TYPE_KEYWORDS), text)
+
+    beam_pat = re.compile(r'\b(Gaussian|Tophat)\b', re.IGNORECASE)
+    text = beam_pat.sub(lambda m: _maybe_swap_keyword(m, _BEAM_TYPE_KEYWORDS), text)
+
+    ddm_pat = re.compile(r'(?<=\bDDM\s)\s*(Simple|Linear|Leal|Bfactor)\b', re.IGNORECASE)
+    text = ddm_pat.sub(lambda m: _maybe_swap_keyword(m, _DDM_TYPE_KEYWORDS), text)
+
+    # ---- 3. Line-level mutations ----
+    lines = text.split('\n')
+    new_lines = []
+    for line in lines:
+        # 5% deletion
+        if rng.random() < 0.05:
+            continue
+        # 5% duplication
+        if rng.random() < 0.05:
+            new_lines.append(line)
+        # 3% comment injection
+        if rng.random() < 0.03:
+            new_lines.append(f"# fuzz {rng.randint(0, 9999)}")
+        # 10% whitespace mutation
+        if rng.random() < 0.10:
+            line = line.replace(' ', '\t' if rng.random() < 0.3 else '  ')
+        new_lines.append(line)
+    lines = new_lines
+
+    # ---- 4. Case mutation (5% per RD3D keyword per line) ----
+    kw_pat = re.compile(r'\b(' + '|'.join(re.escape(k) for k in _RD3D_KEYWORDS) + r')\b',
+                         re.IGNORECASE)
+
+    def _maybe_case(m: re.Match) -> str:
+        if rng.random() < 0.05:
+            w = m.group(0)
+            return w.upper() if rng.random() < 0.5 else w.lower()
+        return m.group(0)
+
+    lines = [kw_pat.sub(_maybe_case, ln) for ln in lines]
+
+    # ---- 5. Block reordering (5% chance overall) ----
+    if rng.random() < 0.05:
+        full = '\n'.join(lines)
+        # Split into blocks by "Beam" or "Wedge" headers (keep Crystal block first)
+        block_pat = re.compile(r'(?=^(?:Beam|Wedge)\s*$)', re.IGNORECASE | re.MULTILINE)
+        parts = block_pat.split(full)
+        if len(parts) > 2:
+            crystal_part = parts[0]
+            beam_wedge_parts = parts[1:]
+            rng.shuffle(beam_wedge_parts)
+            full = crystal_part + ''.join(beam_wedge_parts)
+            lines = full.split('\n')
+
+    return '\n'.join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Chaos generator — deliberately challenging / invalid inputs
+# ---------------------------------------------------------------------------
+
+_CHAOS_BASE = (
+    "Crystal\nType Cuboid\nDimensions 100 100 100\nPixelsPerMicron 0.5\n"
+    "AbsCoefCalc RD3D\nUnitCell 78 78 78\nNumMonomers 24\nNumResidues 51\n\n"
+    "Beam\nType Gaussian\nFlux 2e12\nFWHM 100 100\nEnergy 12.1\n"
+    "Collimation Rectangular 100 100\n\n"
+    "Wedge 0 90\nExposureTime 10\nAngularResolution 2\n"
+)
+
+
+def generate_chaos(rng: Optional[random.Random] = None) -> str:
+    """
+    Generate a deliberately challenging or invalid RADDOSE-3D input.
+    Returns raw text (not a Config). Expected use: test error handling.
+    """
+    if rng is None:
+        rng = random.Random()
+
+    chaos_type = rng.choice([
+        "negative_dims",
+        "zero_ppm",
+        "negative_energy",
+        "negative_flux",
+        "wedge_end_lt_start",
+        "missing_type",
+        "unknown_keyword",
+        "empty_crystal",
+        "no_beam",
+        "duplicate_crystal",
+        "long_element_list",
+        "zero_exposure",
+        "huge_resolution",
+        "negative_unit_cell",
+        "zero_sim_electrons",
+    ])
+
+    base = _CHAOS_BASE
+
+    if chaos_type == "negative_dims":
+        x, y, z = rng.uniform(0.1, 100), rng.uniform(0.1, 100), rng.uniform(0.1, 100)
+        return base.replace("Dimensions 100 100 100",
+                            f"Dimensions -{x:.2f} -{y:.2f} -{z:.2f}")
+
+    if chaos_type == "zero_ppm":
+        return base.replace("PixelsPerMicron 0.5", "PixelsPerMicron 0")
+
+    if chaos_type == "negative_energy":
+        e = rng.uniform(0.1, 30)
+        return base.replace("Energy 12.1", f"Energy -{e:.2f}")
+
+    if chaos_type == "negative_flux":
+        f = 10 ** rng.uniform(10, 14)
+        return base.replace("Flux 2e12", f"Flux -{f:.3e}")
+
+    if chaos_type == "wedge_end_lt_start":
+        end = rng.uniform(10, 89)
+        start = end + rng.uniform(1, 90)
+        return base.replace("Wedge 0 90", f"Wedge {start:.1f} {end:.1f}")
+
+    if chaos_type == "missing_type":
+        return base.replace("Type Cuboid\n", "")
+
+    if chaos_type == "unknown_keyword":
+        return base.replace("NumResidues 51",
+                            f"NumResidues 51\nFooBarKeyword {rng.randint(1, 999)}")
+
+    if chaos_type == "empty_crystal":
+        return (
+            "Crystal\n\n"
+            "Beam\nType Gaussian\nFlux 2e12\nFWHM 100 100\nEnergy 12.1\n"
+            "Collimation Rectangular 100 100\n\n"
+            "Wedge 0 90\nExposureTime 10\nAngularResolution 2\n"
+        )
+
+    if chaos_type == "no_beam":
+        # Remove Beam block entirely
+        lines = [ln for ln in base.split('\n')
+                 if not ln.startswith(('Beam', 'Type Gaussian', 'Flux', 'FWHM',
+                                       'Energy', 'Collimation'))]
+        return '\n'.join(lines)
+
+    if chaos_type == "duplicate_crystal":
+        crystal_block = base.split('\n\nBeam')[0]
+        return base + "\n" + crystal_block + "\n"
+
+    if chaos_type == "long_element_list":
+        elements = " ".join(
+            f"{el} {rng.randint(1, 5)}"
+            for el in HEAVY_PROTEIN_ELEMENT_POOL[:10]
+        )
+        return base.replace("NumResidues 51",
+                            f"NumResidues 51\nProteinHeavyAtoms {elements}")
+
+    if chaos_type == "zero_exposure":
+        return base.replace("ExposureTime 10", "ExposureTime 0")
+
+    if chaos_type == "huge_resolution":
+        return base.replace("AngularResolution 2", "AngularResolution 0.001")
+
+    if chaos_type == "negative_unit_cell":
+        a, b, c = rng.uniform(1, 100), rng.uniform(1, 100), rng.uniform(1, 100)
+        return base.replace("UnitCell 78 78 78",
+                            f"UnitCell -{a:.2f} -{b:.2f} -{c:.2f}")
+
+    if chaos_type == "zero_sim_electrons":
+        return base.replace(
+            "AbsCoefCalc RD3D",
+            "AbsCoefCalc RD3D\nSubprogram MONTECARLO\nRuns 1\nSimElectrons 0",
+        )
+
+    return base
+
+
+# ---------------------------------------------------------------------------
+# Coverage tracker — lightweight feedback for guided generation
+# ---------------------------------------------------------------------------
+
+import threading
+from collections import Counter as _Counter
+
+
+class CoverageTracker:
+    """
+    Tracks (subprogram, crystal_type, coefcalc, ddm, has_container, n_segments)
+    tuples seen so far. After `bias_after` total iterations, exposes which
+    subprograms are under-covered so the generator can bias toward them.
+    """
+
+    def __init__(self, bias_after: int = 50):
+        self._lock = threading.Lock()
+        self._counts: _Counter = _Counter()
+        self._total: int = 0
+        self._bias_after = bias_after
+
+    def record_key(self, key: tuple) -> None:
+        with self._lock:
+            self._counts[key] += 1
+            self._total += 1
+
+    def should_bias(self) -> bool:
+        with self._lock:
+            return self._total >= self._bias_after
+
+    def least_covered_subprogram(self) -> "Optional[str]":
+        with self._lock:
+            if self._total < self._bias_after:
+                return None
+            sub_counts: _Counter = _Counter()
+            for (sub, *_), count in self._counts.items():
+                sub_counts[sub] += count
+            candidates = ["", "MONTECARLO", "XFEL", "EMSP"]
+            return min(candidates, key=lambda s: sub_counts.get(s, 0))
+
+    def summary(self) -> dict:
+        with self._lock:
+            return {str(k): v for k, v in self._counts.most_common()}
