@@ -243,12 +243,14 @@ def get_coverage_bitmap(
 def greedy_set_cover(
     inputs: list[Path],
     bitmaps: dict[Path, frozenset],
+    wall_times: "dict[Path, float] | None" = None,
 ) -> list[Path]:
     """
     Greedy maximum-coverage selection.
 
     Iteratively picks the input that covers the most uncovered regions,
-    until no new regions can be added. Returns paths in selection order.
+    until no new regions can be added. Among inputs with equal marginal gain,
+    the faster one (by wall_time) is preferred. Returns paths in selection order.
     """
     universe: set[tuple] = set()
     for bm in bitmaps.values():
@@ -257,12 +259,14 @@ def greedy_set_cover(
     if not universe:
         return []
 
+    times = wall_times or {}
     covered: set[tuple] = set()
     selected: list[Path] = []
     remaining = list(inputs)
 
     while remaining and covered != universe:
-        best = max(remaining, key=lambda p: len(bitmaps[p] - covered))
+        # Primary key: most new regions. Tiebreaker: shortest wall time.
+        best = max(remaining, key=lambda p: (len(bitmaps[p] - covered), -times.get(p, 0.0)))
         gain = len(bitmaps[best] - covered)
         if gain == 0:
             break
@@ -374,6 +378,7 @@ def main():
     print("-" * 60)
 
     bitmaps: dict[Path, frozenset] = {}
+    wall_times: dict[Path, float] = {}
     skipped: list[Path] = []
     per_input_profraw: dict[Path, Path] = {}
 
@@ -392,6 +397,7 @@ def main():
                 args.rust_bin, inp, profraw, args.timeout, patched_text=patched
             )
 
+            wall_times[inp] = wall
             status = "OK" if succeeded else "FAIL"
             print(f"[{idx:4d}/{len(inputs)}] {status}  {wall:.1f}s  {inp.name}")
             if not succeeded and stderr:
@@ -447,6 +453,7 @@ def main():
                 if not succeeded and stderr:
                     print(f"           stderr: {stderr[:120]}")
                 bitmaps[inp] = bm
+                wall_times[inp] = wall
                 per_input_profraw[inp] = profraw
                 if not bm:
                     skipped.append(inp)
@@ -464,7 +471,7 @@ def main():
     total_regions = len(all_regions)
 
     usable = [p for p in inputs if bitmaps[p]]
-    selected = greedy_set_cover(usable, bitmaps)
+    selected = greedy_set_cover(usable, bitmaps, wall_times)
 
     selected_regions: set[tuple] = set()
     for p in selected:
@@ -483,10 +490,44 @@ def main():
     for i, p in enumerate(selected, 1):
         gain = len(bitmaps[p] - cumulative)
         cumulative |= bitmaps[p]
-        print(f"  {i:3d}.  +{gain:6,} regions  {p}")
+        t = wall_times.get(p, 0.0)
+        print(f"  {i:3d}.  +{gain:6,} regions  {t:5.1f}s  {p}")
 
     # ---------------------------------------------------------------------------
-    # Phase 3: copy selected inputs to --out-dir (optional)
+    # Phase 3: merge selected profraws → total program coverage (always)
+    # ---------------------------------------------------------------------------
+    merged_all_profdata = work_dir / "all_selected.profdata"
+    selected_profraws = [
+        per_input_profraw[p] for p in selected
+        if p in per_input_profraw and per_input_profraw[p].exists()
+    ]
+    cov_data: dict = {}
+    if selected_profraws and merge_profraws(selected_profraws, merged_all_profdata, llvm_profdata):
+        cmd = [
+            str(llvm_cov), "export",
+            "--instr-profile", str(merged_all_profdata),
+            "--format", "text",
+            str(args.rust_bin),
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            try:
+                cov_data = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                pass
+
+    totals = cov_data.get("data", [{}])[0].get("totals", {})
+    if totals:
+        def _pct(d: dict) -> str:
+            return f"{d.get('covered', 0):,}/{d.get('count', 0):,} ({d.get('percent', 0.0):.1f}%)"
+        print()
+        print("Total program coverage (selected inputs merged):")
+        print(f"  Lines:    {_pct(totals.get('lines', {}))}")
+        print(f"  Regions:  {_pct(totals.get('regions', {}))}")
+        print(f"  Branches: {_pct(totals.get('branches', {}))}")
+
+    # ---------------------------------------------------------------------------
+    # Phase 4: copy selected inputs to --out-dir (optional)
     # ---------------------------------------------------------------------------
     if args.out_dir:
         args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -497,38 +538,20 @@ def main():
         print(f"\nCopied {len(selected)} input(s) to {args.out_dir}")
 
     # ---------------------------------------------------------------------------
-    # Phase 4: JSON report (optional)
+    # Phase 5: JSON report (optional)
     # ---------------------------------------------------------------------------
     if args.report:
-        # Per-file coverage breakdown from the merged profile of all selected inputs
-        merged_all_profdata = work_dir / "all_selected.profdata"
-        selected_profraws = [per_input_profraw[p] for p in selected
-                             if p in per_input_profraw and per_input_profraw[p].exists()]
         file_coverage: dict[str, dict] = {}
-        if selected_profraws and merge_profraws(selected_profraws, merged_all_profdata, llvm_profdata):
-            cmd = [
-                str(llvm_cov), "export",
-                "--instr-profile", str(merged_all_profdata),
-                "--format", "text",
-                str(args.rust_bin),
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
-                try:
-                    data = json.loads(result.stdout)
-                    totals = data.get("data", [{}])[0].get("totals", {})
-                    for file_entry in data.get("data", [{}])[0].get("files", []):
-                        fname = file_entry.get("filename", "")
-                        if "/rustc/" in fname or fname.endswith("_test.rs"):
-                            continue
-                        summary = file_entry.get("summary", {})
-                        file_coverage[fname] = {
-                            "lines": summary.get("lines", {}),
-                            "regions": summary.get("regions", {}),
-                            "branches": summary.get("branches", {}),
-                        }
-                except (json.JSONDecodeError, KeyError):
-                    pass
+        for file_entry in cov_data.get("data", [{}])[0].get("files", []):
+            fname = file_entry.get("filename", "")
+            if "/rustc/" in fname or "/.cargo/registry/" in fname or fname.endswith("_test.rs"):
+                continue
+            summary = file_entry.get("summary", {})
+            file_coverage[fname] = {
+                "lines": summary.get("lines", {}),
+                "regions": summary.get("regions", {}),
+                "branches": summary.get("branches", {}),
+            }
 
         report = {
             "inputs_analysed": len(inputs),
@@ -537,9 +560,11 @@ def main():
             "total_regions": total_regions,
             "covered_regions": len(selected_regions),
             "coverage_pct": round(100 * len(selected_regions) / max(total_regions, 1), 2),
+            "totals": totals,
             "selected": [
                 {
                     "path": str(p),
+                    "wall_time": wall_times.get(p, 0.0),
                     "regions_covered": len(bitmaps[p]),
                     "marginal_gain": len(bitmaps[p] - (
                         set().union(*[bitmaps[q] for q in selected[:i]])

@@ -250,13 +250,17 @@ Selected by greedy set-cover:              9 input(s)
 Regions covered by selection:              6,761 (100.0%)
 
 Selected inputs (in selection order):
-    1.  + 4,512 regions  corpus/seeds/standard_cylinder.txt
-    2.  + 1,300 regions  corpus/seeds/microed_basic.txt
+    1.  + 4,512 regions   9.8s  corpus/seeds/standard_cylinder.txt
+    2.  + 1,300 regions   0.4s  corpus/seeds/microed_basic.txt
     ...
+
+Total program coverage (selected inputs merged):
+  Lines:    4,821/6,102 (79.0%)
+  Regions:  6,761/8,234 (82.1%)
+  Branches: 1,203/1,890 (63.6%)
 ```
 
-The JSON report (if requested) includes per-file line and region coverage
-percentages from the merged profile of all selected inputs.
+Among inputs with equal marginal coverage gain the faster one is preferred (runtime tiebreaker), so the selected set tends toward shorter-running inputs without sacrificing coverage. The total program coverage block is always printed; the JSON report (if requested) additionally includes per-file line/region/branch percentages.
 
 ### Typical workflow
 
