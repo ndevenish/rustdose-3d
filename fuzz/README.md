@@ -186,12 +186,12 @@ inputs with the fuzzer.
 
 ### Setup
 
-Build the Rust binary with coverage instrumentation (once). The script outputs
-to `target/coverage/release/` so it doesn't clobber the normal release binary:
+Build the Rust binary with coverage instrumentation (once, separate from the
+normal release binary):
 
 ```bash
 cd raddose3d
-./build-coverage.sh
+RUSTFLAGS="-C instrument-coverage" cargo build --release
 ```
 
 Install the LLVM tools if not already present:
@@ -260,13 +260,10 @@ percentages from the merged profile of all selected inputs.
 ### Typical workflow
 
 ```bash
-# 1. Build the instrumented binary (once)
-cd raddose3d && ./build-coverage.sh && cd ../fuzz
-
-# 2. Collect a large pool of inputs (saves every input, not just failures)
+# 1. Collect a large pool of inputs (saves every input, not just failures)
 uv run python fuzz.py -n 500 --save-all --workers 8
 
-# 3. Run coverage distillation on the collected pool
+# 2. Run coverage distillation on the collected pool
 uv run python coverage.py corpus/ --out-dir corpus/coverage-selected/ --report coverage.json
 ```
 
