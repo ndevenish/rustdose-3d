@@ -91,6 +91,41 @@ def _find_llvm_tool(name: str) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# Input patching
+# ---------------------------------------------------------------------------
+
+import re as _re
+
+def patch_sim_electrons(text: str, n: int) -> str:
+    """
+    Replace the value on any SimElectrons/SimPhotons line with n.
+    If no such line exists and the input contains a MONTECARLO or XFEL
+    subprogram block, insert 'SimElectrons <n>' after the Subprogram line.
+    """
+    # Replace existing SimElectrons/SimPhotons lines
+    patched, count = _re.subn(
+        r'(?i)^(\s*(?:SimElectrons|SimPhotons)\s+)[^\s#!]+',
+        lambda m: m.group(1) + str(n),
+        text,
+        flags=_re.MULTILINE,
+    )
+    if count:
+        return patched
+
+    # Insert after Subprogram line if MC/XFEL
+    def _insert(m):
+        return m.group(0) + f"\nSimElectrons {n}"
+
+    patched, count = _re.subn(
+        r'(?i)^(\s*Subprogram\s+(?:MONTECARLO|GOS|XFEL)\s*)$',
+        _insert,
+        text,
+        flags=_re.MULTILINE,
+    )
+    return patched if count else text
+
+
+# ---------------------------------------------------------------------------
 # Per-input coverage collection
 # ---------------------------------------------------------------------------
 
@@ -99,9 +134,13 @@ def run_instrumented(
     input_path: Path,
     profraw_path: Path,
     timeout: float,
+    patched_text: "str | None" = None,
 ) -> tuple[bool, float, str]:
     """
     Run the instrumented binary on input_path, writing coverage to profraw_path.
+
+    If patched_text is provided it is written to a temp file and used instead
+    of input_path directly (used by --patch-sim-electrons).
 
     Returns (succeeded, wall_time, stderr_snippet).
     """
@@ -109,9 +148,14 @@ def run_instrumented(
     env["LLVM_PROFILE_FILE"] = str(profraw_path)
 
     with tempfile.TemporaryDirectory(prefix="raddose_cov_") as tmp:
+        if patched_text is not None:
+            actual_input = Path(tmp) / "input.txt"
+            actual_input.write_text(patched_text)
+        else:
+            actual_input = input_path.resolve()
         cmd = [
             str(rust_bin),
-            "-i", str(input_path.resolve()),
+            "-i", str(actual_input),
             "-p", str(Path(tmp) / "out-"),
         ]
         t0 = time.monotonic()
@@ -282,6 +326,12 @@ def main():
         help="Parallel workers for running the instrumented binary (default: 1). "
              "Each worker needs its own LLVM_PROFILE_FILE so files don't collide.",
     )
+    ap.add_argument(
+        "--patch-sim-electrons", type=int, default=None, metavar="N",
+        help="Override SimElectrons/SimPhotons to N before running. Useful for "
+             "MONTECARLO/XFEL inputs where the original value is too large for "
+             "coverage collection (e.g. --patch-sim-electrons 500).",
+    )
     args = ap.parse_args()
 
     # Validate binary exists
@@ -333,8 +383,12 @@ def main():
             profraw = work_dir / f"{idx:05d}.profraw"
             profdata = work_dir / f"{idx:05d}.profdata"
 
+            patched = (
+                patch_sim_electrons(inp.read_text(), args.patch_sim_electrons)
+                if args.patch_sim_electrons is not None else None
+            )
             succeeded, wall, stderr = run_instrumented(
-                args.rust_bin, inp, profraw, args.timeout
+                args.rust_bin, inp, profraw, args.timeout, patched_text=patched
             )
 
             status = "OK" if succeeded else "FAIL"
@@ -368,8 +422,12 @@ def main():
                 slot_counter[0] += 1
             profraw = work_dir / f"{slot:05d}.profraw"
             profdata = work_dir / f"{slot:05d}.profdata"
+            patched = (
+                patch_sim_electrons(inp.read_text(), args.patch_sim_electrons)
+                if args.patch_sim_electrons is not None else None
+            )
             succeeded, wall, stderr = run_instrumented(
-                args.rust_bin, inp, profraw, args.timeout
+                args.rust_bin, inp, profraw, args.timeout, patched_text=patched
             )
             bm = frozenset()
             if profraw.exists():
