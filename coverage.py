@@ -327,10 +327,11 @@ def main():
              "Each worker needs its own LLVM_PROFILE_FILE so files don't collide.",
     )
     ap.add_argument(
-        "--patch-sim-electrons", type=int, default=None, metavar="N",
-        help="Override SimElectrons/SimPhotons to N before running. Useful for "
-             "MONTECARLO/XFEL inputs where the original value is too large for "
-             "coverage collection (e.g. --patch-sim-electrons 500).",
+        "--patch-sim-electrons", type=int, default=1000, metavar="N",
+        help="Override SimElectrons/SimPhotons to N before running (default: 1000). "
+             "Reduces MONTECARLO/XFEL runtime from hours to seconds without changing "
+             "which code paths are exercised. Non-MC/XFEL inputs are unaffected. "
+             "Set to 0 to disable.",
     )
     args = ap.parse_args()
 
@@ -385,7 +386,7 @@ def main():
 
             patched = (
                 patch_sim_electrons(inp.read_text(), args.patch_sim_electrons)
-                if args.patch_sim_electrons is not None else None
+                if args.patch_sim_electrons else None
             )
             succeeded, wall, stderr = run_instrumented(
                 args.rust_bin, inp, profraw, args.timeout, patched_text=patched
@@ -424,7 +425,7 @@ def main():
             profdata = work_dir / f"{slot:05d}.profdata"
             patched = (
                 patch_sim_electrons(inp.read_text(), args.patch_sim_electrons)
-                if args.patch_sim_electrons is not None else None
+                if args.patch_sim_electrons else None
             )
             succeeded, wall, stderr = run_instrumented(
                 args.rust_bin, inp, profraw, args.timeout, patched_text=patched

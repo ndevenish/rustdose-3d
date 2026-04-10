@@ -221,7 +221,7 @@ uv run python coverage.py corpus/ --out-dir corpus/coverage-selected/ --report c
 | `--report` | — | Write a JSON report with per-file line/region coverage |
 | `--keep-profraws` | off | Retain raw `.profraw` files for debugging |
 | `--workers`, `-j` | 1 | Parallel workers. Each uses an isolated profraw file. |
-| `--patch-sim-electrons` | — | Override `SimElectrons`/`SimPhotons` to N before running. Useful for MONTECARLO/XFEL inputs where the original photon count is too large for coverage collection (e.g. `--patch-sim-electrons 500`). |
+| `--patch-sim-electrons` | `1000` | Override `SimElectrons`/`SimPhotons` to N before running. Reduces MONTECARLO/XFEL runtime from hours to seconds without changing which code paths are exercised. Non-MC/XFEL inputs are unaffected. Set to `0` to disable. |
 
 ### Algorithm
 
