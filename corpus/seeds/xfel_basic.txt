@@ -8,6 +8,7 @@ NumMonomers 24
 NumResidues 51
 Subprogram XFEL
 Runs 1
+SimPhotons 1000
 
 Beam
 Type Tophat

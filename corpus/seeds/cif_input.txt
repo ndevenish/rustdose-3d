@@ -3,7 +3,7 @@ Type Cuboid
 Dimensions 20 20 20
 PixelsPerMicron 0.5
 AbsCoefCalc EXPSM
-CIF Fe3O4
+CIF /workspace/raddose3d/tests/fixtures/alanine.cif
 
 Beam
 Type Tophat
