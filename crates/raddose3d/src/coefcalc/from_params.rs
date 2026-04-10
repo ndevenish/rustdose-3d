@@ -135,6 +135,13 @@ impl CoefCalcFromParams {
         // Calculate density
         compute.calculate_density();
 
+        // SimElectrons / SimPhotons (MC/XFEL photon count; 0 = default 1,000,000)
+        compute.num_simulated_electrons = config
+            .sim_electrons
+            .filter(|&n| n > 0)
+            .map(|n| n as u64)
+            .unwrap_or(0);
+
         Ok(CoefCalcFromParams { compute })
     }
 }
@@ -212,6 +219,10 @@ impl super::CoefCalc for CoefCalcFromParams {
         } else {
             self.compute.present_elements.clone()
         }
+    }
+
+    fn number_simulated_electrons(&self) -> u64 {
+        self.compute.num_simulated_electrons
     }
 }
 

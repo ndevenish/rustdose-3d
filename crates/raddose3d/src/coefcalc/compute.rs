@@ -87,6 +87,9 @@ pub struct CoefCalcCompute {
     // Present elements
     pub present_elements: HashSet<String>,
     pub cryo_elements: HashSet<String>,
+
+    /// Number of simulated photons/electrons for MC/XFEL (0 = use default 1,000,000).
+    pub num_simulated_electrons: u64,
 }
 
 impl Default for CoefCalcCompute {
@@ -125,6 +128,7 @@ impl CoefCalcCompute {
             cryo_concentration: HashMap::new(),
             present_elements: HashSet::new(),
             cryo_elements: HashSet::new(),
+            num_simulated_electrons: 0,
         }
     }
 
