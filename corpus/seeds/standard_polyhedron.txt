@@ -2,7 +2,7 @@ Crystal
 Type Polyhedron
 Dimensions 30.0 30.0 30.0
 Wireframetype obj
-ModelFile /workspace/raddose3d/tests/fixtures/cube.obj
+ModelFile /home/nickd/raddose-3d/raddose3d/tests/fixtures/cube.obj
 PixelsPerMicron 0.2
 AbsCoefCalc RD3D
 UnitCell 29.15 196.19 42.87
