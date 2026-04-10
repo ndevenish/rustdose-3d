@@ -382,6 +382,66 @@ impl CoefCalcCompute {
         )
     }
 
+    /// Per-element cumulative photoelectric absorption probabilities.
+    /// Returns HashMap<element_name, cumulative_prob> where probs are sorted by element name.
+    /// Mirrors Java's CoefCalcCompute.getPhotoElectricProbsElement().
+    pub fn calc_photo_electric_probs_element(
+        &self,
+        energy: f64,
+    ) -> std::collections::HashMap<String, f64> {
+        let db = ElementDatabase::instance();
+        let total_photo = self.abs_coeff_photo;
+        let mut result = std::collections::HashMap::new();
+        if total_photo <= 0.0 {
+            return result;
+        }
+        let mut elements: Vec<&String> = self.present_elements.iter().collect();
+        elements.sort();
+        let mut running = 0.0;
+        for name in elements {
+            if let Some(e) = db.get(name) {
+                let cs = e.get_abs_coefficients(energy);
+                let atoms = self.total_atoms(name);
+                let photo = atoms * cs[&CrossSection::Photoelectric]
+                    / self.cell_volume
+                    / UNITS_PER_DECI_UNIT
+                    / UNITS_PER_MILLI_UNIT;
+                running += photo / total_photo;
+                result.insert(name.clone(), running);
+            }
+        }
+        result
+    }
+
+    /// Per-element cumulative Compton scattering probabilities.
+    pub fn calc_compton_probs_element(
+        &self,
+        energy: f64,
+    ) -> std::collections::HashMap<String, f64> {
+        let db = ElementDatabase::instance();
+        let total_compton = self.abs_coeff_comp;
+        let mut result = std::collections::HashMap::new();
+        if total_compton <= 0.0 {
+            return result;
+        }
+        let mut elements: Vec<&String> = self.present_elements.iter().collect();
+        elements.sort();
+        let mut running = 0.0;
+        for name in elements {
+            if let Some(e) = db.get(name) {
+                let cs = e.get_abs_coefficients(energy);
+                let atoms = self.total_atoms(name);
+                let compton = atoms * cs[&CrossSection::Compton]
+                    / self.cell_volume
+                    / UNITS_PER_DECI_UNIT
+                    / UNITS_PER_MILLI_UNIT;
+                running += compton / total_compton;
+                result.insert(name.clone(), running);
+            }
+        }
+        result
+    }
+
     /// Calculate coefficients for macromolecular atoms only.
     pub fn calculate_coefficients_macro(&self, energy: f64) -> (f64, f64, f64, f64) {
         let db = ElementDatabase::instance();
@@ -882,6 +942,214 @@ impl CoefCalcCompute {
         factors
     }
 
+    /// Per-element relative shell ionisation probabilities at the given beam energy.
+    /// Returns HashMap<element_name, Vec<cumulative_prob>> with 9 entries (K, L1-L3, M1-M5).
+    /// Mirrors Java MC.getRelativeShellProbs().
+    pub fn calc_relative_shell_probs(
+        &self,
+        energy: f64,
+        cryo: bool,
+    ) -> std::collections::HashMap<String, Vec<f64>> {
+        let db = ElementDatabase::instance();
+        let elements: &std::collections::HashSet<String> = if cryo {
+            &self.cryo_elements
+        } else {
+            &self.present_elements
+        };
+        let mut result = std::collections::HashMap::new();
+
+        for name in elements {
+            if let Some(e) = db.get(name) {
+                let mut shell_probs = vec![0.0_f64; 9];
+                let mut running = 0.0_f64;
+
+                let k_prob = if let Some(k) = e.k_edge() {
+                    if energy > k {
+                        let p = e.k_ionisation_prob();
+                        running += p;
+                        p
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
+                shell_probs[0] = running;
+
+                let l1_prob = if e.atomic_number() >= 12 {
+                    if let Some(l1) = e.l1_edge() {
+                        if energy > l1 {
+                            let p = e.l1_ionisation_prob() * (1.0 - k_prob);
+                            running += p;
+                            p
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
+                shell_probs[1] = running;
+
+                let l2_prob = if e.atomic_number() >= 12 {
+                    if let Some(l2) = e.l2_edge() {
+                        if energy > l2 {
+                            let p = e.l2_ionisation_prob() * (1.0 - k_prob - l1_prob);
+                            running += p;
+                            p
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
+                shell_probs[2] = running;
+
+                let l3_prob = if e.atomic_number() >= 12 {
+                    if let Some(l3) = e.l3_edge() {
+                        if energy > l3 {
+                            let p = e.l3_ionisation_prob() * (1.0 - k_prob - l1_prob - l2_prob);
+                            running += p;
+                            p
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
+                shell_probs[3] = running;
+
+                let m1_prob = if e.atomic_number() >= 73 {
+                    if energy > e.m1_edge() {
+                        let p =
+                            e.m1_ionisation_prob() * (1.0 - k_prob - l1_prob - l2_prob - l3_prob);
+                        running += p;
+                        p
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
+                shell_probs[4] = running;
+
+                let m2_prob = if e.atomic_number() >= 73 {
+                    if let Some(m2) = e.m2_edge() {
+                        if energy > m2 {
+                            let p = e.m2_ionisation_prob()
+                                * (1.0 - k_prob - l1_prob - l2_prob - l3_prob - m1_prob);
+                            running += p;
+                            p
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
+                shell_probs[5] = running;
+
+                let m3_prob = if e.atomic_number() >= 73 {
+                    if let Some(m3) = e.m3_edge() {
+                        if energy > m3 {
+                            let p = e.m3_ionisation_prob()
+                                * (1.0 - k_prob - l1_prob - l2_prob - l3_prob - m1_prob - m2_prob);
+                            running += p;
+                            p
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
+                shell_probs[6] = running;
+
+                let m4_prob = if e.atomic_number() >= 73 {
+                    if let Some(m4) = e.m4_edge() {
+                        if energy > m4 {
+                            let p = e.m4_ionisation_prob()
+                                * (1.0
+                                    - k_prob
+                                    - l1_prob
+                                    - l2_prob
+                                    - l3_prob
+                                    - m1_prob
+                                    - m2_prob
+                                    - m3_prob);
+                            running += p;
+                            p
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
+                shell_probs[7] = running;
+
+                if e.atomic_number() >= 73 {
+                    if let Some(m5) = e.m5_edge() {
+                        if energy > m5 {
+                            let p = e.m5_ionisation_prob()
+                                * (1.0
+                                    - k_prob
+                                    - l1_prob
+                                    - l2_prob
+                                    - l3_prob
+                                    - m1_prob
+                                    - m2_prob
+                                    - m3_prob
+                                    - m4_prob);
+                            running += p;
+                        }
+                    }
+                }
+                shell_probs[8] = running;
+
+                result.insert(name.clone(), shell_probs);
+            }
+        }
+        result
+    }
+
+    /// Shell binding energy (keV) for a given element and shell index.
+    /// Mirrors Java MC.getShellBindingEnergy().
+    /// Shell indices: 0=K, 1=L1, 2=L2, 3=L3, 4=M1, 5=M2, 6=M3, 7=M4, 8=M5
+    pub fn calc_shell_binding_energy(&self, element: &str, shell: usize) -> f64 {
+        let db = ElementDatabase::instance();
+        if let Some(e) = db.get(element) {
+            match shell {
+                0 => e.k_edge().unwrap_or(0.0),
+                1 => e.l1_edge().unwrap_or(0.0),
+                2 => e.l2_edge().unwrap_or(0.0),
+                3 => e.l3_edge().unwrap_or(0.0),
+                4 => e.m1_edge(),
+                5 => e.m2_edge().unwrap_or(0.0),
+                6 => e.m3_edge().unwrap_or(0.0),
+                7 => e.m4_edge().unwrap_or(0.0),
+                8 => e.m5_edge().unwrap_or(0.0),
+                _ => 0.0,
+            }
+        } else {
+            0.0
+        }
+    }
+
     // ── MC electron transport: stopping power, elastic MFPL, elastic probs ───
 
     /// Bethe stopping power (keV/nm) including Joy-Luo correction and radiative
@@ -1039,8 +1307,7 @@ impl CoefCalcCompute {
 
             // Langmore & Smith formula (nm²/atom)
             let mut elastic_xs = if beta_sq > 0.0 {
-                (1.4e-6 * z.powf(1.5) / beta_sq)
-                    * (1.0 - (0.26 * z) / (137.0 * beta_sq.sqrt()))
+                (1.4e-6 * z.powf(1.5) / beta_sq) * (1.0 - (0.26 * z) / (137.0 * beta_sq.sqrt()))
             } else {
                 0.0
             };
@@ -1108,7 +1375,10 @@ impl CoefCalcCompute {
     /// `calc_electron_elastic_mfpl()` which populates the side-effect state.
     pub fn elastic_probs_calc(&self, surrounding: bool) -> HashMap<String, f64> {
         let (xs_map, xs_tot) = if surrounding {
-            (&self.elastic_x_sections_surrounding, self.elastic_x_section_tot_surrounding)
+            (
+                &self.elastic_x_sections_surrounding,
+                self.elastic_x_section_tot_surrounding,
+            )
         } else {
             (&self.elastic_x_sections, self.elastic_x_section_tot)
         };

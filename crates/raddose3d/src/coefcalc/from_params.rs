@@ -236,6 +236,26 @@ impl super::CoefCalc for CoefCalcFromParams {
     fn elastic_probs(&self, cryo: bool) -> std::collections::HashMap<String, f64> {
         self.compute.elastic_probs_calc(cryo)
     }
+
+    fn photo_electric_probs_element(&self, energy: f64) -> std::collections::HashMap<String, f64> {
+        self.compute.calc_photo_electric_probs_element(energy)
+    }
+
+    fn compton_probs_element(&self, energy: f64) -> std::collections::HashMap<String, f64> {
+        self.compute.calc_compton_probs_element(energy)
+    }
+
+    fn relative_shell_probs(
+        &self,
+        energy: f64,
+        cryo: bool,
+    ) -> std::collections::HashMap<String, Vec<f64>> {
+        self.compute.calc_relative_shell_probs(energy, cryo)
+    }
+
+    fn shell_binding_energy(&self, element: &str, shell: usize) -> f64 {
+        self.compute.calc_shell_binding_energy(element, shell)
+    }
 }
 
 #[cfg(test)]

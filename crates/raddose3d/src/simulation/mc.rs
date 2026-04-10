@@ -580,18 +580,43 @@ impl MonteCarloSimulation {
 
     // ── Starting Z for photon injection ─────────────────────────────────────
 
-    fn get_starting_z(&mut self, angle: f64, _wedge: &Wedge, xy: &[f64; 3], front: bool) -> f64 {
-        // Bisect along z to find the surface of the crystal.
-        let sign = if front { -1.0 } else { 1.0 };
-        let mut z = sign * (self.z_dimension / 2.0 + 50.0);
-        let step = -sign * 1.0; // nm
-        for _ in 0..5000 {
-            if self.is_microcrystal_at(xy[0] * 1000.0, xy[1] * 1000.0, z, angle, _wedge) {
-                return z;
+    fn get_starting_z(&mut self, _angle: f64, _wedge: &Wedge, xy: &[f64; 3], front: bool) -> f64 {
+        // Ray-trace from (x_um, y_um, 0) in +z direction through the rotated crystal,
+        // matching Java's MC.getStartingZ ray-tracing approach.
+        // xy is in µm; returns z in nm.
+        self.calculate_normals(true);
+        let normals = self.rotated_normals.as_ref().unwrap().clone();
+        let dists = self.rotated_origin_distances.as_ref().unwrap().clone();
+        let tris = self.expanded_rotated_vertices.clone();
+
+        let x = xy[0]; // µm
+        let y = xy[1]; // µm
+
+        let mut ts: Vec<f64> = Vec::new();
+        for (i, tri) in tris.iter().enumerate() {
+            let n = normals[i];
+            let d = dists[i];
+            let denom = n[2]; // ray direction is (0,0,1)
+            if denom.abs() < 1e-12 {
+                continue;
             }
-            z += step;
+            let t = -(n[0] * x + n[1] * y + d) / denom;
+            let hit = [x, y, t];
+            if Self::point_in_triangle_2d(&hit, &tri[0], &tri[1], &tri[2]) {
+                ts.push(t);
+            }
         }
-        0.0
+
+        if ts.is_empty() {
+            return 0.0;
+        }
+        ts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Deduplicate near-equal t values (shared triangle edges)
+        ts.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+
+        let idx = if front { 0 } else { ts.len().saturating_sub(1) };
+        ts.get(idx).copied().unwrap_or(0.0) * 1000.0 // µm → nm
     }
 
     fn get_starting_z_surrounding(&mut self, _angle: f64, _wedge: &Wedge, xy: &[f64; 3]) -> f64 {
@@ -1155,7 +1180,11 @@ impl MonteCarloSimulation {
 
     fn get_ionised_element(element_probs: &HashMap<String, f64>) -> Option<String> {
         let rnd: f64 = rand::random();
-        for (name, &p) in element_probs {
+        // Sort by cumulative probability (ascending) so the sample is correct
+        // regardless of HashMap iteration order.
+        let mut sorted: Vec<(&String, f64)> = element_probs.iter().map(|(k, &v)| (k, v)).collect();
+        sorted.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        for (name, p) in sorted {
             if p > rnd {
                 return Some(name.clone());
             }
@@ -2470,6 +2499,11 @@ impl MonteCarloSimulation {
             println!(
                 "RADDOSE-GOS average dose exposed region (ADER): {:.3}",
                 vde_mgy
+            );
+        } else {
+            println!(
+                "Monte Carlo average dose whole crystal (ADWC): {:.3}",
+                self.dose
             );
         }
 
