@@ -394,6 +394,11 @@ def _generate(
         if cost > eff * 2:
             mutated = mutate_text(seed_text, mutation_rate=0.05, rng=rng)
             cost = _estimate_cost_from_text(mutated)
+        # If structural validation fails (mutation deleted required keywords),
+        # fall back to a lightly-mutated seed so we don't waste a harness run.
+        if not _is_structurally_valid(mutated):
+            mutated = mutate_text(seed_text, mutation_rate=0.02, rng=rng)
+            cost = _estimate_cost_from_text(mutated)
         return "mutate", mutated, cost
 
 
@@ -528,15 +533,59 @@ def _save_input(
 
 
 def _load_seeds() -> list[str]:
-    """Load all .txt files from corpus/seeds/."""
+    """Load all .txt files from corpus/seeds/, normalizing any stale absolute paths."""
+    from generate import FIXTURES_DIR
     seeds = []
     if SEEDS_DIR.exists():
         for p in sorted(SEEDS_DIR.glob("*.txt")):
             try:
-                seeds.append(p.read_text())
+                text = p.read_text()
+                # Replace any old absolute fixtures paths (e.g. from a different machine)
+                # with the current FIXTURES_DIR so ModelFile/SeqFile/CIF paths work.
+                text = re.sub(
+                    r'(?<!\w)/[^\s]*/tests/fixtures/',
+                    str(FIXTURES_DIR) + '/',
+                    text,
+                )
+                seeds.append(text)
             except Exception:
                 pass
     return seeds
+
+
+def _is_structurally_valid(text: str) -> bool:
+    """
+    Lightweight pre-validation: check that mutated text still has the minimum
+    structural keywords required by both implementations.  Avoids running the
+    full dual-harness on inputs that are guaranteed to crash both programs.
+    """
+    lower = text.lower()
+    # Must start with a Crystal block
+    if 'crystal' not in lower:
+        return False
+    # Must have at least one Beam block header (not just beam-related fields)
+    if not re.search(r'^\s*beam\s*$', text, re.IGNORECASE | re.MULTILINE):
+        return False
+    # Must have at least one Wedge line
+    if not re.search(r'^\s*wedge\b', text, re.IGNORECASE | re.MULTILINE):
+        return False
+    # Gaussian beams must have FWHM
+    in_gaussian = False
+    has_fwhm = False
+    for line in text.splitlines():
+        s = line.strip().lower()
+        if s == 'beam':
+            in_gaussian = False
+            has_fwhm = False
+        elif s.startswith('type gaussian'):
+            in_gaussian = True
+        elif s.startswith('fwhm'):
+            has_fwhm = True
+        elif s == '' and in_gaussian and not has_fwhm:
+            return False  # blank line ended the block without FWHM
+    if in_gaussian and not has_fwhm:
+        return False
+    return True
 
 
 if __name__ == "__main__":
