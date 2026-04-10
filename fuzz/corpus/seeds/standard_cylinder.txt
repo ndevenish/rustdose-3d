@@ -3,7 +3,7 @@ Type Cylinder
 Dimensions 1700 1000
 PixelsPerMicron 0.01
 AbsCoefCalc SAXSseq
-SeqFile /workspace/raddose3d/tests/fixtures/rcsb_pdb_4OR0.fasta
+SeqFile /home/nickd/raddose-3d/raddose3d/tests/fixtures/rcsb_pdb_4OR0.fasta
 ProteinConc 2
 ContainerMaterialType elemental
 MaterialElements Si 1 O 2
