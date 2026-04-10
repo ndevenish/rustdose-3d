@@ -17,9 +17,9 @@ subset that covers the most regions.
 
 Usage
 -----
-    # Build instrumented binary (once, outputs to target/coverage/ separate from release)
+    # Build instrumented binary (once)
     cd /path/to/raddose3d
-    ./build-coverage.sh
+    RUSTFLAGS="-C instrument-coverage" cargo build --release
 
     # Run coverage analysis on a corpus directory
     cd /path/to/fuzz
@@ -49,7 +49,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).parent.parent
-DEFAULT_RUST_BIN = REPO_ROOT / "raddose3d" / "target" / "coverage" / "release" / "raddose3d"
+DEFAULT_RUST_BIN = REPO_ROOT / "raddose3d" / "target" / "release" / "raddose3d"
 DEFAULT_TIMEOUT = 0.0  # seconds per input; 0 = no timeout
 
 
