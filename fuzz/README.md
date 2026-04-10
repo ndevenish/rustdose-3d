@@ -178,6 +178,95 @@ with tempfile.TemporaryDirectory() as tmp:
     print('Rust exit:', rust_r.exit_code, 'stderr:', rust_r.stderr[:200])
 ```
 
+## Coverage-driven corpus distillation (`coverage.py`)
+
+Finds the smallest subset of inputs that together maximise Rust source-level
+code coverage. Run this as a post-processing step after collecting a pool of
+inputs with the fuzzer.
+
+### Setup
+
+Build the Rust binary with coverage instrumentation (once, separate from the
+normal release binary):
+
+```bash
+cd raddose3d
+RUSTFLAGS="-C instrument-coverage" cargo build --release
+```
+
+Install the LLVM tools if not already present:
+
+```bash
+rustup component add llvm-tools-preview
+```
+
+### Usage
+
+```bash
+# Analyse an entire corpus directory (recursively finds all .txt files)
+uv run python coverage.py corpus/
+
+# Analyse specific subdirectories or files
+uv run python coverage.py corpus/seeds/ corpus/diffs/
+
+# Copy the selected subset to a new directory and write a JSON report
+uv run python coverage.py corpus/ --out-dir corpus/coverage-selected/ --report coverage.json
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--rust-bin` | `../raddose3d/target/release/raddose3d` | Path to the **instrumented** binary |
+| `--timeout` | `0` (none) | Per-input timeout in seconds. **Leave at 0**: LLVM only writes coverage data on a clean process exit, so killed processes produce no data. Only set a timeout if you have genuinely unbounded inputs. |
+| `--out-dir` | — | Copy selected inputs here (numbered by selection order) |
+| `--report` | — | Write a JSON report with per-file line/region coverage |
+| `--keep-profraws` | off | Retain raw `.profraw` files for debugging |
+| `--workers`, `-j` | 1 | Parallel workers. Each uses an isolated profraw file. |
+
+### Algorithm
+
+For each input, the script runs the instrumented binary with `LLVM_PROFILE_FILE`
+set to capture a `.profraw` file, then calls `llvm-cov export` to extract the
+set of covered source regions (skipping registry crates and compiler internals).
+A greedy set-cover pass then selects inputs in order of marginal coverage gain
+until no new regions can be added.
+
+### Output
+
+Progress is printed per input, followed by a set-cover summary:
+
+```
+Phase 1: collecting coverage (1 worker(s), timeout=0.0s each)
+------------------------------------------------------------
+[   1/15] OK  10.0s  standard_cuboid.txt
+[   2/15] OK   0.4s  ddm_bfactor.txt
+...
+
+Phase 2: greedy set-cover
+------------------------------------------------------------
+Total regions reachable across all inputs: 6,761
+Inputs with usable coverage:               12
+Selected by greedy set-cover:              9 input(s)
+Regions covered by selection:              6,761 (100.0%)
+
+Selected inputs (in selection order):
+    1.  + 4,512 regions  corpus/seeds/standard_cylinder.txt
+    2.  + 1,300 regions  corpus/seeds/microed_basic.txt
+    ...
+```
+
+The JSON report (if requested) includes per-file line and region coverage
+percentages from the merged profile of all selected inputs.
+
+### Typical workflow
+
+```bash
+# 1. Collect a large pool of inputs (saves every input, not just failures)
+uv run python fuzz.py -n 500 --save-all --workers 8
+
+# 2. Run coverage distillation on the collected pool
+uv run python coverage.py corpus/ --out-dir corpus/coverage-selected/ --report coverage.json
+```
+
 ## Files
 
 | File | Purpose |
@@ -187,6 +276,7 @@ with tempfile.TemporaryDirectory() as tmp:
 | `harness.py` | Launches both binaries in parallel, collects `RunResult` |
 | `compare.py` | Parses `Summary.csv`, returns classified `Comparison` |
 | `fuzz.py` | CLI entry point, `ThreadPoolExecutor` loop, corpus saving |
+| `coverage.py` | Offline coverage-driven corpus distillation |
 | `test_differential.py` | Hypothesis-based pytest tests |
 | `corpus/seeds/` | Seed inputs (copied from `raddose3d/tests/fixtures/*.txt`) |
 | `results/` | Per-run `.jsonl` logs and `_stats.json` summaries |

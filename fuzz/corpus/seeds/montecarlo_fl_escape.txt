@@ -1,6 +1,6 @@
 Crystal
 Type Cuboid
-Dimensions 100 100 100
+Dimensions 10 10 10
 PixelsPerMicron 0.5
 AbsCoefCalc RD3D
 UnitCell 78.0 78.0 78.0
@@ -8,14 +8,15 @@ NumMonomers 24
 NumResidues 51
 Subprogram MONTECARLO
 Runs 1
+SimElectrons 1000
 CalculateFLEscape TRUE
 
 Beam
 Type Gaussian
 Flux 2e12
-FWHM 100 100
+FWHM 10 10
 Energy 12.1
-Collimation Rectangular 100 100
+Collimation Rectangular 10 10
 
 Wedge 0 90
 ExposureTime 10
