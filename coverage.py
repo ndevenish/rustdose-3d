@@ -149,7 +149,7 @@ def run_instrumented(
 
     with tempfile.TemporaryDirectory(prefix="raddose_cov_") as tmp:
         if patched_text is not None:
-            actual_input = Path(tmp) / "input.txt"
+            actual_input = Path(tmp) / input_path.name
             actual_input.write_text(patched_text)
         else:
             actual_input = input_path.resolve()
