@@ -11,7 +11,7 @@ from hypothesis import strategies as st
 from generate import (
     BeamConfig, WedgeConfig, Config, estimate_cost, DEFAULT_BUDGET,
     FIXTURES_DIR, INSULIN_BASE_COST, MC_COST_PER_ELECTRON, XFEL_PER_VOXEL_PER_SECOND,
-    _pe_cost_factor, GrammarGenerator,
+    _pe_cost_factor, GrammarGenerator, raw_voxel_count, VOXEL_MEMORY_LIMIT,
     SMALL_MOLE_ELEMENT_POOL, HEAVY_PROTEIN_ELEMENT_POOL, SOLVENT_HEAVY_ELEMENT_POOL,
 )
 
@@ -278,7 +278,8 @@ def raddose_config(draw, budget: float = DEFAULT_BUDGET) -> Config:
         _gen = GrammarGenerator(budget=budget)
         cfg = _gen._boundary_perturb(cfg)
 
-    # ---- Enforce budget ----
+    # ---- Enforce budget and memory limit ----
     assume(estimate_cost(cfg) <= budget)
+    assume(raw_voxel_count(cfg) <= VOXEL_MEMORY_LIMIT)
 
     return cfg

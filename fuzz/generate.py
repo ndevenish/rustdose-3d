@@ -197,6 +197,26 @@ def _pe_cost_factor(escape_active: bool) -> float:
 # Cost estimation
 # ---------------------------------------------------------------------------
 
+# Uncapped voxel count above which Rust will OOM before the 1M cap takes effect.
+# Rust allocates the full array before downsizing; ~50M gives ~400 MB headroom.
+VOXEL_MEMORY_LIMIT = 50_000_000
+
+
+def raw_voxel_count(cfg: Config) -> float:
+    """Uncapped voxel count — used to guard against Rust OOM before the 1M cap applies."""
+    ppm3 = cfg.pixels_per_micron ** 3
+    if cfg.crystal_type == "Cuboid":
+        return cfg.dim_x * cfg.dim_y * cfg.dim_z * ppm3
+    elif cfg.crystal_type == "Cylinder":
+        r = cfg.dim_y / 2.0
+        return math.pi * r * r * cfg.dim_x * ppm3
+    elif cfg.crystal_type == "Spherical":
+        r = cfg.dim_x / 2.0
+        return (4.0 / 3.0) * math.pi * r * r * r * ppm3
+    else:  # Polyhedron
+        return cfg.dim_x * cfg.dim_y * cfg.dim_z * ppm3
+
+
 def estimate_cost(cfg: Config) -> float:
     """Return cost relative to insulin_test.txt (≈ 1.0)."""
     ppm3 = cfg.pixels_per_micron ** 3
@@ -323,9 +343,7 @@ def render(cfg: Config) -> str:
         lines.append("Beam")
         lines.append(f"Type {beam.beam_type}")
         lines.append(f"Energy {beam.energy}")
-
-        if cfg.subprogram != "EMSP":
-            lines.append(f"Flux {beam.flux:.3e}")
+        lines.append(f"Flux {beam.flux:.3e}")
 
         if beam.beam_type == "Gaussian":
             lines.append(f"FWHM {beam.fwhm_x} {beam.fwhm_y}")
@@ -389,7 +407,8 @@ class GrammarGenerator:
                 cfg = self._boundary_perturb(cfg)
             if self._flip(0.2):
                 cfg = self._structural_mutate(cfg)
-            if estimate_cost(cfg) <= self.budget:
+            if (estimate_cost(cfg) <= self.budget
+                    and raw_voxel_count(cfg) <= VOXEL_MEMORY_LIMIT):
                 return cfg
         return self._minimal_fallback()
 
