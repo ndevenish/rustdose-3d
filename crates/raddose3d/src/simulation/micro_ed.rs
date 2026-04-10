@@ -521,7 +521,7 @@ impl MicroEdSimulation {
     /// Compute the Continuous-Slowing-Down Approximation (CSDA) range in nm.
     ///
     /// Mirrors Java `getCSDArange(CoefCalc, Beam)`.
-    pub fn get_csda_range(&self, coef_calc: &dyn CoefCalc, beam: &dyn Beam) -> f64 {
+    pub fn get_csda_range(&self, coef_calc: &mut dyn CoefCalc, beam: &dyn Beam) -> f64 {
         let mut en = beam.photon_energy(); // keV
         let divisions = 100;
         let energy_step = en / divisions as f64;
@@ -548,7 +548,7 @@ impl MicroEdSimulation {
         &mut self,
         beam: &dyn Beam,
         _wedge: &Wedge,
-        coef_calc: &dyn CoefCalc,
+        coef_calc: &mut dyn CoefCalc,
     ) -> Vec<f64> {
         let exposure = beam.exposure(); // e/Å²
         let exposed_area = self.exposed_area(beam); // µm²
@@ -609,7 +609,7 @@ impl MicroEdSimulation {
         &mut self,
         beam: &dyn Beam,
         _wedge: &Wedge,
-        _coef_calc: &dyn CoefCalc,
+        _coef_calc: &mut dyn CoefCalc,
     ) -> f64 {
         let exposure = beam.exposure(); // e/Å²
         let beam_energy = beam.photon_energy(); // keV
@@ -636,7 +636,7 @@ impl MicroEdSimulation {
         &mut self,
         beam: &dyn Beam,
         _wedge: &Wedge,
-        coef_calc: &dyn CoefCalc,
+        coef_calc: &mut dyn CoefCalc,
         _use_inel_equ: bool,
     ) -> f64 {
         let exposure = beam.exposure();
@@ -692,7 +692,7 @@ impl MicroEdSimulation {
         &mut self,
         beam: &dyn Beam,
         _wedge: &Wedge,
-        coef_calc: &dyn CoefCalc,
+        coef_calc: &mut dyn CoefCalc,
     ) -> f64 {
         let exposure = beam.exposure();
         let exposed_area = self.exposed_area(beam);
@@ -757,7 +757,7 @@ impl MicroEdSimulation {
         &mut self,
         beam: &dyn Beam,
         _wedge: &Wedge,
-        coef_calc: &dyn CoefCalc,
+        coef_calc: &mut dyn CoefCalc,
     ) -> f64 {
         let avg_energy = beam.photon_energy();
         let exposure = beam.exposure();
@@ -1197,7 +1197,7 @@ impl MicroEdSimulation {
     /// Mirrors Java `getInfoCoef(CoefCalc, double, double, double, double)`.
     fn get_info_coef(
         &self,
-        coef_calc: &dyn CoefCalc,
+        coef_calc: &mut dyn CoefCalc,
         test_energy: f64,
         electron_number: f64,
         exposed_mass: f64,

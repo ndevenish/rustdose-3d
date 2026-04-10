@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::element::{CrossSection, ElementDatabase};
+use crate::constants::KEV_TO_JOULES;
+use crate::element::{CrossSection, ElementDatabase, ElementDatabaseEM};
 
 /// Constants for amino acid/nucleotide/carbohydrate composition.
 pub const PROTEIN_DENSITY: f64 = 1.35;
@@ -90,6 +91,17 @@ pub struct CoefCalcCompute {
 
     /// Number of simulated photons/electrons for MC/XFEL (0 = use default 1,000,000).
     pub num_simulated_electrons: u64,
+
+    /// Molecular weight of the cryo-surrounding (sum of cryo occurrence × atomic weight).
+    pub molecular_weight_surrounding: f64,
+
+    /// Per-element elastic cross-section × number density (nm⁻¹), last computed for crystal.
+    pub elastic_x_sections: HashMap<String, f64>,
+    /// Sum of all per-element elastic cross-section × number density (nm⁻¹), crystal.
+    pub elastic_x_section_tot: f64,
+    /// Same as above but for surrounding/cryo.
+    pub elastic_x_sections_surrounding: HashMap<String, f64>,
+    pub elastic_x_section_tot_surrounding: f64,
 }
 
 impl Default for CoefCalcCompute {
@@ -129,6 +141,11 @@ impl CoefCalcCompute {
             present_elements: HashSet::new(),
             cryo_elements: HashSet::new(),
             num_simulated_electrons: 0,
+            molecular_weight_surrounding: 0.0,
+            elastic_x_sections: HashMap::new(),
+            elastic_x_section_tot: 0.0,
+            elastic_x_sections_surrounding: HashMap::new(),
+            elastic_x_section_tot_surrounding: 0.0,
         }
     }
 
@@ -498,11 +515,13 @@ impl CoefCalcCompute {
     pub fn calculate_cryo_density(&mut self) {
         let db = ElementDatabase::instance();
         let mut mass = 0.0;
+        self.molecular_weight_surrounding = 0.0;
 
-        for name in &self.cryo_elements {
+        for name in &self.cryo_elements.clone() {
             if let Some(e) = db.get(name) {
                 let occ = self.cryo_occurrence.get(name).copied().unwrap_or(0.0);
                 mass += occ * e.atomic_weight_in_grams();
+                self.molecular_weight_surrounding += occ * e.atomic_weight();
             }
         }
 
@@ -861,5 +880,249 @@ impl CoefCalcCompute {
         }
 
         factors
+    }
+
+    // ── MC electron transport: stopping power, elastic MFPL, elastic probs ───
+
+    /// Bethe stopping power (keV/nm) including Joy-Luo correction and radiative
+    /// component.  Matches Java `CoefCalcCompute.calcStoppingPower()`.
+    pub fn calc_stopping_power(&self, energy_kev: f64, surrounding: bool) -> f64 {
+        const M_E: f64 = 9.109_383_56e-31; // electron mass (kg)
+        const C: f64 = 299_792_458.0; // speed of light (m/s)
+        const C2: f64 = C * C;
+
+        let db = ElementDatabase::instance();
+        let (elements, density, mol_weight) = if surrounding {
+            (
+                &self.cryo_elements,
+                self.cryo_density,
+                self.molecular_weight_surrounding,
+            )
+        } else {
+            (
+                &self.present_elements,
+                self.crystal_density,
+                self.molecular_weight,
+            )
+        };
+
+        if mol_weight <= 0.0 || density <= 0.0 {
+            return 0.0;
+        }
+
+        let v0 = energy_kev * KEV_TO_JOULES;
+        let beta_sq = 1.0 - (M_E * C2 / (v0 + M_E * C2)).powi(2);
+        if beta_sq <= 0.0 {
+            return 0.0;
+        }
+        let gamma = 1.0 / (1.0 - beta_sq).sqrt();
+        let ke = (gamma - 1.0) * M_E * C2;
+        let ke_mev = (ke / KEV_TO_JOULES) / 1000.0;
+
+        let mut sum_z: f64 = 0.0;
+        let mut sum_a: f64 = 0.0;
+        let mut mean_ln_i: f64 = 0.0;
+        let mut mean_z: f64 = 0.0;
+
+        for name in elements {
+            let e = match db.get(name) {
+                Some(e) => e,
+                None => continue,
+            };
+            let a = e.atomic_weight();
+            let z = e.atomic_number() as f64;
+            let num_atoms = if surrounding {
+                self.cryo_occurrence.get(name).copied().unwrap_or(0.0)
+            } else {
+                self.total_atoms(name)
+            };
+
+            let mol_weight_fraction = (num_atoms * a) / mol_weight;
+            sum_z += z * num_atoms;
+            sum_a += a * num_atoms;
+            mean_z += mol_weight_fraction * z;
+
+            // Mean excitation energy with condensed-phase correction
+            let mut j = e.mean_ionisation_potential(); // eV
+            let zi = e.atomic_number();
+            if zi != 1 && zi != 6 && zi != 7 && zi != 8 && zi != 9 && zi != 17 {
+                j *= 1.13; // gas → solid/liquid phase
+            }
+            // Joy-Luo low-energy correction
+            let k = 0.7344 * z.powf(0.0367);
+            let j_star = j / (1.0 + k * (j / (energy_kev * 1000.0)));
+
+            mean_ln_i += mol_weight_fraction * (z / a) * j_star.ln();
+        }
+
+        if sum_a <= 0.0 || sum_z <= 0.0 {
+            return 0.0;
+        }
+
+        let z_over_a = sum_z / sum_a;
+        mean_ln_i /= z_over_a;
+        let mean_i = mean_ln_i.exp(); // eV
+
+        // Joy-Luo correction on mean I
+        let mean_j = mean_i / (1.0 + 0.85 * mean_i / (energy_kev * 1000.0));
+        let mean_j_joules = (mean_j / 1000.0) * KEV_TO_JOULES;
+
+        let energy_joules = energy_kev * KEV_TO_JOULES;
+        let delta = 0.1832;
+
+        // Modified Bethe formula (Fbeta)
+        let f_beta = ((M_E * C2 * energy_joules * beta_sq) / (2.0 * (1.0 - beta_sq))).ln()
+            - (2.0 * (1.0 - beta_sq).sqrt() - 1.0 + beta_sq) * 2.0_f64.ln()
+            + 1.0
+            - beta_sq
+            + (1.0 / 8.0) * (1.0 - (1.0 - beta_sq).sqrt());
+
+        let mut stopping_power =
+            (0.153536 / beta_sq) * z_over_a * (f_beta - 2.0 * mean_j_joules.ln() - delta);
+        stopping_power = stopping_power * 1000.0 * density / 1e7;
+
+        // Radiative stopping power
+        let radiative = (ke_mev * mean_z / 800.0) * stopping_power;
+        stopping_power += radiative;
+
+        stopping_power // keV/nm
+    }
+
+    /// Compute per-element elastic cross-section contributions and MFPL.
+    /// Matches Java `getElectronElasticCrossSection()` + `getElectronElasticMFPL()`.
+    ///
+    /// As a side effect, populates `elastic_x_sections`/`elastic_x_section_tot`
+    /// (or their `_surrounding` variants) which are later read by `elastic_probs_calc()`.
+    ///
+    /// Returns the elastic mean free path length in nm.
+    pub fn calc_electron_elastic_mfpl(&mut self, electron_energy: f64, surrounding: bool) -> f64 {
+        let db = ElementDatabase::instance();
+        let db_em = ElementDatabaseEM::instance();
+
+        let (elements, density, mol_weight) = if surrounding {
+            (
+                self.cryo_elements.clone(),
+                self.cryo_density,
+                self.molecular_weight_surrounding,
+            )
+        } else {
+            (
+                self.present_elements.clone(),
+                self.crystal_density,
+                self.molecular_weight,
+            )
+        };
+
+        if mol_weight <= 0.0 {
+            return 0.0;
+        }
+
+        const M_E: f64 = 9.109_383_56e-31;
+        const C2: f64 = 299_792_458.0 * 299_792_458.0;
+
+        let v0 = electron_energy * KEV_TO_JOULES;
+        let beta_sq = 1.0 - (M_E * C2 / (v0 + M_E * C2)).powi(2);
+
+        let mut part_lambda = 0.0;
+        let mut x_section_tot_per_element = 0.0;
+        let mut x_sections: HashMap<String, f64> = HashMap::new();
+
+        let cell_vol_nm3 = self.cell_volume / 1000.0; // Å³ → nm³
+
+        for name in &elements {
+            let e_xray = match db.get(name) {
+                Some(e) => e,
+                None => continue,
+            };
+            let z = e_xray.atomic_number() as f64;
+            let a = e_xray.atomic_weight();
+
+            // Langmore & Smith formula (nm²/atom)
+            let mut elastic_xs = if beta_sq > 0.0 {
+                (1.4e-6 * z.powf(1.5) / beta_sq)
+                    * (1.0 - (0.26 * z) / (137.0 * beta_sq.sqrt()))
+            } else {
+                0.0
+            };
+
+            // mol weight fraction and number density (atoms/nm³)
+            let (mol_weight_fraction, n_per_vol) = if surrounding {
+                let occ = self.cryo_occurrence.get(name).copied().unwrap_or(0.0);
+                (
+                    (occ * a) / mol_weight,
+                    if cell_vol_nm3 > 0.0 {
+                        occ / cell_vol_nm3
+                    } else {
+                        0.0
+                    },
+                )
+            } else {
+                let occ = self.total_atoms(name);
+                (
+                    (occ * a) / mol_weight,
+                    if cell_vol_nm3 > 0.0 {
+                        occ / cell_vol_nm3
+                    } else {
+                        0.0
+                    },
+                )
+            };
+
+            // Override with ELSEPA tabulated value when available (0.05–300 keV)
+            if (0.05..=300.0).contains(&electron_energy) {
+                if let Some(e_em) = db_em.get(name) {
+                    let xs = e_em.elastic_coefficient(electron_energy);
+                    if xs > 0.0 {
+                        elastic_xs = xs;
+                    }
+                }
+            }
+
+            let xs_n = elastic_xs * n_per_vol; // nm⁻¹
+            x_section_tot_per_element += xs_n;
+            x_sections.insert(name.clone(), xs_n);
+
+            part_lambda += (mol_weight_fraction * elastic_xs) / a;
+        }
+
+        // Store side-effect state
+        if surrounding {
+            self.elastic_x_sections_surrounding = x_sections;
+            self.elastic_x_section_tot_surrounding = x_section_tot_per_element;
+        } else {
+            self.elastic_x_sections = x_sections;
+            self.elastic_x_section_tot = x_section_tot_per_element;
+        }
+
+        // MFPL = 1 / (N_A × (density/1e21) × partLambda)
+        let denom = AVOGADRO_NUM * (density / 1e21) * part_lambda;
+        if denom > 0.0 {
+            1.0 / denom
+        } else {
+            0.0
+        }
+    }
+
+    /// Cumulative elastic scattering probabilities per element.
+    /// Matches Java `getElasticProbs()`.  Must be called after
+    /// `calc_electron_elastic_mfpl()` which populates the side-effect state.
+    pub fn elastic_probs_calc(&self, surrounding: bool) -> HashMap<String, f64> {
+        let (xs_map, xs_tot) = if surrounding {
+            (&self.elastic_x_sections_surrounding, self.elastic_x_section_tot_surrounding)
+        } else {
+            (&self.elastic_x_sections, self.elastic_x_section_tot)
+        };
+
+        let mut probs = HashMap::new();
+        if xs_tot <= 0.0 {
+            return probs;
+        }
+
+        let mut running_sum = 0.0;
+        for (name, &xs) in xs_map {
+            running_sum += xs / xs_tot;
+            probs.insert(name.clone(), running_sum);
+        }
+        probs
     }
 }

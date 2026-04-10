@@ -136,7 +136,9 @@ pub trait CoefCalc: std::fmt::Debug + Send + Sync {
     fn populate_cross_section_coefficients(&mut self) {}
 
     /// Electron elastic mean free path (nm).
-    fn electron_elastic_mfpl(&self, _energy: f64, _cryo: bool) -> f64 {
+    /// Takes `&mut self` because it populates per-element cross-section state
+    /// as a side effect (read by `elastic_probs()`).
+    fn electron_elastic_mfpl(&mut self, _energy: f64, _cryo: bool) -> f64 {
         0.0
     }
 

@@ -165,7 +165,7 @@ fn phase6_microed_optimal_voltage_matches_java() {
         num_residues: Some(51),
         ..Default::default()
     };
-    let coef_calc = CoefCalcMicroED::from_config(&config).expect("CoefCalcMicroED");
+    let mut coef_calc = CoefCalcMicroED::from_config(&config).expect("CoefCalcMicroED");
 
     // Gaussian beam: 300 keV, 2×2 µm FWHM, 1e6 ph/s, 60s exposure
     let beam_config = raddose3d::parser::config::BeamConfig {
@@ -189,14 +189,14 @@ fn phase6_microed_optimal_voltage_matches_java() {
     });
 
     // get_optimal_energy: Java reference = 1990 kV
-    let opt_v = micro_ed.get_optimal_energy(&beam, &wedge, &coef_calc);
+    let opt_v = micro_ed.get_optimal_energy(&beam, &wedge, &mut coef_calc);
     assert!(
         (opt_v - 1990.0).abs() < 5.0,
         "Optimal voltage: expected ~1990 kV (Java), got {opt_v:.0} kV"
     );
 
     // get_optimal_thickness: Java reference = 1995 nm
-    let opt_t = micro_ed.get_optimal_thickness(&beam, &wedge, &coef_calc);
+    let opt_t = micro_ed.get_optimal_thickness(&beam, &wedge, &mut coef_calc);
     assert!(
         (opt_t - 1995.0).abs() < 10.0,
         "Optimal thickness: expected ~1995 nm (Java), got {opt_t:.0} nm"

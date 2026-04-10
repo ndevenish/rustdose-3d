@@ -224,6 +224,18 @@ impl super::CoefCalc for CoefCalcFromParams {
     fn number_simulated_electrons(&self) -> u64 {
         self.compute.num_simulated_electrons
     }
+
+    fn stopping_power(&self, energy: f64, cryo: bool) -> f64 {
+        self.compute.calc_stopping_power(energy, cryo)
+    }
+
+    fn electron_elastic_mfpl(&mut self, energy: f64, cryo: bool) -> f64 {
+        self.compute.calc_electron_elastic_mfpl(energy, cryo)
+    }
+
+    fn elastic_probs(&self, cryo: bool) -> std::collections::HashMap<String, f64> {
+        self.compute.elastic_probs_calc(cryo)
+    }
 }
 
 #[cfg(test)]
