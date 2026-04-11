@@ -6,6 +6,7 @@ pub mod ddm;
 pub mod element;
 pub mod energy_distribution;
 pub mod experiment;
+pub(crate) mod nist_tables;
 pub mod output;
 pub mod residue;
 pub mod simulation;

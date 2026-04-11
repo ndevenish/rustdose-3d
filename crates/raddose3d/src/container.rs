@@ -1,4 +1,5 @@
 use crate::element::ElementDatabase;
+use crate::nist_tables;
 
 /// Conversion factor: microns to centimeters.
 const MICRONS_TO_CM: f64 = 1e-4;
@@ -18,89 +19,27 @@ pub trait Container: std::fmt::Debug + Send + Sync {
     fn info(&self) -> String;
 }
 
-/// Fetch mass attenuation coefficient (µ/ρ in cm²/g) for a single element
-/// from the NIST X-Ray Mass Attenuation Coefficients database.
-///
-/// Downloads the table from NIST, parses the energy vs µ/ρ data, and
-/// linearly interpolates to the requested beam energy.
-///
-/// Returns None if the download or parsing fails.
-/// Not available on wasm32 (no blocking HTTP).
-#[cfg(not(target_arch = "wasm32"))]
-fn fetch_nist_mass_attenuation(atomic_number: i32, beam_energy_kev: f64) -> Option<f64> {
-    let url = format!(
-        "https://physics.nist.gov/PhysRefData/XrayMassCoef/ElemTab/z{:02}.html",
-        atomic_number
-    );
-
-    let body = ureq::get(&url)
-        .call()
-        .ok()?
-        .body_mut()
-        .read_to_string()
-        .ok()?;
-
-    // Parse data between <PRE> and </PRE> tags, matching lines with scientific notation
-    let mut in_pre = false;
+/// Linearly interpolate µ/ρ from a sorted (energy_MeV, mu_rho) table
+/// for the given beam energy in keV.  Returns None if the table is empty.
+fn interpolate_mu_rho(table: &[(f64, f64)], beam_energy_kev: f64) -> Option<f64> {
+    if table.is_empty() {
+        return None;
+    }
     let mut prev_energy_kev = 0.0_f64;
     let mut prev_mu_rho = 0.0_f64;
-
-    for line in body.lines() {
-        if line.contains("<PRE>") {
-            in_pre = true;
-            continue;
-        }
-        if line.contains("</PRE>") {
-            in_pre = false;
-            continue;
-        }
-
-        if !in_pre {
-            continue;
-        }
-
-        // Look for lines containing scientific notation (digits, E, +/-)
-        if !line.contains('E') {
-            continue;
-        }
-
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        // Find the first column containing 'E' (scientific notation)
-        let energy_col = parts.iter().position(|p| p.contains('E'));
-        let energy_col = match energy_col {
-            Some(i) => i,
-            None => continue,
-        };
-
-        if parts.len() < energy_col + 2 {
-            continue;
-        }
-
-        let energy_mev: f64 = match parts[energy_col].parse() {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        let mu_rho: f64 = match parts[energy_col + 1].parse() {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-
+    for &(energy_mev, mu_rho) in table {
         let energy_kev = energy_mev * MEV_TO_KEV;
-
         if energy_kev > beam_energy_kev {
-            // Linearly interpolate between previous and current
             if prev_energy_kev <= 0.0 {
                 return Some(mu_rho);
             }
             let frac = (beam_energy_kev - prev_energy_kev) / (energy_kev - prev_energy_kev);
             return Some(prev_mu_rho + (mu_rho - prev_mu_rho) * frac);
         }
-
         prev_energy_kev = energy_kev;
         prev_mu_rho = mu_rho;
     }
-
-    // Beam energy beyond last table entry — use last value
+    // Beam energy beyond last table entry — use last value.
     if prev_mu_rho > 0.0 {
         Some(prev_mu_rho)
     } else {
@@ -108,42 +47,43 @@ fn fetch_nist_mass_attenuation(atomic_number: i32, beam_energy_kev: f64) -> Opti
     }
 }
 
-/// Compute the weighted-average mass attenuation coefficient (cm²/g) for a
-/// compound, using NIST data for each element. This matches the Java
-/// RADDOSE-3D approach exactly (ContainerElemental.extractMassAttenuationCoef).
-#[cfg(not(target_arch = "wasm32"))]
-fn compute_nist_mass_attenuation(elements: &[(String, f64)], beam_energy_kev: f64) -> Option<f64> {
+/// Look up mass attenuation coefficient for a NIST ComTab mixture by name.
+fn mixture_mu_rho(material: &str, beam_energy_kev: f64) -> Option<f64> {
+    let lower = material.to_lowercase();
+    let idx = nist_tables::MIXTURE_NAMES
+        .iter()
+        .position(|&name| name == lower.as_str())?;
+    let table = nist_tables::MIXTURE_MU_RHO[idx];
+    interpolate_mu_rho(table, beam_energy_kev)
+}
+
+/// Look up mass attenuation coefficient for an element by atomic number Z.
+fn elem_mu_rho_by_z(z: i32, beam_energy_kev: f64) -> Option<f64> {
+    let idx = (z as usize).checked_sub(1)?;
+    let table = nist_tables::ELEM_MU_RHO.get(idx)?;
+    interpolate_mu_rho(table, beam_energy_kev)
+}
+
+/// Compute the weighted-average µ/ρ (cm²/g) for a compound from its elements.
+/// Weights are by mass fraction: w_i = count_i × A_i / Σ(count_j × A_j).
+fn compute_elemental_mu_rho(elements: &[(String, f64)], beam_energy_kev: f64) -> Option<f64> {
     let db = ElementDatabase::instance();
-
-    let mut element_mu_rhos = Vec::with_capacity(elements.len());
-    let mut element_weights = Vec::with_capacity(elements.len());
     let mut total_weight = 0.0_f64;
-
+    let mut weighted_sum = 0.0_f64;
     for (symbol, count) in elements {
         let elem = db.get(symbol)?;
         let z = elem.atomic_number();
         let atomic_weight = elem.atomic_weight();
-
-        let mu_rho = fetch_nist_mass_attenuation(z, beam_energy_kev)?;
-
-        element_mu_rhos.push(mu_rho);
-        element_weights.push(count * atomic_weight);
-        total_weight += count * atomic_weight;
+        let mu_rho = elem_mu_rho_by_z(z, beam_energy_kev)?;
+        let mass = count * atomic_weight;
+        weighted_sum += mass * mu_rho;
+        total_weight += mass;
     }
-
-    if total_weight <= 0.0 {
-        return None;
+    if total_weight > 0.0 {
+        Some(weighted_sum / total_weight)
+    } else {
+        None
     }
-
-    // Weighted average: µ/ρ = Σ(w_i × µ_i/ρ_i)
-    // where w_i = (count_i × A_i) / total_weight
-    let mut mass_atten = 0.0;
-    for i in 0..elements.len() {
-        let relative_weight = element_weights[i] / total_weight;
-        mass_atten += relative_weight * element_mu_rhos[i];
-    }
-
-    Some(mass_atten)
 }
 
 /// Transparent container: no attenuation at all.
@@ -163,90 +103,6 @@ impl Container for ContainerTransparent {
 
     fn info(&self) -> String {
         "No container has been specified.".to_string()
-    }
-}
-
-/// Fetch mass attenuation coefficient (µ/ρ in cm²/g) for a compound mixture
-/// from the NIST X-Ray Mass Attenuation Coefficients ComTab database.
-///
-/// Downloads the HTML table, parses TD cells with scientific notation
-/// in groups of 3 (energy MeV, µ/ρ, µ_en/ρ), and linearly interpolates
-/// to the requested beam energy. Matches Java's ContainerMixture algorithm.
-#[cfg(not(target_arch = "wasm32"))]
-fn fetch_nist_mixture_attenuation(material: &str, beam_energy_kev: f64) -> Option<f64> {
-    let url = format!(
-        "https://physics.nist.gov/PhysRefData/XrayMassCoef/ComTab/{}.html",
-        material
-    );
-
-    let body = ureq::get(&url)
-        .call()
-        .ok()?
-        .body_mut()
-        .read_to_string()
-        .ok()?;
-
-    // Extract all TD cell values containing scientific notation (e.g. 1.000E-03)
-    // matching Java's Pattern: <TD>([0-9]\.[0-9]+E[+-][0-9]+)</TD>
-    let mut scientific_values: Vec<f64> = Vec::new();
-    let mut search = body.as_str();
-    while let Some(td_start) = search.find("<TD>") {
-        let after = &search[td_start + 4..];
-        if let Some(td_end) = after.find("</TD>") {
-            let cell = &after[..td_end];
-            // Check if cell matches scientific notation: digit.digits E +/- digits
-            if looks_like_scientific(cell) {
-                if let Ok(v) = cell.trim().parse::<f64>() {
-                    scientific_values.push(v);
-                }
-            }
-            search = &after[td_end + 5..];
-        } else {
-            break;
-        }
-    }
-
-    // Process in groups of 3: (energy_mev, mu_rho, mu_en_rho)
-    let mut prev_energy_kev = 0.0_f64;
-    let mut prev_mu_rho = 0.0_f64;
-    let mut i = 0;
-    while i + 2 < scientific_values.len() {
-        let energy_mev = scientific_values[i];
-        let mu_rho = scientific_values[i + 1];
-        let energy_kev = energy_mev * MEV_TO_KEV;
-
-        if energy_kev > beam_energy_kev {
-            if prev_energy_kev <= 0.0 {
-                return Some(mu_rho);
-            }
-            let frac = (beam_energy_kev - prev_energy_kev) / (energy_kev - prev_energy_kev);
-            return Some(prev_mu_rho + (mu_rho - prev_mu_rho) * frac);
-        }
-
-        prev_energy_kev = energy_kev;
-        prev_mu_rho = mu_rho;
-        i += 3;
-    }
-
-    // Beam energy beyond last table entry — use last value
-    if prev_mu_rho > 0.0 {
-        Some(prev_mu_rho)
-    } else {
-        None
-    }
-}
-
-/// Return true if `s` looks like NIST scientific notation (e.g. "1.000E-03").
-fn looks_like_scientific(s: &str) -> bool {
-    let s = s.trim();
-    if let Some(e_pos) = s.find('E') {
-        let before = &s[..e_pos];
-        let after = &s[e_pos + 1..];
-        before.contains('.')
-            && before.chars().next().is_some_and(|c| c.is_ascii_digit())
-            && !after.is_empty()
-    } else {
-        false
     }
 }
 
@@ -277,9 +133,7 @@ impl Container for ContainerMixture {
         if self.thickness_um <= 0.0 || self.material.is_empty() {
             return;
         }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        match fetch_nist_mixture_attenuation(&self.material, beam_energy) {
+        match mixture_mu_rho(&self.material, beam_energy) {
             Some(mu_rho) => {
                 self.mass_attenuation_coeff = mu_rho;
                 let thickness_cm = self.thickness_um * MICRONS_TO_CM;
@@ -289,14 +143,11 @@ impl Container for ContainerMixture {
             }
             None => {
                 eprintln!(
-                    "Warning: failed to fetch NIST ComTab data for container '{}', using 0 attenuation",
+                    "Warning: NIST ComTab data not found for container material '{}', using 0 attenuation",
                     self.material
                 );
             }
         }
-
-        #[cfg(target_arch = "wasm32")]
-        let _ = beam_energy;
     }
 
     fn attenuation_fraction(&self) -> f64 {
@@ -369,33 +220,21 @@ impl Container for ContainerElemental {
         if self.thickness_um <= 0.0 || self.elements.is_empty() {
             return;
         }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        match compute_nist_mass_attenuation(&self.elements, beam_energy) {
+        match compute_elemental_mu_rho(&self.elements, beam_energy) {
             Some(mu_rho) => {
                 self.mass_attenuation_coeff = mu_rho;
+                let thickness_cm = self.thickness_um * MICRONS_TO_CM;
+                let mass_thickness = self.density_g_per_ml * thickness_cm;
+                self.attenuation_fraction =
+                    1.0 - (-self.mass_attenuation_coeff * mass_thickness).exp();
             }
             None => {
                 eprintln!(
-                    "Warning: failed to fetch NIST data for container {}, using 0 attenuation",
+                    "Warning: failed to look up NIST attenuation data for container {}, using 0 attenuation",
                     self.formula()
                 );
-                return;
             }
         }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            // mass_thickness = density (g/cm³) × thickness (cm)
-            let thickness_cm = self.thickness_um * MICRONS_TO_CM;
-            let mass_thickness = self.density_g_per_ml * thickness_cm;
-
-            // Beer-Lambert law
-            self.attenuation_fraction = 1.0 - (-self.mass_attenuation_coeff * mass_thickness).exp();
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        let _ = beam_energy;
     }
 
     fn attenuation_fraction(&self) -> f64 {
@@ -484,6 +323,32 @@ mod tests {
         assert!(
             ce.attenuation_fraction() < 1e-6,
             "Zero-thickness elemental container should not attenuate"
+        );
+    }
+
+    #[test]
+    fn water_mixture_attenuates_correctly() {
+        // Water at 17 keV: NIST gives µ/ρ ≈ 1.355 cm²/g (interpolated near that range)
+        // Beer-Lambert: 1 - exp(-µ/ρ × ρ × t) with ρ=1.0 g/cm³, t=100µm → small attenuation
+        let mut cm = ContainerMixture::new(100.0, 1.0, "water".to_string());
+        cm.calculate_attenuation(17.434);
+        let frac = cm.attenuation_fraction();
+        // Just verify it's a reasonable positive value
+        assert!(
+            frac > 0.0 && frac < 1.0,
+            "Expected attenuation fraction in (0,1), got {frac}"
+        );
+    }
+
+    #[test]
+    fn elemental_container_attenuates_correctly() {
+        // Silicon at 8.05 keV
+        let mut ce = ContainerElemental::new(100.0, 2.33, vec![("Si".to_string(), 1.0)]);
+        ce.calculate_attenuation(8.05);
+        let frac = ce.attenuation_fraction();
+        assert!(
+            frac > 0.0 && frac < 1.0,
+            "Expected attenuation fraction in (0,1), got {frac}"
         );
     }
 }
