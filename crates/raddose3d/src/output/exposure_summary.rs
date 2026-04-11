@@ -379,14 +379,10 @@ impl ExposureSummary {
             self.avg_dose_whole_crystal = self.total_dose / self.occupied_voxels as f64;
         }
 
-        if self.total_absorbed_energy > 0.0 {
-            self.dose_inefficiency =
-                (self.max_dose() * 1e6) / (1000.0 * self.total_absorbed_energy);
-        }
-
-        if self.total_energy > 0.0 {
-            self.dose_inefficiency_pe = (self.max_dose() * 1e6) / (1000.0 * self.total_energy);
-        }
+        // Match Java: computed unconditionally (no > 0 guard), matching Java's behaviour
+        // which can produce negative or infinite values with unusual inputs.
+        self.dose_inefficiency = (self.max_dose() * 1e6) / (1000.0 * self.total_absorbed_energy);
+        self.dose_inefficiency_pe = (self.max_dose() * 1e6) / (1000.0 * self.total_energy);
 
         if self.images > 0 {
             self.last_dwd = self.image_dwd[self.images - 1];

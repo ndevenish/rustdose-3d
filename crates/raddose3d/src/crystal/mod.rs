@@ -366,10 +366,13 @@ fn compute_angles(wedge: &Wedge) -> Vec<f64> {
         // Static exposure: no rotation
         vec![start; STATIC_EXPOSURE]
     } else {
-        let sign: f64 = if end < start { -1.0 } else { 1.0 };
-        let count = (sign * (end - start) / wedge.ang_res + 1.0) as usize;
+        // Match Java: sign * (int)((end - start) / angRes + 1)
+        // Java's (int) cast truncates toward zero (not floor), so we replicate that.
+        let sign: i64 = if end < start { -1 } else { 1 };
+        let raw = (end - start) / wedge.ang_res + 1.0;
+        let count = (sign * raw as i64).unsigned_abs() as usize;
         (0..count)
-            .map(|i| start + sign * i as f64 * wedge.ang_res)
+            .map(|i| start + sign as f64 * i as f64 * wedge.ang_res)
             .collect()
     }
 }

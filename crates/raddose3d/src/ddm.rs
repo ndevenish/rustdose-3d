@@ -467,7 +467,8 @@ pub fn create_ddm(
         None | Some(DdmType::Simple) => Box::new(DdmSimple),
         Some(DdmType::Linear) => Box::new(DdmLinear {
             // Java DDMLinear: DDM_FACTOR_OWEN_2006 = 2*43 = 86, formula = 1 - dose/86
-            gamma: gamma.unwrap_or(1.0 / (2.0 * 43.0)),
+            // Java ignores any DecayParam for Linear DDM — always uses the hardcoded constant.
+            gamma: 1.0 / (2.0 * 43.0),
         }),
         Some(DdmType::Leal) => Box::new(DdmLeal::new(
             gamma.unwrap_or(0.0),
