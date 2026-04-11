@@ -28,7 +28,9 @@ impl CoefCalcFromParams {
 
         compute.calculate_cell_volume(cell_a, cell_b, cell_c, cell_alpha, cell_beta, cell_gamma);
 
-        let num_monomers = config.num_monomers.unwrap_or(1);
+        // Java's parser declares `int numMon;` which defaults to 0 (Java primitive default).
+        // When numMon=0, all protein atom contributions are zeroed out (residues*0=0).
+        let num_monomers = config.num_monomers.unwrap_or(0);
         let num_residues = config.num_residues.unwrap_or(0);
         let num_rna = config.num_rna.unwrap_or(0);
         let num_dna = config.num_dna.unwrap_or(0);

@@ -270,20 +270,42 @@ pub fn create_container(config: &crate::parser::config::CrystalConfig) -> Box<dy
     use crate::parser::config::ContainerMaterialType;
     match config.container_material {
         Some(ContainerMaterialType::Mixture) => {
-            let thickness = config.container_thickness.unwrap_or(0.0);
-            let density = config.container_density.unwrap_or(1.0);
-            let material = config.container_mixture.clone().unwrap_or_default();
-            Box::new(ContainerMixture::new(thickness, density, material))
+            // Java's ContainerSemiTransparent requires ALL three of thickness, density,
+            // and material. If any is null, it prints "Not all of the container fields
+            // have been defined" and falls back to no container.
+            let thickness = config.container_thickness;
+            let density = config.container_density;
+            let material = config.container_mixture.clone();
+            match (thickness, density, material) {
+                (Some(t), Some(d), Some(m)) if !m.is_empty() => {
+                    Box::new(ContainerMixture::new(t, d, m))
+                }
+                (None, None, None) | (None, None, Some(_)) => Box::new(ContainerTransparent),
+                _ => {
+                    println!("Not all of the container fields have been defined. Assuming no container around sample.");
+                    Box::new(ContainerTransparent)
+                }
+            }
         }
         Some(ContainerMaterialType::Elemental) => {
-            let thickness = config.container_thickness.unwrap_or(0.0);
-            let density = config.container_density.unwrap_or(1.0);
-            let elements = config
-                .container_elements
-                .iter()
-                .map(|ec| (ec.symbol.clone(), ec.count))
-                .collect();
-            Box::new(ContainerElemental::new(thickness, density, elements))
+            let thickness = config.container_thickness;
+            let density = config.container_density;
+            let has_elements = !config.container_elements.is_empty();
+            match (thickness, density, has_elements) {
+                (Some(t), Some(d), true) => {
+                    let elements = config
+                        .container_elements
+                        .iter()
+                        .map(|ec| (ec.symbol.clone(), ec.count))
+                        .collect();
+                    Box::new(ContainerElemental::new(t, d, elements))
+                }
+                (None, None, false) => Box::new(ContainerTransparent),
+                _ => {
+                    println!("Not all of the container fields have been defined. Assuming no container around sample.");
+                    Box::new(ContainerTransparent)
+                }
+            }
         }
         _ => Box::new(ContainerTransparent),
     }

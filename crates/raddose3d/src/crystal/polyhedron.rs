@@ -103,9 +103,20 @@ impl CrystalPolyhedron {
         let dim_z = max_coords[2] - min_coords[2];
         let max_dim = dim_x.max(dim_y).max(dim_z).max(1e-9);
 
-        let pix_per_um = config
-            .pixels_per_micron
-            .unwrap_or_else(|| (10.0 / max_dim).min(Self::DEFAULT_RESOLUTION));
+        // Java's Crystal constructor sets CRYSTAL_RESOLUTION_DEF = 10 / DIM_X
+        // (using the input Dimensions, NOT the OBJ bounding box).
+        // Then getDefaultLimitedResolution(bbox_x, bbox_y, bbox_z) caps voxels at 1M.
+        let pix_per_um = config.pixels_per_micron.unwrap_or_else(|| {
+            let input_dim_x = config.dim_x.unwrap_or(max_dim);
+            let default_res = (10.0 / input_dim_x).min(Self::DEFAULT_RESOLUTION);
+            // Java's getDefaultLimitedResolution: if total voxels > 1M, reduce
+            let vox = (dim_x * default_res) * (dim_y * default_res) * (dim_z * default_res);
+            if vox <= 1_000_000.0 {
+                default_res
+            } else {
+                (1_000_000.0 / (dim_x * dim_y * dim_z)).cbrt()
+            }
+        });
 
         let nx = (dim_x * pix_per_um).round() as usize + 1;
         let ny = (dim_y * pix_per_um).round() as usize + 1;

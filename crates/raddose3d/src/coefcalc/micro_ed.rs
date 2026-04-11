@@ -33,7 +33,9 @@ impl CoefCalcMicroED {
 
         compute.calculate_cell_volume(cell_a, cell_b, cell_c, cell_alpha, cell_beta, cell_gamma);
 
-        let num_monomers = config.num_monomers.unwrap_or(1).max(1);
+        // Java's parser defaults numMon to 0 (Java int primitive default).
+        // MicroED extends CoefCalcFromParams which passes numMon through directly.
+        let num_monomers = config.num_monomers.unwrap_or(0);
         let num_residues = config.num_residues.unwrap_or(0);
         let num_rna = config.num_rna.unwrap_or(0);
         let num_dna = config.num_dna.unwrap_or(0);
