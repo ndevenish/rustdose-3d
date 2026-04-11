@@ -119,20 +119,51 @@ fn main() {
     println!("No output specifications given. Using defaults.");
 
     let mut experiment = Experiment::new();
-    add_default_observers(&mut experiment, prefix);
+
+    // Special subprograms (MC, XFEL, MicroED) handle their own output and in
+    // Java call System.exit(0) immediately after, leaving all regular output
+    // files empty. Only add the default observers when using standard RD3D mode.
+    let uses_special_subprogram = config.items.iter().any(|item| {
+        if let raddose3d::parser::config::ConfigItem::Crystal(c) = item {
+            matches!(
+                c.program.as_deref().unwrap_or("").to_uppercase().as_str(),
+                "MONTECARLO" | "GOS" | "XFEL" | "EMSP" | "EMED"
+            )
+        } else {
+            false
+        }
+    });
+    if !uses_special_subprogram {
+        add_default_observers(&mut experiment, prefix);
+    }
 
     use raddose3d::parser::config::ConfigItem;
     for item in &config.items {
         match item {
             ConfigItem::Crystal(c) => match crystal::create_crystal(c) {
-                Ok(crystal) => experiment.set_crystal(crystal),
+                Ok(crystal) => {
+                    // In special subprogram modes the regular observers are skipped,
+                    // but Java still prints the crystal/DDM info to stdout before running MC.
+                    if uses_special_subprogram {
+                        println!("{}", crystal.crystal_info());
+                        println!("{}", crystal.ddm().description());
+                    }
+                    experiment.set_crystal(crystal);
+                }
                 Err(e) => {
                     eprintln!("Crystal error: {}", e);
                     std::process::exit(1);
                 }
             },
             ConfigItem::Beam(b) => match beam::create_beam(b) {
-                Ok(beam) => experiment.set_beam(beam),
+                Ok(beam) => {
+                    if uses_special_subprogram {
+                        use std::io::Write;
+                        print!("{}", beam.description());
+                        let _ = std::io::stdout().flush();
+                    }
+                    experiment.set_beam(beam);
+                }
                 Err(e) => {
                     eprintln!("Beam error: {}", e);
                     std::process::exit(1);

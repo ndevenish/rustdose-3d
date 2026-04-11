@@ -256,6 +256,16 @@ impl super::CoefCalc for CoefCalcFromParams {
     fn shell_binding_energy(&self, element: &str, shell: usize) -> f64 {
         self.compute.calc_shell_binding_energy(element, shell)
     }
+
+    fn total_atoms_in_crystal_element(&self, volume_cm3: f64, element: &str) -> f64 {
+        let atoms_per_cell = self.compute.total_atoms(element);
+        if self.compute.cell_volume == 0.0 {
+            return 0.0;
+        }
+        // Java: totalAtoms * (crystalVolume * 1e24) / cellVolume
+        // crystalVolume in cm³, cellVolume in Å³, 1e24 converts cm³ → Å³
+        atoms_per_cell * (volume_cm3 * 1.0e24) / self.compute.cell_volume
+    }
 }
 
 #[cfg(test)]

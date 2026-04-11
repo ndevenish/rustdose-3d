@@ -60,9 +60,14 @@ impl Experiment {
             (&mut self.current_crystal, &mut self.current_beam)
         {
             crystal.expose(&mut **beam, wedge);
-            let summary = crystal.exposure_summary();
-            for o in &mut self.observers {
-                o.publish_wedge(wedge, summary, Some(crystal.as_ref()));
+            // Special subprograms (MC, XFEL, MicroED) handle their own output
+            // and don't participate in the regular observer pipeline — matching
+            // Java's System.exit(0) behaviour which leaves output files empty.
+            if !crystal.suppress_regular_output() {
+                let summary = crystal.exposure_summary();
+                for o in &mut self.observers {
+                    o.publish_wedge(wedge, summary, Some(crystal.as_ref()));
+                }
             }
         }
     }
@@ -70,6 +75,14 @@ impl Experiment {
     /// Close the experiment.
     pub fn close(&mut self) {
         let crystal_ref: Option<&dyn Crystal> = self.current_crystal.as_deref();
+        // Skip closing observers for special subprograms to leave output files empty.
+        let suppress = crystal_ref.is_some_and(|c| c.suppress_regular_output());
+        if suppress {
+            self.observers.clear();
+            self.current_beam = None;
+            self.current_crystal = None;
+            return;
+        }
         for o in &mut self.observers {
             o.close(crystal_ref);
         }

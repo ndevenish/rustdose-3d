@@ -2419,6 +2419,7 @@ impl MonteCarloSimulation {
 
         let mut vox_dose_v_resolved = 0.0_f64;
         let mut vox_dose_exposed = 0.0_f64;
+        let mut sum_dose_no_cutoff_exposed = 0.0_f64;
         let mut dwd = 0.0_f64;
         let total_elastic = self.tot_elastic;
 
@@ -2430,6 +2431,13 @@ impl MonteCarloSimulation {
                         continue;
                     }
                     let cart = self.convert_to_cartesian_coordinates(a, b, c);
+                    // Accumulate simple-MC exposed dose (Java's sumDoseNoCutOffExposed)
+                    if self.simple_mc
+                        && idx < self.dose_simple.len()
+                        && self.test_if_inside_exposed_area(cart[0], cart[1], beam)
+                    {
+                        sum_dose_no_cutoff_exposed += self.dose_simple[idx] * scale * KEV_TO_JOULES;
+                    }
                     if c < self.last_time_vox.len() {
                         vox_dose_v_resolved += self.voxel_energy_v_resolved[idx];
                         if self.test_if_inside_exposed_area(cart[0], cart[1], beam) {
@@ -2501,18 +2509,111 @@ impl MonteCarloSimulation {
                 vde_mgy
             );
         } else {
+            let ader_mgy = if exposed_mass > 0.0 {
+                (sum_dose_no_cutoff_exposed / exposed_mass) / 1.0e6
+            } else {
+                0.0
+            };
             println!(
                 "Monte Carlo average dose whole crystal (ADWC): {:.3}",
                 self.dose
             );
+            println!(
+                "Monte Carlo average dose exposed region (ADER): {:.3}",
+                ader_mgy
+            );
         }
 
-        // Write output CSV
+        // Write outputXFEL.CSV (always, for GOS/XFEL paths)
         if let Err(e) =
             self.write_output_csv("outputXFEL.CSV", tot_raddose, rd_exposed, vdvr_mgy, vde_mgy)
         {
             println!("Could not write outputXFEL.CSV: {}", e);
         }
+
+        // Compute ions-per-atom-exposed for outputIonsPerAtom.CSV
+        let vol_fraction = if sample_vol_cm3 > 0.0 {
+            (exposed_vol / sample_vol_cm3).min(1.0)
+        } else {
+            1.0
+        };
+        let elem_db = crate::element::database::ElementDatabase::instance();
+        let mut ions_per_atom_exposed: Vec<(u32, f64)> = self
+            .atomic_ionisations_exposed
+            .iter()
+            .filter_map(|(name, &raw_count)| {
+                let z = elem_db.get(name).map(|e| e.atomic_number() as u32)?;
+                let total_atoms = coef_calc.total_atoms_in_crystal_element(sample_vol_cm3, name);
+                if total_atoms == 0.0 || vol_fraction == 0.0 {
+                    return None;
+                }
+                let ions = (raw_count as f64 * scale) / (total_atoms * vol_fraction);
+                Some((z, ions))
+            })
+            .collect();
+        ions_per_atom_exposed.sort_by_key(|(z, _)| *z);
+
+        if let Err(e) =
+            self.write_ions_per_atom_csv("outputIonsPerAtom.CSV", &ions_per_atom_exposed)
+        {
+            println!("Could not write outputIonsPerAtom.CSV: {}", e);
+        }
+
+        // Write outputMC.CSV for simple MC mode
+        if self.simple_mc {
+            let ader_mgy = if exposed_mass > 0.0 {
+                (sum_dose_no_cutoff_exposed / exposed_mass) / 1.0e6
+            } else {
+                0.0
+            };
+            if let Err(e) = self.write_mc_simple_csv(
+                "outputMC.CSV",
+                tot_raddose,
+                rd_exposed,
+                self.dose,
+                ader_mgy,
+                self.tot_elastic,
+            ) {
+                println!("Could not write outputMC.CSV: {}", e);
+            }
+        }
+    }
+
+    fn write_ions_per_atom_csv(&self, filename: &str, ions: &[(u32, f64)]) -> std::io::Result<()> {
+        use std::io::Write;
+        let mut f = std::fs::File::create(filename)?;
+        writeln!(f, "Atomic number,ionisationsPerAtom")?;
+        for (z, ipa) in ions {
+            writeln!(f, " {z}, {ipa:.6}")?;
+        }
+        Ok(())
+    }
+
+    fn write_mc_simple_csv(
+        &self,
+        filename: &str,
+        rd_adwc: f64,
+        rd_ader: f64,
+        mc_adwc: f64,
+        mc_ader: f64,
+        num_el: f64,
+    ) -> std::io::Result<()> {
+        use std::io::Write;
+        let append = self.run_number > 1;
+        let mut f = if append {
+            std::fs::OpenOptions::new().append(true).open(filename)?
+        } else {
+            std::fs::File::create(filename)?
+        };
+        if !append {
+            writeln!(f, "Run Number, RD3D-ADWC,RD3D-ADER,MC-ADWC,MC-ADER,numEl")?;
+        }
+        writeln!(
+            f,
+            " {}, {rd_adwc:.6}, {rd_ader:.6}, {mc_adwc:.6}, {mc_ader:.6}, {num_el:.6}",
+            self.run_number
+        )?;
+        Ok(())
     }
 
     fn write_output_csv(

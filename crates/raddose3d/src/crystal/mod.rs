@@ -103,6 +103,16 @@ pub trait Crystal: std::fmt::Debug + Send + Sync {
         None
     }
 
+    /// Whether this crystal's subprogram bypasses the regular output pipeline.
+    /// Returns true for MONTECARLO, GOS, XFEL, EMSP, EMED — modes that handle
+    /// their own output and call System.exit(0) in Java, leaving output files empty.
+    fn suppress_regular_output(&self) -> bool {
+        matches!(
+            self.subprogram().to_uppercase().as_str(),
+            "MONTECARLO" | "GOS" | "XFEL" | "EMSP" | "EMED"
+        )
+    }
+
     /// Expose the crystal to a beam according to a wedge strategy.
     fn expose(&mut self, beam: &mut dyn Beam, wedge: &Wedge);
 }
