@@ -166,13 +166,98 @@ impl Container for ContainerTransparent {
     }
 }
 
-/// Container with a known material mixture (attenuates beam based on mass attenuation coefficient).
-/// Note: proper attenuation requires NIST lookup (not yet implemented). Returns 0 attenuation.
+/// Fetch mass attenuation coefficient (µ/ρ in cm²/g) for a compound mixture
+/// from the NIST X-Ray Mass Attenuation Coefficients ComTab database.
+///
+/// Downloads the HTML table, parses TD cells with scientific notation
+/// in groups of 3 (energy MeV, µ/ρ, µ_en/ρ), and linearly interpolates
+/// to the requested beam energy. Matches Java's ContainerMixture algorithm.
+#[cfg(not(target_arch = "wasm32"))]
+fn fetch_nist_mixture_attenuation(material: &str, beam_energy_kev: f64) -> Option<f64> {
+    let url = format!(
+        "https://physics.nist.gov/PhysRefData/XrayMassCoef/ComTab/{}.html",
+        material
+    );
+
+    let body = ureq::get(&url)
+        .call()
+        .ok()?
+        .body_mut()
+        .read_to_string()
+        .ok()?;
+
+    // Extract all TD cell values containing scientific notation (e.g. 1.000E-03)
+    // matching Java's Pattern: <TD>([0-9]\.[0-9]+E[+-][0-9]+)</TD>
+    let mut scientific_values: Vec<f64> = Vec::new();
+    let mut search = body.as_str();
+    while let Some(td_start) = search.find("<TD>") {
+        let after = &search[td_start + 4..];
+        if let Some(td_end) = after.find("</TD>") {
+            let cell = &after[..td_end];
+            // Check if cell matches scientific notation: digit.digits E +/- digits
+            if looks_like_scientific(cell) {
+                if let Ok(v) = cell.trim().parse::<f64>() {
+                    scientific_values.push(v);
+                }
+            }
+            search = &after[td_end + 5..];
+        } else {
+            break;
+        }
+    }
+
+    // Process in groups of 3: (energy_mev, mu_rho, mu_en_rho)
+    let mut prev_energy_kev = 0.0_f64;
+    let mut prev_mu_rho = 0.0_f64;
+    let mut i = 0;
+    while i + 2 < scientific_values.len() {
+        let energy_mev = scientific_values[i];
+        let mu_rho = scientific_values[i + 1];
+        let energy_kev = energy_mev * MEV_TO_KEV;
+
+        if energy_kev > beam_energy_kev {
+            if prev_energy_kev <= 0.0 {
+                return Some(mu_rho);
+            }
+            let frac = (beam_energy_kev - prev_energy_kev) / (energy_kev - prev_energy_kev);
+            return Some(prev_mu_rho + (mu_rho - prev_mu_rho) * frac);
+        }
+
+        prev_energy_kev = energy_kev;
+        prev_mu_rho = mu_rho;
+        i += 3;
+    }
+
+    // Beam energy beyond last table entry — use last value
+    if prev_mu_rho > 0.0 {
+        Some(prev_mu_rho)
+    } else {
+        None
+    }
+}
+
+/// Return true if `s` looks like NIST scientific notation (e.g. "1.000E-03").
+fn looks_like_scientific(s: &str) -> bool {
+    let s = s.trim();
+    if let Some(e_pos) = s.find('E') {
+        let before = &s[..e_pos];
+        let after = &s[e_pos + 1..];
+        before.contains('.')
+            && before.chars().next().is_some_and(|c| c.is_ascii_digit())
+            && !after.is_empty()
+    } else {
+        false
+    }
+}
+
+/// Container with a known material mixture — attenuates beam via NIST ComTab lookup.
 #[derive(Debug)]
 pub struct ContainerMixture {
     thickness_um: f64,
     density_g_per_ml: f64,
     material: String,
+    mass_attenuation_coeff: f64, // cm²/g
+    attenuation_fraction: f64,
 }
 
 impl ContainerMixture {
@@ -181,19 +266,41 @@ impl ContainerMixture {
             thickness_um,
             density_g_per_ml: density,
             material,
+            mass_attenuation_coeff: 0.0,
+            attenuation_fraction: 0.0,
         }
     }
 }
 
 impl Container for ContainerMixture {
-    fn calculate_attenuation(&mut self, _beam_energy: f64) {
-        println!(
-            "ContainerMixture: NIST attenuation lookup not yet implemented, using 0 attenuation"
-        );
+    fn calculate_attenuation(&mut self, beam_energy: f64) {
+        if self.thickness_um <= 0.0 || self.material.is_empty() {
+            return;
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        match fetch_nist_mixture_attenuation(&self.material, beam_energy) {
+            Some(mu_rho) => {
+                self.mass_attenuation_coeff = mu_rho;
+                let thickness_cm = self.thickness_um * MICRONS_TO_CM;
+                let mass_thickness = self.density_g_per_ml * thickness_cm;
+                self.attenuation_fraction =
+                    1.0 - (-self.mass_attenuation_coeff * mass_thickness).exp();
+            }
+            None => {
+                eprintln!(
+                    "Warning: failed to fetch NIST ComTab data for container '{}', using 0 attenuation",
+                    self.material
+                );
+            }
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        let _ = beam_energy;
     }
 
     fn attenuation_fraction(&self) -> f64 {
-        0.0
+        self.attenuation_fraction
     }
 
     fn material_name(&self) -> Option<&str> {
@@ -201,10 +308,21 @@ impl Container for ContainerMixture {
     }
 
     fn info(&self) -> String {
-        format!(
-            "Container: {} (thickness: {:.1} µm, density: {:.2} g/ml) - attenuation not yet calculated",
-            self.material, self.thickness_um, self.density_g_per_ml
-        )
+        if self.mass_attenuation_coeff > 0.0 {
+            format!(
+                "The mass attenuation coefficient of the {} container is {:.2} centimetres^2 per gram.\n\
+                 The attenuation fraction of the beam due to the sample container of thickness {:.2} microns is: {:.2}.",
+                self.material,
+                self.mass_attenuation_coeff,
+                self.thickness_um,
+                self.attenuation_fraction,
+            )
+        } else {
+            format!(
+                "Container: {} (thickness: {:.1} µm, density: {:.2} g/ml)",
+                self.material, self.thickness_um, self.density_g_per_ml
+            )
+        }
     }
 }
 
