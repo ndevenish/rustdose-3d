@@ -38,10 +38,10 @@ CORPUS_DIR = FUZZ_DIR / "corpus"
 _SKIP_CATEGORIES = {Category.PARSE_ERROR, Category.HARNESS_ERROR}
 
 
-def _subdir_for(cat: Category) -> str | None:
-    """Return corpus subdirectory for category, or None to delete (fixed)."""
+def _subdir_for(cat: Category) -> str:
+    """Return corpus subdirectory for category."""
     if cat == Category.MATCH:
-        return None  # fixed — remove
+        return "diffs"  # keep — input is still valuable for regression testing
     if cat == Category.JAVA_CRASH:
         return "crashes/java"
     if cat == Category.RUST_CRASH:
@@ -147,10 +147,10 @@ def _update_corpus(
     java_r,
     rust_r,
     dry_run: bool,
-) -> tuple[str, Path | None]:
+) -> tuple[str, Path]:
     """
-    Move/delete txt_path (and its .json sidecar) to match new category.
-    Returns (action, new_path_or_None).
+    Move txt_path (and its .json sidecar) to match new category.
+    Returns (action, new_path).
     """
     new_subdir = _subdir_for(new_result.category)
     json_path = txt_path.with_suffix(".json")
@@ -174,13 +174,6 @@ def _update_corpus(
              "rel_diff": d.rel_diff if d.rel_diff != float("inf") else "inf"}
             for d in new_result.diffs
         ]
-
-    if new_subdir is None:
-        # Fixed — delete
-        if not dry_run:
-            txt_path.unlink(missing_ok=True)
-            json_path.unlink(missing_ok=True)
-        return "deleted", None
 
     dest_dir = CORPUS_DIR / new_subdir
     new_stem = _rename_stem(txt_path.stem, new_result.category.name)
@@ -288,8 +281,6 @@ def main():
                 extra = ""
                 if action == "moved" and new_path:
                     extra = f"  → {new_path.relative_to(CORPUS_DIR)}"
-                elif action == "deleted":
-                    extra = "  (removed)"
                 print(f"[{done_count:4d}/{len(inputs)}]{marker}"
                       f" {old_str} → {new_str} [{label}]"
                       f"  {txt_path.name[:50]}{extra}")
