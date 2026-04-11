@@ -9,9 +9,75 @@ pub use config::*;
 #[grammar = "grammar.pest"]
 struct InputParser;
 
+/// Remove duplicate consecutive section headers from input text.
+///
+/// Java's ANTLR parser has automatic error recovery that skips unexpected
+/// tokens.  When a block keyword (`Crystal`, `Beam`, `Wedge`) appears twice
+/// in a row with no intervening content, ANTLR recovers by skipping the
+/// repeated keyword and continuing to parse the block.  This preprocessor
+/// replicates that behaviour so the Rust PEG grammar (which has no error
+/// recovery) accepts the same inputs as Java.
+fn preprocess_input(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    // The last section keyword seen with no content lines after it yet.
+    let mut pending: Option<&'static str> = None;
+
+    for line in input.lines() {
+        let trimmed = line.trim();
+
+        // Pass through empty lines and comments without changing state.
+        if trimmed.is_empty()
+            || trimmed.starts_with('#')
+            || trimmed.starts_with("//")
+            || trimmed.starts_with('!')
+        {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
+
+        let lower = trimmed.to_lowercase();
+
+        // Identify standalone section headers.
+        let section: Option<&'static str> = if lower == "crystal" {
+            Some("crystal")
+        } else if lower == "beam" {
+            Some("beam")
+        } else if lower.starts_with("wedge")
+            && lower["wedge".len()..]
+                .trim_start()
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_digit() || c == '.' || c == '-')
+        {
+            Some("wedge")
+        } else {
+            None
+        };
+
+        match section {
+            Some(key) if pending == Some(key) => {
+                // Duplicate header with no content between – skip it.
+                continue;
+            }
+            Some(key) => {
+                pending = Some(key);
+            }
+            None => {
+                pending = None;
+            }
+        }
+
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
 /// Parse a RADDOSE-3D input file string into a Config.
 pub fn parse(input: &str) -> Result<Config, ParseError> {
-    let pairs = InputParser::parse(Rule::configfile, input)
+    let preprocessed = preprocess_input(input);
+    let pairs = InputParser::parse(Rule::configfile, &preprocessed)
         .map_err(|e| ParseError::Grammar(e.to_string()))?;
 
     let mut config = Config::default();
