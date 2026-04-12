@@ -1,0 +1,22 @@
+Crystal
+Type Cuboid
+Dimensions 50 50 50
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 8
+NumResidues 120
+ProteinHeavyAtoms Pt 2
+SolventHeavyConc Pb 50
+SolventFraction 0.55
+
+Beam
+Type Gaussian
+Flux 2e12
+FWHM 50 50
+Energy 12.1
+Collimation Rectangular 50 50
+
+Wedge 0 90
+ExposureTime 30
+AngularResolution 5
