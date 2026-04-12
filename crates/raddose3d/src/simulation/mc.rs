@@ -1137,45 +1137,6 @@ impl MonteCarloSimulation {
         0
     }
 
-    // ── Relative shell probabilities ──────────────────────────────────────────
-
-    fn get_relative_shell_probs(
-        element_abs_probs: &HashMap<String, f64>,
-        beam_energy: f64,
-        elements: &HashMap<String, Element>,
-    ) -> HashMap<String, Vec<f64>> {
-        let mut result = HashMap::new();
-        for name in element_abs_probs.keys() {
-            if let Some(e) = elements.get(name) {
-                let mut shell_probs = vec![0.0_f64; 9];
-                let mut running = 0.0;
-                let k = e.k_ionisation_prob();
-                if beam_energy > e.k_edge().unwrap_or(f64::INFINITY) {
-                    running += k;
-                    shell_probs[0] = running;
-                }
-                if beam_energy > e.l1_edge().unwrap_or(f64::INFINITY) && e.atomic_number() >= 12 {
-                    let p = e.l1_ionisation_prob() * (1.0 - k);
-                    running += p;
-                    shell_probs[1] = running;
-                }
-                if beam_energy > e.l2_edge().unwrap_or(f64::INFINITY) && e.atomic_number() >= 12 {
-                    let p = e.l2_ionisation_prob() * (1.0 - shell_probs[0] - shell_probs[1]);
-                    running += p;
-                    shell_probs[2] = running;
-                }
-                if beam_energy > e.l3_edge().unwrap_or(f64::INFINITY) && e.atomic_number() >= 12 {
-                    let p = e.l3_ionisation_prob()
-                        * (1.0 - shell_probs[0] - shell_probs[1] - shell_probs[2]);
-                    running += p;
-                    shell_probs[3] = running;
-                }
-                result.insert(name.clone(), shell_probs);
-            }
-        }
-        result
-    }
-
     // ── Ionisation helpers ────────────────────────────────────────────────────
 
     fn get_ionised_element(element_probs: &HashMap<String, f64>) -> Option<String> {
