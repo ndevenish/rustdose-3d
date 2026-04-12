@@ -6,10 +6,8 @@ AbsCoefCalc RD3D
 UnitCell 78.0 78.0 78.0
 NumMonomers 24
 NumResidues 51
-Subprogram MONTECARLO
-Runs 1
-SimElectrons 1000
 CalculatePEEscape TRUE
+CalculateFLEscape TRUE
 CalcSurrounding TRUE
 SurroundingHeavyConc O 55500
 SurroundingThickness 20 20 20

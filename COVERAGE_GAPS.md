@@ -8,7 +8,7 @@ Seed attempts verified against `coverage5.json`.
 | Category | Approx lines | % of total | Action | Status |
 |----------|-------------|-----------|--------|--------|
 | Structurally unreachable from CLI | ~375 | 8% | None — by design | — |
-| Cryo/surrounding escape cluster | ~1,100 | 23% | Fix seed wiring | Open |
+| Cryo/surrounding escape cluster | ~1,100 | 23% | Fix seed wiring | Fixed ✓ |
 | M-shell heavy atom branches | ~80 | 2% | Needs cryo+heavy seed | Revised (see §3) |
 | GOS inner-shell calculations | ~200 | 4% | Dead code in mc.rs | Revised (see §4) |
 | MicroED cylinder/polyhedron geometry | ~125 | 3% | Seed added ✓ (+3 lines) | Partial |
@@ -80,9 +80,15 @@ Key uncovered regions:
 - Lines 506–513: surrounding vertex rotation per angle
 - Lines 674–681: `get_intersection_point` for surrounding geometry
 
-### Diagnosis
+### Fix (completed)
 
-The seed `corpus/seeds/pe_escape_surrounding.txt` uses `CalcSurrounding TRUE` + `CalculatePEEscape TRUE` + `Subprogram MONTECARLO`. Check whether `CoefCalcFromParams::is_cryo()` returns `true` when `CalcSurrounding TRUE` is set — if not, the cryo branch is silently skipped.
+Two bugs were found and fixed:
+
+1. **`CrystalCuboid.calc_surrounding()` always returned `false`** — the `Crystal` trait has a default impl returning `false`, and `CrystalCuboid` never overrode it. Fixed by adding a `calc_surrounding: bool` field (read from `config.calc_surrounding`) and overriding the trait method.
+
+2. **Seed used `Subprogram MONTECARLO`** — this bypasses `expose_rd3d` entirely, so the `escape.rs`/`crystal/mod.rs` cryo paths were never entered. Fixed by updating `pe_escape_surrounding.txt` to use RD3D mode (with `CalculateFLEscape TRUE` added), and adding a separate `mc_surrounding.txt` seed for the MC path.
+
+3. **MC surrounding volume never set up** — `setup_surrounding_volume()` and `set_up_rotated_vertices_surrounding()` were defined but never called. Fixed by wiring them into the `start_monte_carlo_xfel` per-photon loop when `coef_calc.is_cryo()` is true, matching Java MC.java ~line 425.
 
 ---
 
@@ -189,7 +195,7 @@ Many of these require either: invalid/edge-case inputs (negative cell volume), n
 
 | Priority | Seed / action | Target gap | Est. lines | Status |
 |----------|--------------|-----------|-----------|--------|
-| 1 | Investigate `is_cryo()` wiring in `pe_escape_surrounding.txt` | Cryo/surrounding cluster | ~1,100 | Open |
+| 1 | Fix `CrystalCuboid.calc_surrounding()` + update seed + wire MC surrounding | Cryo/surrounding cluster | ~1,100 | Done ✓ |
 | 2 | `Type Cylinder` + `Subprogram EMSP` microED | MicroED mesh geometry | ~80 | Done ✓ (+3) |
 | 3 | Cryo seed with heavy atom (Z≥73) in `SurroundingHeavyConc` | M-shell cryo branches | ~80 | Open (part of §2) |
 | 4 | `mc.rs::get_relative_shell_probs` | GOS inner-shell mc.rs | ~30 | Dead code — skip |
