@@ -1,0 +1,19 @@
+Crystal
+Type Cylinder
+Dimensions 200 200
+PixelsPerMicron 0.05
+AbsCoefCalc SAXS
+ProteinConc 10
+NumResidues 200
+SolventFraction 0.5
+
+Beam
+Type Gaussian
+Flux 2e12
+FWHM 100 100
+Energy 12.1
+Collimation Rectangular 200 200
+
+Wedge 0 0
+ExposureTime 10
+AngularResolution 1

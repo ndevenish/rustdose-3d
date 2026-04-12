@@ -1,0 +1,35 @@
+Crystal
+Type Polyhedron
+Dimensions 55.81 55.81 55.81
+Wireframetype obj
+ModelFile /Users/nickd/dials/raddose-web/RADDOSE-3D/raddose3d/tests/fixtures/cube.obj
+PixelsPerMicron 0.8478
+AbsCoefCalc SMALLMOLE
+UnitCell 10.776 42.11 5.956
+SmallMoleAtoms Se 11
+NumMonomers 8
+DDM Linear
+ContainerMaterialType mixture
+MaterialMixture alanine
+ContainerThickness 104.7
+ContainerDensity 4.0908
+
+Beam
+Type Tophat
+Energy 35.155
+Flux 6.488e+11
+Collimation Circular 30.68 90.94
+
+Wedge 0.0 45.0
+ExposureTime 163.12
+AngularResolution 39.24
+
+Beam
+Type Tophat
+Energy 46.203
+Flux 7.304e+10
+Collimation Rectangular 106.98 46.19
+
+Wedge 45.0 126.0
+ExposureTime 68.15
+AngularResolution 4.1
