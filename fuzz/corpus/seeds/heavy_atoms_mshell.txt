@@ -1,22 +1,28 @@
 Crystal
 Type Cuboid
-Dimensions 50 50 50
+Dimensions 10 10 10
 PixelsPerMicron 0.5
 AbsCoefCalc RD3D
 UnitCell 78.0 78.0 78.0
 NumMonomers 8
 NumResidues 120
-ProteinHeavyAtoms Pt 2
-SolventHeavyConc Pb 50
 SolventFraction 0.55
+Subprogram MONTECARLO
+Runs 1
+SimElectrons 1000
+CalculatePEEscape TRUE
+CalcSurrounding TRUE
+SurroundingHeavyConc Pt 100
+SurroundingThickness 20 20 20
+SurroundingDensity 21.4
 
 Beam
 Type Gaussian
 Flux 2e12
-FWHM 50 50
+FWHM 10 10
 Energy 12.1
-Collimation Rectangular 50 50
+Collimation Rectangular 10 10
 
 Wedge 0 90
-ExposureTime 30
-AngularResolution 5
+ExposureTime 10
+AngularResolution 10
