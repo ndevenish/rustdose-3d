@@ -153,7 +153,8 @@ pub trait CoefCalc: std::fmt::Debug + Send + Sync {
     }
 
     /// GOS inelastic mean free path (nm).
-    fn gos_inel(&self, _cryo: bool, _energy: f64) -> f64 {
+    /// Takes `&mut self` because it populates GOSinelastic state as a side effect.
+    fn gos_inel(&mut self, _cryo: bool, _energy: f64) -> f64 {
         0.0
     }
 

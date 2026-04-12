@@ -13,7 +13,7 @@ use crate::wedge::Wedge;
 /// ray-tracing for occupancy. For a cuboid, occupancy is trivially determined
 /// by bounding box, so we implement it directly with a simpler approach.
 #[derive(Debug)]
-#[allow(dead_code)] // phase-6 fields (angle_p, angle_l, photo_electron_escape, fluorescent_escape, first_wedge)
+#[allow(dead_code)] // phase-6 fields (angle_p, angle_l, photo_electron_escape, fluorescent_escape, calc_surrounding, first_wedge)
 pub struct CrystalCuboid {
     /// Crystal dimensions in µm [x, y, z].
     cryst_size_um: [f64; 3],
@@ -46,6 +46,8 @@ pub struct CrystalCuboid {
     photo_electron_escape: bool,
     /// Whether fluorescent escape is enabled.
     fluorescent_escape: bool,
+    /// Whether surrounding (cryo) calculation is enabled.
+    calc_surrounding: bool,
     /// Is this the first wedge?
     first_wedge: bool,
     /// Vertices of the cuboid (8 vertices × 3 coords).
@@ -234,6 +236,10 @@ impl CrystalCuboid {
             .calculate_fl_escape
             .as_deref()
             .is_some_and(|s| s.eq_ignore_ascii_case("true"));
+        let calc_surrounding = config
+            .calc_surrounding
+            .as_deref()
+            .is_some_and(|s| s.eq_ignore_ascii_case("true"));
 
         // MC/XFEL/MicroED config
         let runs = config.runs.unwrap_or(1).max(1) as usize;
@@ -264,6 +270,7 @@ impl CrystalCuboid {
             subprogram,
             photo_electron_escape,
             fluorescent_escape,
+            calc_surrounding,
             first_wedge: true,
             vertices,
             rotated_vertices: vertices,
@@ -520,6 +527,10 @@ impl super::Crystal for CrystalCuboid {
 
     fn fluorescent_escape(&self) -> bool {
         self.fluorescent_escape
+    }
+
+    fn calc_surrounding(&self) -> bool {
+        self.calc_surrounding
     }
 
     fn expose(&mut self, beam: &mut dyn Beam, wedge: &Wedge) {

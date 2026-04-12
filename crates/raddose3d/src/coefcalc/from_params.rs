@@ -259,6 +259,106 @@ impl super::CoefCalc for CoefCalcFromParams {
         self.compute.calc_shell_binding_energy(element, shell)
     }
 
+    fn atomic_number_of(&self, element: &str) -> usize {
+        use crate::element::database::ElementDatabase;
+        let db = ElementDatabase::instance();
+        db.get(element)
+            .map(|e| e.atomic_number() as usize)
+            .unwrap_or(0)
+    }
+
+    fn shell_fluorescence_yield(&self, element: &str, shell: usize) -> f64 {
+        use crate::element::database::ElementDatabase;
+        let db = ElementDatabase::instance();
+        if let Some(e) = db.get(element) {
+            match shell {
+                0 => e.k_fluorescence_yield().unwrap_or(0.0),
+                1 => e.l1_fluorescence_yield().unwrap_or(0.0),
+                2 => e.l2_fluorescence_yield().unwrap_or(0.0),
+                3 => e.l3_fluorescence_yield().unwrap_or(0.0),
+                4 => e.m1_fluorescence_yield().unwrap_or(0.0),
+                5 => e.m2_fluorescence_yield().unwrap_or(0.0),
+                6 => e.m3_fluorescence_yield().unwrap_or(0.0),
+                7 => e.m4_fluorescence_yield().unwrap_or(0.0),
+                8 => e.m5_fluorescence_yield().unwrap_or(0.0),
+                _ => 0.0,
+            }
+        } else {
+            0.0
+        }
+    }
+
+    fn gos_inel(&mut self, cryo: bool, energy: f64) -> f64 {
+        self.compute.calc_gos_inel(cryo, energy)
+    }
+
+    fn gos_inner_lambda(&self, cryo: bool) -> f64 {
+        self.compute.calc_gos_inner_lambda(cryo)
+    }
+
+    fn gos_outer_lambda(&self, cryo: bool) -> f64 {
+        self.compute.calc_gos_outer_lambda(cryo)
+    }
+
+    fn gos_shell_probs(
+        &self,
+        cryo: bool,
+        lambda: f64,
+    ) -> std::collections::HashMap<String, Vec<f64>> {
+        self.compute.calc_gos_shell_probs(cryo, lambda)
+    }
+
+    fn gos_outer_shell_probs(
+        &self,
+        cryo: bool,
+        lambda: f64,
+    ) -> std::collections::HashMap<String, f64> {
+        self.compute.calc_gos_outer_shell_probs(cryo, lambda)
+    }
+
+    fn gos_outer_shell_probs_simple(
+        &self,
+        cryo: bool,
+        lambda: f64,
+    ) -> std::collections::HashMap<String, f64> {
+        self.compute.calc_gos_outer_shell_probs(cryo, lambda)
+    }
+
+    fn gos_variable(&self, cryo: bool) -> std::collections::HashMap<String, Vec<f64>> {
+        self.compute.calc_gos_variable(cryo)
+    }
+
+    fn plasmon_variable(&self, cryo: bool) -> f64 {
+        self.compute.calc_plasmon_variable(cryo)
+    }
+
+    fn return_adjustment(&self) -> f64 {
+        self.compute.sturnheimer_adjustment
+    }
+
+    fn wk_molecule(&self, a: f64, element: &str, shell: usize, cryo: bool) -> f64 {
+        self.compute.wk_molecule_calc(a, element, shell, cryo)
+    }
+
+    fn wcb_all(&self, cryo: bool) -> f64 {
+        self.compute.calc_wcb_all(cryo)
+    }
+
+    fn num_valence_electrons_subshells(&self, element: &str) -> Vec<i32> {
+        use crate::element::database::ElementDatabase;
+        let db = ElementDatabase::instance();
+        if let Some(e) = db.get(element) {
+            let [v, n] = CoefCalcCompute::num_valence_electrons_subshells_z(e.atomic_number());
+            vec![v, n]
+        } else {
+            vec![0, 0]
+        }
+    }
+
+    fn plasma_energy(&self, cryo: bool) -> f64 {
+        self.compute.plasma_energy_all(cryo)
+    }
+
     fn total_atoms_in_crystal_element(&self, volume_cm3: f64, element: &str) -> f64 {
         let atoms_per_cell = self.compute.total_atoms(element);
         if self.compute.cell_volume == 0.0 {

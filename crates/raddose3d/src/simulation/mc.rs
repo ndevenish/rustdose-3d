@@ -9,7 +9,6 @@ use std::f64::consts::PI;
 
 use crate::beam::Beam;
 use crate::coefcalc::CoefCalc;
-use crate::element::database::Element;
 use crate::wedge::Wedge;
 
 /// Speed of light (m/s).
@@ -1075,36 +1074,6 @@ impl MonteCarloSimulation {
 
     // ── Shell binding energy ──────────────────────────────────────────────────
 
-    fn get_shell_binding_energy(element: &Element, shell: usize) -> f64 {
-        match shell {
-            0 => element.k_edge().unwrap_or(0.0),
-            1 => element.l1_edge().unwrap_or(0.0),
-            2 => element.l2_edge().unwrap_or(0.0),
-            3 => element.l3_edge().unwrap_or(0.0),
-            4 => element.m1_edge(),
-            5 => element.m2_edge().unwrap_or(0.0),
-            6 => element.m3_edge().unwrap_or(0.0),
-            7 => element.m4_edge().unwrap_or(0.0),
-            8 => element.m5_edge().unwrap_or(0.0),
-            _ => 0.0,
-        }
-    }
-
-    fn get_shell_fluorescence_yield(element: &Element, shell: usize) -> f64 {
-        match shell {
-            0 => element.k_fluorescence_yield().unwrap_or(0.0),
-            1 => element.l1_fluorescence_yield().unwrap_or(0.0),
-            2 => element.l2_fluorescence_yield().unwrap_or(0.0),
-            3 => element.l3_fluorescence_yield().unwrap_or(0.0),
-            4 => element.m1_fluorescence_yield().unwrap_or(0.0),
-            5 => element.m2_fluorescence_yield().unwrap_or(0.0),
-            6 => element.m3_fluorescence_yield().unwrap_or(0.0),
-            7 => element.m4_fluorescence_yield().unwrap_or(0.0),
-            8 => element.m5_fluorescence_yield().unwrap_or(0.0),
-            _ => 0.0,
-        }
-    }
-
     // ── Auger transition index ────────────────────────────────────────────────
 
     fn get_transition_index_auger(&self, z: u32, shell: u32) -> usize {
@@ -1286,6 +1255,25 @@ impl MonteCarloSimulation {
             let element_compton_probs = coef_calc.compton_probs_element(energy_of_photon);
             let ionisation_probs = coef_calc.relative_shell_probs(energy_of_photon, false);
 
+            // Set up surrounding (cryo) volume if enabled (Java MC.java ~line 425)
+            if coef_calc.is_cryo() {
+                coef_calc.update_cryo_coefficients(energy_of_photon);
+                // Cap surrounding thickness by max PE travel distance
+                let stopping_power = coef_calc.stopping_power(energy_of_photon, true);
+                if stopping_power > 0.0 {
+                    let wick_test = energy_of_photon / stopping_power;
+                    for j in 0..3 {
+                        if self.surrounding_thickness[j] <= 0.0
+                            || self.surrounding_thickness[j] > wick_test
+                        {
+                            self.surrounding_thickness[j] = wick_test;
+                        }
+                    }
+                }
+                self.setup_surrounding_volume();
+                self.set_up_rotated_vertices_surrounding(angle, wedge);
+            }
+
             // Time stamp for this photon
             let time_stamp = (i as f64 / photon_divisions) * self.pulse_bin_length;
 
@@ -1294,7 +1282,15 @@ impl MonteCarloSimulation {
             let previous_y = xy_pos[1];
 
             let coord = [previous_x / 1000.0, previous_y / 1000.0, 0.0];
-            let previous_z = self.get_starting_z(angle, wedge, &coord, true);
+
+            // Place photon at surrounding front (or crystal front if no cryo)
+            let (previous_z, _is_surrounding) = if coef_calc.is_cryo() {
+                let surr_z = self.get_starting_z_surrounding(angle, wedge, &coord);
+                let cryst_z = self.get_starting_z(angle, wedge, &coord, true);
+                (surr_z, cryst_z != surr_z)
+            } else {
+                (self.get_starting_z(angle, wedge, &coord, true), false)
+            };
 
             if previous_z == 0.0 {
                 miss_count += 1;

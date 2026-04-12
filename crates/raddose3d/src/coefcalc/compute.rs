@@ -102,6 +102,15 @@ pub struct CoefCalcCompute {
     /// Same as above but for surrounding/cryo.
     pub elastic_x_sections_surrounding: HashMap<String, f64>,
     pub elastic_x_section_tot_surrounding: f64,
+
+    // GOS inelastic state: element → [maxShells=10][4]  (long, trans, close, tot)
+    pub gos_inelastic: HashMap<String, Vec<[f64; 4]>>,
+    pub gos_inelastic_surrounding: HashMap<String, Vec<[f64; 4]>>,
+    /// Plasmon (conduction-band) inelastic: [long, trans, close, tot]
+    pub cb_inel: [f64; 4],
+    pub cb_inel_surrounding: [f64; 4],
+    /// Sturnheimer a parameter from last `gos_inel` call.
+    pub sturnheimer_adjustment: f64,
 }
 
 impl Default for CoefCalcCompute {
@@ -146,6 +155,11 @@ impl CoefCalcCompute {
             elastic_x_section_tot: 0.0,
             elastic_x_sections_surrounding: HashMap::new(),
             elastic_x_section_tot_surrounding: 0.0,
+            gos_inelastic: HashMap::new(),
+            gos_inelastic_surrounding: HashMap::new(),
+            cb_inel: [0.0; 4],
+            cb_inel_surrounding: [0.0; 4],
+            sturnheimer_adjustment: 1.5,
         }
     }
 
@@ -1394,5 +1408,782 @@ impl CoefCalcCompute {
             probs.insert(name.clone(), running_sum);
         }
         probs
+    }
+
+    // -----------------------------------------------------------------------
+    // GOS (Generalised Oscillator Strength) inelastic scattering physics
+    // Ported from Java CoefCalcCompute.java — Ritchie/Ashley GOS model.
+    // -----------------------------------------------------------------------
+
+    /// Returns total atoms of an element in the cryo-surrounding.
+    fn total_atoms_surr(&self, element: &str) -> f64 {
+        self.cryo_occurrence.get(element).copied().unwrap_or(0.0)
+    }
+
+    /// Number of valence electrons and inner shells for element Z.
+    /// Returns `[valence, numInnerShells]`.  Matches Java `getNumValenceElectronsSubshells`.
+    pub fn num_valence_electrons_subshells_z(z: i32) -> [i32; 2] {
+        if z <= 2 {
+            [z, 0]
+        } else if z <= 10 {
+            [z - 2, 1]
+        } else if z == 11 {
+            [z - 4, 2]
+        } else if z == 12 {
+            [z - 6, 3]
+        } else if (13..=19).contains(&z) {
+            [z - 10, 4]
+        } else if (20..=22).contains(&z) {
+            [z - 12, 5]
+        } else if z == 23 {
+            [z - 14, 6]
+        } else if (24..=32).contains(&z) {
+            [z - 18, 7]
+        } else if (33..=34).contains(&z) {
+            [z - 28, 9]
+        } else {
+            // Fallback for higher Z — use shell structure from getNumValenceElectrons
+            if z <= 10 {
+                [z - 2, 1]
+            } else if z <= 28 {
+                [z - 10, 2]
+            } else if z <= 60 {
+                [z - 28, 3]
+            } else {
+                [z - 60, 4]
+            }
+        }
+    }
+
+    /// Shell binding energy in eV using subshell indices.
+    /// Index 0=K, 1=L1, 2=L2, 3=L3, 4=M1, 5=M2, 6=M3, 7=M4, 8=M5, 9=N1.
+    /// Matches Java `getShellBindingSubshell`.
+    pub fn shell_binding_subshell_kev(element: &str, shell_index: usize) -> f64 {
+        use crate::element::database::ElementDatabase;
+        let db = ElementDatabase::instance();
+        let Some(e) = db.get(element) else { return 0.0 };
+        let val = match shell_index {
+            0 => e.k_edge(),
+            1 => e.l1_binding(),
+            2 => e.l2_edge(),
+            3 => e.l3_edge(),
+            4 => e.m1_binding(),
+            5 => e.m2_edge(),
+            6 => e.m3_edge(),
+            7 => e.m4_edge(),
+            8 => e.m5_edge(),
+            9 => e.n1_binding(),
+            _ => None,
+        };
+        val.unwrap_or(0.0)
+    }
+
+    /// Shell binding energy in eV using coarser (3-shell) index.
+    /// Index 0=K, 1=L1, 2=M1.  Matches Java `getShellBinding`.
+    pub fn shell_binding_kev(element: &str, shell_index: usize) -> f64 {
+        use crate::element::database::ElementDatabase;
+        let db = ElementDatabase::instance();
+        let Some(e) = db.get(element) else { return 0.0 };
+        match shell_index {
+            0 => e.k_edge().unwrap_or(0.0),
+            1 => e.l1_edge().unwrap_or(0.0),
+            2 => e.m1_edge(),
+            _ => 0.0,
+        }
+    }
+
+    /// Plasma energy (eV) from electron density.  Matches Java `getPlasmaEnergyAll`.
+    pub fn plasma_energy_all(&self, surrounding: bool) -> f64 {
+        let hbar_sq: f64 = (6.62607004e-34 / (2.0 * std::f64::consts::PI)).powi(2);
+        let m: f64 = 9.10938356e-31;
+        let e_sq: f64 = (4.80320425e-10_f64).powi(2) / 1000.0; // esu²→kg cm³ s⁻²
+        let mut nz: f64 = 0.0;
+        let elements: Vec<String> = if surrounding {
+            self.cryo_elements.iter().cloned().collect()
+        } else {
+            self.present_elements.iter().cloned().collect()
+        };
+        for name in &elements {
+            let atom_num = if surrounding {
+                self.total_atoms_surr(name)
+            } else {
+                self.total_atoms(name)
+            };
+            if let Some(z) = crate::element::database::ElementDatabase::instance()
+                .get(name)
+                .map(|e| e.atomic_number() as f64)
+            {
+                // electrons cm⁻³ — cell_volume in Å³, 1Å³ = 1e-24 cm³
+                nz += (z * atom_num) / (self.cell_volume / 1e24);
+            }
+        }
+        let mut plasma_energy = (4.0 * std::f64::consts::PI * hbar_sq * nz * e_sq / m).sqrt(); // J
+        plasma_energy = (plasma_energy / KEV_TO_JOULES) * 1000.0; // eV
+        plasma_energy
+    }
+
+    /// Wcb — bulk conduction-band plasmon energy (eV).  Matches Java `getWcbAll`.
+    pub fn calc_wcb_all(&self, surrounding: bool) -> f64 {
+        const FCB_CUTOFF: f64 = 0.0;
+        let hbar_sq: f64 = (6.62607004e-34 / (2.0 * std::f64::consts::PI)).powi(2);
+        let m: f64 = 9.10938356e-31;
+        let e_sq: f64 = (4.80320425e-10_f64).powi(2) / 1000.0;
+        let elements: Vec<String> = if surrounding {
+            self.cryo_elements.iter().cloned().collect()
+        } else {
+            self.present_elements.iter().cloned().collect()
+        };
+        let mut nz: f64 = 0.0;
+        let mut sum_z: f64 = 0.0;
+        let mut sum_fcb: f64 = 0.0;
+        for name in &elements {
+            let atom_num = if surrounding {
+                self.total_atoms_surr(name)
+            } else {
+                self.total_atoms(name)
+            };
+            let db = crate::element::database::ElementDatabase::instance();
+            let Some(e) = db.get(name) else { continue };
+            let z = e.atomic_number() as f64;
+            nz += (z * atom_num) / (self.cell_volume / 1e24);
+            sum_z += z * atom_num;
+            let [_valence, num_inner] = Self::num_valence_electrons_subshells_z(e.atomic_number());
+            for i in 0..=num_inner {
+                let uk_kev = Self::shell_binding_kev(name, i as usize);
+                let uk_ev = uk_kev * 1000.0;
+                if uk_ev < FCB_CUTOFF {
+                    // subshells[i] electrons from the simple shell structure
+                    const SUBSHELLS: [i32; 10] = [2, 2, 2, 4, 2, 2, 4, 10, 2, 30];
+                    let [valence, num_inner2] =
+                        Self::num_valence_electrons_subshells_z(e.atomic_number());
+                    let fk = if i == num_inner2 {
+                        valence
+                    } else {
+                        SUBSHELLS[i as usize]
+                    };
+                    sum_fcb += fk as f64 * atom_num;
+                }
+            }
+        }
+        if sum_z == 0.0 {
+            return 0.0;
+        }
+        let mut plasma_energy = (4.0 * std::f64::consts::PI * hbar_sq * nz * e_sq / m).sqrt(); // J
+        plasma_energy = (plasma_energy / KEV_TO_JOULES) * 1000.0; // eV
+        ((sum_fcb / sum_z).sqrt()) * plasma_energy
+    }
+
+    /// Wk for a molecule shell.  Matches Java `getWkMolecule`.
+    pub fn wk_molecule_calc(
+        &self,
+        a: f64,
+        element: &str,
+        shell_index: usize,
+        surrounding: bool,
+    ) -> f64 {
+        const SUBSHELLS: [i32; 10] = [2, 2, 2, 4, 2, 2, 4, 10, 2, 30];
+        let db = crate::element::database::ElementDatabase::instance();
+        let Some(e) = db.get(element) else { return 0.0 };
+        let z = e.atomic_number();
+        let elements: Vec<String> = if surrounding {
+            self.cryo_elements.iter().cloned().collect()
+        } else {
+            self.present_elements.iter().cloned().collect()
+        };
+        let tot_num = if surrounding {
+            self.total_atoms_surr(element)
+        } else {
+            self.total_atoms(element)
+        };
+        let mut sum_z: i64 = 0;
+        for name in &elements {
+            let atom_num = if surrounding {
+                self.total_atoms_surr(name)
+            } else {
+                self.total_atoms(name)
+            };
+            if let Some(elem) = db.get(name) {
+                sum_z += (elem.atomic_number() as i64) * (atom_num.round() as i64);
+            }
+        }
+        if sum_z == 0 {
+            return 0.0;
+        }
+        let [valence, num_inner] = Self::num_valence_electrons_subshells_z(z);
+        let fk = if shell_index == num_inner as usize {
+            valence
+        } else {
+            SUBSHELLS.get(shell_index).copied().unwrap_or(0)
+        };
+        let plasma_energy = self.plasma_energy_all(surrounding);
+        let uk_kev = Self::shell_binding_subshell_kev(element, shell_index);
+        let term1 = (a * uk_kev * 1000.0).powi(2);
+        let term2 = (2.0 / 3.0) * ((fk as f64 * tot_num) / (sum_z as f64)) * plasma_energy.powi(2);
+        (term1 + term2).sqrt()
+    }
+
+    /// Qminus (minimum momentum transfer, J).  Matches Java `getQminusModified`.
+    fn get_qminus_modified(e_kev: f64, wak_ev: f64) -> f64 {
+        let m: f64 = 9.10938356e-31;
+        let c: f64 = 299_792_458.0;
+        let csq = c * c;
+        let e_j = e_kev * KEV_TO_JOULES;
+        let wak_j = (wak_ev / 1000.0) * KEV_TO_JOULES;
+        if wak_j > e_j {
+            return 0.0;
+        }
+        let a = (e_j * (e_j + 2.0 * m * csq)).sqrt();
+        let b = ((e_j - wak_j) * (e_j - wak_j + 2.0 * m * csq)).sqrt();
+        ((a - b).powi(2) + (m * csq).powi(2)).sqrt() - m * csq
+    }
+
+    /// Wak: effective energy loss (eV).  Matches Java `getWak`.
+    fn get_wak(e_kev: f64, wk_ev: f64, uk_ev: f64) -> f64 {
+        if e_kev * 1000.0 > 3.0 * wk_ev - 2.0 * uk_ev {
+            wk_ev
+        } else {
+            (e_kev * 1000.0 + 2.0 * uk_ev) / 3.0
+        }
+    }
+
+    /// Qak: cut-off momentum transfer (eV).  Matches Java `getQak`.
+    fn get_qak(e_kev: f64, wk_ev: f64, uk_ev: f64) -> f64 {
+        if e_kev * 1000.0 > 3.0 * wk_ev - 2.0 * uk_ev {
+            uk_ev
+        } else {
+            uk_ev * (e_kev * 1000.0 / (3.0 * wk_ev - 2.0 * uk_ev))
+        }
+    }
+
+    /// Edash = E + Uk/1000.  Matches Java `getEdash`.
+    fn get_edash(e_kev: f64, uk_ev: f64) -> f64 {
+        e_kev + uk_ev / 1000.0
+    }
+
+    /// Relativistic close-collision parameter.  Matches Java `getClosea`.
+    fn get_close_a(e_kev: f64) -> f64 {
+        let m: f64 = 9.10938356e-31;
+        let c: f64 = 299_792_458.0;
+        let csq = c * c;
+        let vo = e_kev * KEV_TO_JOULES;
+        (vo / (vo + m * csq)).powi(2)
+    }
+
+    /// Analytical solution for the close-collision integral.
+    /// Matches Java `solveCloseAnalytical`.
+    fn solve_close_analytical(win_ev: f64, n: i32, energy_kev: f64) -> f64 {
+        let e = energy_kev * KEV_TO_JOULES;
+        let w = (win_ev / 1000.0) * KEV_TO_JOULES;
+        if e <= w {
+            return 0.0;
+        }
+        let a = Self::get_close_a(energy_kev);
+        match n {
+            0 => {
+                -1.0 / w + 1.0 / (e - w) + ((1.0 - a) / e) * ((e - w) / w).ln() + a * w / e.powi(2)
+            }
+            1 => {
+                w.ln()
+                    + e / (e - w)
+                    + (2.0 - a) * (e - w).ln()
+                    + (a * w.powi(2)) / (2.0 * e.powi(2))
+            }
+            2 => {
+                (2.0 - a) * w
+                    + (2.0 * e.powi(2) - w.powi(2)) / (e - w)
+                    + (3.0 - a) * e * (e - w).ln()
+                    + (a * w.powi(3)) / (3.0 * e.powi(2))
+            }
+            _ => 0.0,
+        }
+    }
+
+    /// Close-collision integral.  Matches Java `doCloseIntegral`.
+    fn do_close_integral(e_kev: f64, n: i32, uk_ev: f64, qak_ev: f64) -> f64 {
+        let e_dash = Self::get_edash(e_kev, uk_ev);
+        let wmax = 1000.0 * e_dash / 2.0; // eV
+        Self::solve_close_analytical(wmax, n, e_dash)
+            - Self::solve_close_analytical(qak_ev, n, e_dash)
+    }
+
+    /// Distant-interaction GOS distribution p(W) for a shell.
+    fn get_p_dis_w(
+        e_kev: f64,
+        w_j: f64,
+        _a: f64,
+        element: &str,
+        shell: usize,
+        _surrounding: bool,
+        wk_cache: f64,
+    ) -> f64 {
+        let uk_kev = Self::shell_binding_kev(element, shell);
+        let wak = Self::get_wak(e_kev, wk_cache, uk_kev * 1000.0);
+        let wdis_ev = 3.0 * wak - 2.0 * uk_kev * 1000.0;
+        let uk_j = (uk_kev / 1.0) * KEV_TO_JOULES; // uk in keV → J
+        let wdis_j = (wdis_ev / 1000.0) * KEV_TO_JOULES;
+        if w_j >= uk_j && w_j < wdis_j {
+            (2.0 / (wdis_j - uk_j).powi(2)) * (wdis_j - w_j)
+        } else {
+            0.0
+        }
+    }
+
+    /// Integral of W^(n-1) × p_dis(W) by trapezoid rule.  Matches Java `integrateDist`.
+    #[allow(clippy::too_many_arguments)]
+    fn integrate_dist(
+        &self,
+        e_kev: f64,
+        uk_ev: f64,
+        n: i32,
+        shell: usize,
+        element: &str,
+        a: f64,
+        surrounding: bool,
+    ) -> f64 {
+        const WBINS: usize = 1000;
+        let wk = self.wk_molecule_calc(a, element, shell, surrounding);
+        if wk <= 0.0 {
+            return 0.0;
+        }
+        let wak = Self::get_wak(e_kev, wk, uk_ev);
+        let wdis_ev = 3.0 * wak - 2.0 * uk_ev;
+        let wdis_j = (wdis_ev / 1000.0) * KEV_TO_JOULES;
+        let uk_kev = uk_ev / 1000.0;
+        let binding_j = uk_kev * KEV_TO_JOULES;
+        let step = wdis_j / (WBINS as f64);
+        if step <= 0.0 {
+            return 0.0;
+        }
+        let mut w = binding_j;
+        let mut prev_y = 0.0_f64;
+        let mut sum = 0.0_f64;
+        let mut count = 0;
+        loop {
+            let this_y = if w == 0.0 {
+                0.0
+            } else {
+                let p = Self::get_p_dis_w(e_kev, w, a, element, shell, surrounding, wk);
+                if n == 1 {
+                    p
+                } else {
+                    w.powi(n - 1) * p
+                }
+            };
+            if count > 0 {
+                sum += step * (this_y + prev_y) / 2.0;
+            }
+            count += 1;
+            w += step;
+            prev_y = this_y;
+            if w > wdis_j {
+                break;
+            }
+        }
+        sum
+    }
+
+    /// Plasmon distribution integral.  Matches Java `integrateDistPlasmon`.
+    fn integrate_dist_plasmon(e_kev: f64, n: i32, wcb_ev: f64) -> f64 {
+        let uk_ev = 0.0_f64;
+        let e_dash = Self::get_edash(e_kev, uk_ev);
+        let wmax = (e_dash / 2.0) * KEV_TO_JOULES; // J
+        let w = (wcb_ev / 1000.0) * KEV_TO_JOULES; // J
+        if w > 0.0 && w < wmax {
+            if n == 1 {
+                w.powi(0)
+            } else {
+                w.powi(n - 1)
+            }
+        } else {
+            0.0
+        }
+    }
+
+    /// Sum of Z×ln(I) for mean excitation energy, weighted by atoms.
+    fn get_zlni(&self, surrounding: bool) -> f64 {
+        let elements: Vec<String> = if surrounding {
+            self.cryo_elements.iter().cloned().collect()
+        } else {
+            self.present_elements.iter().cloned().collect()
+        };
+        let db = crate::element::database::ElementDatabase::instance();
+        let mut sum_z = 0.0_f64;
+        let mut sum_a = 0.0_f64;
+        let mut meln_i = 0.0_f64;
+        for name in &elements {
+            let atom_num = if surrounding {
+                self.total_atoms_surr(name)
+            } else {
+                self.total_atoms(name)
+            };
+            let Some(e) = db.get(name) else { continue };
+            let z = e.atomic_number() as f64;
+            let a = e.atomic_weight();
+            let mol_weight_fraction = (atom_num * a) / self.molecular_weight;
+            sum_z += z * atom_num;
+            sum_a += a * atom_num;
+            let mut j = e.mean_ionisation_potential(); // eV
+            if z as i32 != 1
+                && z as i32 != 6
+                && z as i32 != 7
+                && z as i32 != 8
+                && z as i32 != 9
+                && z as i32 != 17
+            {
+                j *= 1.13;
+            }
+            meln_i += mol_weight_fraction * (z / a) * j.ln();
+        }
+        if sum_a == 0.0 {
+            return 0.0;
+        }
+        meln_i /= sum_z / sum_a;
+        sum_z * meln_i
+    }
+
+    /// Check if Sturnheimer `a` is consistent with mean excitation energy.
+    /// Returns `[ZlnI, RHS]`.  Matches Java `checkMeanI`.
+    fn check_mean_i(&self, _e_kev: f64, a: f64, surrounding: bool) -> [f64; 2] {
+        const FCB_CUTOFF: f64 = 0.0;
+        const SUBSHELLS: [i32; 10] = [2, 2, 2, 4, 2, 2, 4, 10, 2, 30];
+        let zlni = self.get_zlni(surrounding);
+        let elements: Vec<String> = if surrounding {
+            self.cryo_elements.iter().cloned().collect()
+        } else {
+            self.present_elements.iter().cloned().collect()
+        };
+        let db = crate::element::database::ElementDatabase::instance();
+        let mut sum_fcb = 0.0_f64;
+        let mut sum_fk_ln_wk = 0.0_f64;
+        for name in &elements {
+            let atom_num = if surrounding {
+                self.total_atoms_surr(name)
+            } else {
+                self.total_atoms(name)
+            };
+            let Some(e) = db.get(name) else { continue };
+            let [valence, num_inner] = Self::num_valence_electrons_subshells_z(e.atomic_number());
+            for i in 0..=(num_inner as usize) {
+                let mut fk = SUBSHELLS.get(i).copied().unwrap_or(0);
+                if i == num_inner as usize {
+                    let uk_ev = Self::shell_binding_subshell_kev(name, i) * 1000.0;
+                    if uk_ev > FCB_CUTOFF {
+                        fk = valence;
+                    } else {
+                        sum_fcb += valence as f64;
+                        fk = 0;
+                    }
+                }
+                let wk = self.wk_molecule_calc(a, name, i, surrounding);
+                if wk > 0.0 {
+                    sum_fk_ln_wk += atom_num * fk as f64 * wk.ln();
+                }
+            }
+        }
+        let wcb = self.calc_wcb_all(surrounding);
+        let fcb_ln_wcb = if wcb > 0.0 { sum_fcb * wcb.ln() } else { 0.0 };
+        let rhs = fcb_ln_wcb + sum_fk_ln_wk;
+        [zlni, rhs]
+    }
+
+    /// Find Sturnheimer `a` by bisection on `checkMeanI`.  Matches Java `getSturnheimera`.
+    fn get_sturnheimer_a(&self, e_kev: f64, surrounding: bool) -> f64 {
+        let mut a = 1.5_f64;
+        let check = self.check_mean_i(e_kev, a, surrounding);
+        if check[1] > check[0] {
+            // a too high, decrease
+            while a > 0.1 {
+                a -= 0.1;
+                let c = self.check_mean_i(e_kev, a, surrounding);
+                if c[1] <= c[0] {
+                    break;
+                }
+            }
+        } else {
+            // a too low, increase
+            while a < 3.0 {
+                let prev = self.check_mean_i(e_kev, a, surrounding);
+                a += 0.1;
+                let c = self.check_mean_i(e_kev, a, surrounding);
+                if c[1] >= c[0] {
+                    // interpolate back
+                    let frac = (c[1] - c[0]) / (c[1] - prev[1]);
+                    a -= 0.1 * frac;
+                    break;
+                }
+            }
+        }
+        a
+    }
+
+    /// Populate GOS inelastic tables and return lambda (nm).
+    /// `n=0` → MFP, `n=1` → stopping power, `n=2` → straggling.
+    /// Matches Java `populateGOSInel`.
+    #[allow(clippy::needless_range_loop)]
+    pub fn populate_gos_inel(&mut self, e_kev: f64, n: i32, a: f64, surrounding: bool) -> f64 {
+        const FCB_CUTOFF: f64 = 0.0;
+        const SUBSHELLS: [i32; 10] = [2, 2, 2, 4, 2, 2, 4, 10, 2, 30];
+        const MAX_SHELLS: usize = 10;
+
+        let e_charge: f64 = 4.80320425e-10;
+        let m: f64 = 9.10938356e-31;
+        let c: f64 = 299_792_458.0;
+        let csq = c * c;
+        let vo = e_kev * KEV_TO_JOULES;
+        let beta_sq = 1.0 - (m * csq / (vo + m * csq)).powi(2);
+        let v_sq = beta_sq * csq;
+        let constant = 2.0 * std::f64::consts::PI * (e_charge.powi(4) / 1.0e18) / (m * v_sq);
+
+        let elements: Vec<String> = if surrounding {
+            self.cryo_elements.iter().cloned().collect()
+        } else {
+            self.present_elements.iter().cloned().collect()
+        };
+        let db = crate::element::database::ElementDatabase::instance();
+
+        let mut check_sum = 0.0_f64;
+        let mut sum_fcb = 0.0_f64;
+        let mut new_map: HashMap<String, Vec<[f64; 4]>> = HashMap::new();
+
+        for name in &elements {
+            let atom_num = if surrounding {
+                self.total_atoms_surr(name)
+            } else {
+                self.total_atoms(name)
+            };
+            if atom_num <= 0.0 {
+                continue;
+            }
+            let Some(e) = db.get(name) else { continue };
+            let [valence, num_inner] = Self::num_valence_electrons_subshells_z(e.atomic_number());
+            let mut inel_shell = vec![[0.0_f64; 4]; MAX_SHELLS];
+
+            for i in 0..=(num_inner as usize) {
+                let mut fk = SUBSHELLS.get(i).copied().unwrap_or(0);
+                if i == num_inner as usize {
+                    fk = valence;
+                }
+                let wk = self.wk_molecule_calc(a, name, i, surrounding);
+                if wk <= 0.0 {
+                    continue;
+                }
+                let uk_ev = Self::shell_binding_subshell_kev(name, i) * 1000.0;
+                if uk_ev < FCB_CUTOFF {
+                    sum_fcb += fk as f64 * atom_num;
+                    fk = 0;
+                }
+                let wak = Self::get_wak(e_kev, wk, uk_ev);
+                let qak = Self::get_qak(e_kev, wk, uk_ev);
+                let qminus = Self::get_qminus_modified(e_kev, wak);
+                let integral = self.integrate_dist(e_kev, uk_ev, n, i, name, a, surrounding);
+
+                if e_kev * 1000.0 > uk_ev && uk_ev >= FCB_CUTOFF {
+                    if qak > 0.0 && qminus > 0.0 {
+                        let qak_j = (qak / 1000.0) * KEV_TO_JOULES;
+                        let log_term =
+                            (qak_j / qminus) * ((qminus + 2.0 * m * csq) / (qak_j + 2.0 * m * csq));
+                        inel_shell[i][0] =
+                            (1.0e18 * constant * (atom_num * fk as f64 * log_term.ln() * integral))
+                                / (self.cell_volume / 1000.0);
+                    }
+                    inel_shell[i][1] = (1.0e18
+                        * constant
+                        * (atom_num
+                            * fk as f64
+                            * ((1.0 / (1.0 - beta_sq)).ln() - beta_sq)
+                            * integral))
+                        / (self.cell_volume / 1000.0);
+                    let close_integral = Self::do_close_integral(e_kev, n, uk_ev, qak);
+                    inel_shell[i][2] =
+                        (1.0e18 * constant * (atom_num * fk as f64 * close_integral))
+                            / (self.cell_volume / 1000.0);
+                    inel_shell[i][3] = inel_shell[i][0] + inel_shell[i][1] + inel_shell[i][2];
+                    check_sum += inel_shell[i][3];
+                }
+            }
+            new_map.insert(name.clone(), inel_shell);
+        }
+
+        // Plasmon contribution
+        let wcb = self.calc_wcb_all(surrounding);
+        let qcb = wcb;
+        let qminus_cb = Self::get_qminus_modified(e_kev, wcb);
+        let integral_cb = Self::integrate_dist_plasmon(e_kev, n, wcb);
+        let mut cb = [0.0_f64; 4];
+        if wcb > 0.0 && e_kev * 1000.0 > wcb {
+            let qcb_j = (qcb / 1000.0) * KEV_TO_JOULES;
+            if qcb_j > 0.0 && qminus_cb > 0.0 {
+                let log_term =
+                    (qcb_j / qminus_cb) * ((qminus_cb + 2.0 * m * csq) / (qcb_j + 2.0 * m * csq));
+                cb[0] = (1.0e18 * constant * (sum_fcb * log_term.ln() * integral_cb))
+                    / (self.cell_volume / 1000.0);
+            }
+            cb[1] = (1.0e18
+                * constant
+                * (sum_fcb * ((1.0 / (1.0 - beta_sq)).ln() - beta_sq) * integral_cb))
+                / (self.cell_volume / 1000.0);
+            let close_integral_cb = Self::do_close_integral(e_kev, n, 0.0, qcb);
+            cb[2] = (1.0e18 * constant * sum_fcb * close_integral_cb) / (self.cell_volume / 1000.0);
+            cb[3] = cb[0] + cb[1] + cb[2];
+            check_sum += cb[3];
+        }
+
+        if surrounding {
+            self.gos_inelastic_surrounding = new_map;
+            self.cb_inel_surrounding = cb;
+        } else {
+            self.gos_inelastic = new_map;
+            self.cb_inel = cb;
+        }
+
+        if check_sum > 0.0 {
+            1.0 / check_sum
+        } else {
+            0.0
+        }
+    }
+
+    /// GOS inelastic MFP (nm).  Matches Java `getGOSInel`.
+    pub fn calc_gos_inel(&mut self, surrounding: bool, e_kev: f64) -> f64 {
+        let a = self.get_sturnheimer_a(e_kev, surrounding);
+        self.sturnheimer_adjustment = a;
+        self.populate_gos_inel(e_kev, 0, a, surrounding)
+    }
+
+    /// GOS inner-shell lambda (nm).  Matches Java `getGOSInnerLambda`.
+    pub fn calc_gos_inner_lambda(&self, surrounding: bool) -> f64 {
+        let map = if surrounding {
+            &self.gos_inelastic_surrounding
+        } else {
+            &self.gos_inelastic
+        };
+        let db = crate::element::database::ElementDatabase::instance();
+        let mut lambda_sum = 0.0_f64;
+        for (name, shells) in map {
+            let z = db.get(name).map(|e| e.atomic_number()).unwrap_or(0);
+            let [_, num_inner] = Self::num_valence_electrons_subshells_z(z);
+            for i in 0..(num_inner as usize) {
+                if i < shells.len() {
+                    lambda_sum += shells[i][3];
+                }
+            }
+        }
+        if lambda_sum > 0.0 {
+            1.0 / lambda_sum
+        } else {
+            0.0
+        }
+    }
+
+    /// GOS outer-shell lambda (nm).  Matches Java `getGOSOuterLambda`.
+    pub fn calc_gos_outer_lambda(&self, surrounding: bool) -> f64 {
+        let map = if surrounding {
+            &self.gos_inelastic_surrounding
+        } else {
+            &self.gos_inelastic
+        };
+        let db = crate::element::database::ElementDatabase::instance();
+        let mut lambda_sum = 0.0_f64;
+        for (name, shells) in map {
+            let z = db.get(name).map(|e| e.atomic_number()).unwrap_or(0);
+            let [_, num_inner] = Self::num_valence_electrons_subshells_z(z);
+            let outer = num_inner as usize;
+            if outer < shells.len() {
+                lambda_sum += shells[outer][3];
+            }
+        }
+        if lambda_sum > 0.0 {
+            1.0 / lambda_sum
+        } else {
+            0.0
+        }
+    }
+
+    /// GOS shell ionisation probabilities (CDF per element per shell).
+    /// Matches Java `getGOSShellProbs`.
+    pub fn calc_gos_shell_probs(
+        &self,
+        surrounding: bool,
+        tot_lambda: f64,
+    ) -> HashMap<String, Vec<f64>> {
+        let tot_inel = 1.0 / tot_lambda;
+        let map = if surrounding {
+            &self.gos_inelastic_surrounding
+        } else {
+            &self.gos_inelastic
+        };
+        let mut probs: HashMap<String, Vec<f64>> = HashMap::new();
+        let mut running_sum = 0.0_f64;
+        for (name, shells) in map {
+            let mut shell_probs = vec![0.0_f64; 9];
+            for (i, sh) in shells.iter().enumerate().take(9) {
+                let frac = if tot_inel > 0.0 {
+                    sh[3] / tot_inel
+                } else {
+                    0.0
+                };
+                running_sum += frac;
+                shell_probs[i] = running_sum;
+            }
+            probs.insert(name.clone(), shell_probs);
+        }
+        probs
+    }
+
+    /// GOS outer-shell ionisation probabilities (CDF per element).
+    /// Matches Java `getGOSOuterShellProbs`.
+    pub fn calc_gos_outer_shell_probs(
+        &self,
+        surrounding: bool,
+        tot_lambda: f64,
+    ) -> HashMap<String, f64> {
+        let tot_inel = 1.0 / tot_lambda;
+        let map = if surrounding {
+            &self.gos_inelastic_surrounding
+        } else {
+            &self.gos_inelastic
+        };
+        let db = crate::element::database::ElementDatabase::instance();
+        let mut probs: HashMap<String, f64> = HashMap::new();
+        let mut running_sum = 0.0_f64;
+        for (name, shells) in map {
+            let z = db.get(name).map(|e| e.atomic_number()).unwrap_or(0);
+            let [_, num_inner] = Self::num_valence_electrons_subshells_z(z);
+            let outer = num_inner as usize;
+            let frac = if tot_inel > 0.0 && outer < shells.len() {
+                shells[outer][3] / tot_inel
+            } else {
+                0.0
+            };
+            running_sum += frac;
+            probs.insert(name.clone(), running_sum);
+        }
+        probs
+    }
+
+    /// Returns raw GOSinelastic state as flat probability map.
+    /// Matches Java `getGOSVariable` (returns the map itself).
+    pub fn calc_gos_variable(&self, surrounding: bool) -> HashMap<String, Vec<f64>> {
+        let map = if surrounding {
+            &self.gos_inelastic_surrounding
+        } else {
+            &self.gos_inelastic
+        };
+        map.iter()
+            .map(|(k, v)| {
+                let flat: Vec<f64> = v.iter().flat_map(|sh| sh.iter().copied()).collect();
+                (k.clone(), flat)
+            })
+            .collect()
+    }
+
+    /// Plasmon (conduction-band) total cross-section (nm⁻¹).
+    /// Matches Java `getPlasmonVariable` → returns cbInel[3].
+    pub fn calc_plasmon_variable(&self, surrounding: bool) -> f64 {
+        if surrounding {
+            self.cb_inel_surrounding[3]
+        } else {
+            self.cb_inel[3]
+        }
     }
 }
