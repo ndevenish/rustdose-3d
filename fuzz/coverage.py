@@ -351,6 +351,12 @@ def main():
              "same filter as the printed totals). Useful for scripted analysis "
              "of uncovered lines/regions per file.",
     )
+    ap.add_argument(
+        "--html", type=Path, default=None, metavar="DIR",
+        help="Generate a browsable HTML coverage report into DIR using "
+             "'llvm-cov show --format=html'. Opens index.html in that directory. "
+             "Defaults to html/ inside --out-dir when --out-dir is set.",
+    )
     args = ap.parse_args()
 
     import shutil as _shutil
@@ -632,6 +638,27 @@ def main():
             print(f"Coverage JSON saved to {args.save_covdata}")
         else:
             print("WARNING: no coverage data to save", file=sys.stderr)
+
+    # Resolve effective HTML output dir: explicit flag > out_dir/html > None
+    effective_html_dir = args.html
+    if effective_html_dir is None and args.out_dir is not None:
+        effective_html_dir = args.out_dir / "html"
+
+    if effective_html_dir and effective_profdata_dest and effective_profdata_dest.exists():
+        effective_html_dir.mkdir(parents=True, exist_ok=True)
+        html_cmd = [
+            str(llvm_cov), "show",
+            "--format=html",
+            f"--instr-profile={effective_profdata_dest}",
+            "--ignore-filename-regex", r"(/.cargo/registry/|/rustc/|_test\.rs$)",
+            f"--output-dir={effective_html_dir}",
+            str(args.rust_bin),
+        ]
+        html_result = subprocess.run(html_cmd, capture_output=True, text=True)
+        if html_result.returncode == 0:
+            print(f"HTML report written to {effective_html_dir / 'index.html'}")
+        else:
+            print(f"WARNING: llvm-cov show failed: {html_result.stderr[:200]}", file=sys.stderr)
 
     # Cleanup (unless --keep-profraws)
     if args.keep_profraws:
