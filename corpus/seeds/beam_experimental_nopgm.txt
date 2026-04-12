@@ -1,0 +1,17 @@
+Crystal
+Type Cuboid
+Dimensions 50 50 50
+AbsCoefCalc RD3D
+NumMonomers 8
+NumResidues 153
+UnitCell 78.4 78.4 78.4
+
+Beam
+Type Experimental
+PixelSize 0.310 0.336
+Flux 1.9e11
+Energy 12.7
+
+Wedge 0 90
+ExposureTime 45
+AngularResolution 10
