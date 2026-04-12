@@ -341,7 +341,8 @@ def main():
         "--save-profdata", type=Path, default=None, metavar="PATH",
         help="Save the merged .profdata file here for onward use with llvm-cov "
              "(e.g. 'llvm-cov show', 'llvm-cov report', genhtml, VS Code coverage "
-             "extensions). The binary path is also needed: "
+             "extensions). Defaults to coverage.profdata inside --out-dir when "
+             "--out-dir is set. The binary path is also needed: "
              "'llvm-cov show --instr-profile=<PATH> <BINARY>'.",
     )
     ap.add_argument(
@@ -351,6 +352,8 @@ def main():
              "of uncovered lines/regions per file.",
     )
     args = ap.parse_args()
+
+    import shutil as _shutil
 
     # Validate binary exists
     if not args.rust_bin.exists():
@@ -567,6 +570,11 @@ def main():
             _shutil.copy2(p, dest)
         print(f"\nCopied {len(selected)} input(s) to {args.out_dir}")
 
+    # Resolve effective profdata save path: explicit flag > out_dir default > None
+    effective_profdata_dest = args.save_profdata
+    if effective_profdata_dest is None and args.out_dir is not None:
+        effective_profdata_dest = args.out_dir / "coverage.profdata"
+
     # ---------------------------------------------------------------------------
     # Phase 5: JSON report (optional)
     # ---------------------------------------------------------------------------
@@ -610,12 +618,11 @@ def main():
     # ---------------------------------------------------------------------------
     # Phase 6: save profdata / covdata for onward processing (optional)
     # ---------------------------------------------------------------------------
-    import shutil as _shutil
-    if args.save_profdata:
+    if effective_profdata_dest:
         if merged_all_profdata.exists():
-            _shutil.copy2(merged_all_profdata, args.save_profdata)
-            print(f"Profdata saved to {args.save_profdata}")
-            print(f"  Use with: llvm-cov show --instr-profile={args.save_profdata} {args.rust_bin}")
+            _shutil.copy2(merged_all_profdata, effective_profdata_dest)
+            print(f"Profdata saved to {effective_profdata_dest}")
+            print(f"  Use with: llvm-cov show --instr-profile={effective_profdata_dest} {args.rust_bin}")
         else:
             print("WARNING: no profdata to save (no inputs produced coverage)", file=sys.stderr)
 
