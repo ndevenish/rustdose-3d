@@ -173,6 +173,7 @@ fn parse_crystal(pair: Pairs<'_>) -> Result<CrystalConfig, ParseError> {
                     "cylinder" => CrystalType::Cylinder,
                     "sphericalnew" => CrystalType::SphericalNew,
                     "spherical" => CrystalType::Spherical,
+                    "sphericalanalytic" => CrystalType::SphericalAnalytic,
                     other => {
                         return Err(ParseError::Grammar(format!(
                             "Unknown crystal type: '{other}'"

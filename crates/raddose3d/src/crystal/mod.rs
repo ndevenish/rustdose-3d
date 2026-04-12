@@ -970,6 +970,10 @@ pub fn create_crystal(
         CrystalType::Spherical => Ok(Box::new(polyhedron::crystal_spherical_new_from_config(
             config,
         )?)),
+        // Rust-only extension: analytic sphere using exact radius occupancy check and
+        // closed-form chord-length depth formula. Faster and more accurate than the
+        // icosphere mesh approximation. Not in Java — excluded from differential fuzzing.
+        CrystalType::SphericalAnalytic => Ok(Box::new(CrystalSpherical::from_config(config)?)),
     }
 }
 

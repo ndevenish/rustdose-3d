@@ -87,6 +87,9 @@ pub enum CrystalType {
     Cylinder,
     SphericalNew,
     Spherical,
+    /// Rust-only: analytic sphere (radius occupancy + closed-form depth).
+    /// Not available in Java — do not use in differential fuzzing.
+    SphericalAnalytic,
 }
 
 /// Beam profile type.

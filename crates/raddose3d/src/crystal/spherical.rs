@@ -9,7 +9,6 @@ use crate::wedge::Wedge;
 /// Analytic sphere crystal: occupancy by radius check, depth by analytic formula.
 /// This matches Java's CrystalSpherical (no polyhedron mesh).
 #[derive(Debug)]
-#[allow(dead_code)] // phase-6 fields (photo_electron_escape, fluorescent_escape)
 pub struct CrystalSpherical {
     diameter: f64,
     pix_per_um: f64,
