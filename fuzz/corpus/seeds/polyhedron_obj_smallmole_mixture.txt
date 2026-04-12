@@ -1,3 +1,4 @@
+# Covers: Polyhedron OBJ + SmallMole (Se) + mixture container (alanine) + Linear DDM + multi-beam Tophat
 Crystal
 Type Polyhedron
 Dimensions 55.81 55.81 55.81

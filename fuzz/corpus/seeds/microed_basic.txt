@@ -1,3 +1,4 @@
+# Covers: MicroED coefcalc + EMSP subprogram (electron diffraction, Cuboid crystal)
 Crystal
 Type Cuboid
 Dimensions 2 2 1

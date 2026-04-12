@@ -1,3 +1,4 @@
+# Covers: AbsCoefCalc Sequence + SeqFile (protein sequence from FASTA, MX coefcalc)
 Crystal
 Type Cuboid
 Dimensions 50 50 50

@@ -1,3 +1,4 @@
+# Covers: AbsCoefCalc SAXS + Cylinder crystal + ProteinConc + single-angle wedge (SAXS geometry)
 Crystal
 Type Cylinder
 Dimensions 200 200

@@ -1,3 +1,4 @@
+# Covers: Large crystal triggering automatic voxel resolution reduction (>1M voxel threshold)
 Crystal
 Type Cuboid
 Dimensions 300 300 300

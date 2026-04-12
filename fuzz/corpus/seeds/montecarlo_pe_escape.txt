@@ -1,3 +1,4 @@
+# Covers: Monte Carlo + CalculatePEEscape TRUE (photoelectron escape, no surrounding)
 Crystal
 Type Cuboid
 Dimensions 10 10 10

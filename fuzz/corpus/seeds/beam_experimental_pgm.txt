@@ -1,3 +1,4 @@
+# Covers: ExperimentalPgm beam type (beam profile loaded from .pgm file)
 Crystal
 Type Cuboid
 Dimensions 89 74 40

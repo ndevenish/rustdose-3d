@@ -1,3 +1,4 @@
+# Covers: Monte Carlo + CalculatePEEscape + CalculateFLEscape combined (both escape types active)
 Crystal
 Type Cuboid
 Dimensions 10 10 10

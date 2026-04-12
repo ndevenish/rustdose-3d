@@ -1,3 +1,4 @@
+# Covers: PE + FL escape without MC (non-MC escape path) + CalcSurrounding water
 Crystal
 Type Cuboid
 Dimensions 10 10 10

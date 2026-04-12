@@ -1,3 +1,4 @@
+# Covers: Polyhedron OBJ crystal + multi-beam with separate wedge ranges + Bfactor DDM + Circular collimation + SolventHeavyConc multi-element
 Crystal
 Type Polyhedron
 Dimensions 30.0 30.0 30.0

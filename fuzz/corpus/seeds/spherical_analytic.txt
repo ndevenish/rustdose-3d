@@ -1,5 +1,5 @@
-# Type SphericalAnalytic is a Rust-only extension — Java has no equivalent keyword.
-# "Type Spherical" in Java dispatches to the icosphere mesh (CrystalSphericalNew),
+# Covers: Type SphericalAnalytic (Rust-only analytic sphere, no Java equivalent — skip differential fuzzing)
+# Note: "Type Spherical" in Java dispatches to the icosphere mesh (CrystalSphericalNew),
 # not the analytic implementation. Do NOT include this seed in differential fuzzing.
 Crystal
 Type SphericalAnalytic

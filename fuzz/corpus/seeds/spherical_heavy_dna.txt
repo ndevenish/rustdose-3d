@@ -1,3 +1,4 @@
+# Covers: Spherical crystal + ProteinHeavyAtoms (I, Mn) + SolventHeavyConc Br + NumDNA
 Crystal
 Type Spherical
 Dimensions 1748.63

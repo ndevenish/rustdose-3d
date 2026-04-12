@@ -1,3 +1,4 @@
+# Covers: Monte Carlo + CalculateFLEscape TRUE (fluorescence photon escape tracking)
 Crystal
 Type Cuboid
 Dimensions 10 10 10
