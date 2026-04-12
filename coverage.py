@@ -507,6 +507,10 @@ def main():
             str(llvm_cov), "export",
             "--instr-profile", str(merged_all_profdata),
             "--format", "text",
+            # Restrict totals to workspace source files only — deps and compiler
+            # internals are excluded so the percentages reflect your code, not
+            # the ~90k lines of compiled dependencies.
+            "--ignore-filename-regex", r"(/.cargo/registry/|/rustc/|_test\.rs$)",
             str(args.rust_bin),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -521,10 +525,24 @@ def main():
         def _pct(d: dict) -> str:
             return f"{d.get('covered', 0):,}/{d.get('count', 0):,} ({d.get('percent', 0.0):.1f}%)"
         print()
-        print("Total program coverage (selected inputs merged):")
+        print("Workspace coverage (deps excluded):")
         print(f"  Lines:    {_pct(totals.get('lines', {}))}")
         print(f"  Regions:  {_pct(totals.get('regions', {}))}")
         print(f"  Branches: {_pct(totals.get('branches', {}))}")
+
+    # Per-file table via llvm-cov report (human-readable, workspace files only)
+    if selected_profraws:
+        report_cmd = [
+            str(llvm_cov), "report",
+            "--instr-profile", str(merged_all_profdata),
+            "--ignore-filename-regex", r"(/.cargo/registry/|/rustc/|_test\.rs$)",
+            str(args.rust_bin),
+        ]
+        report_result = subprocess.run(report_cmd, capture_output=True, text=True)
+        if report_result.returncode == 0 and report_result.stdout.strip():
+            print()
+            print("Per-file coverage (workspace files only):")
+            print(report_result.stdout)
 
     # ---------------------------------------------------------------------------
     # Phase 4: copy selected inputs to --out-dir (optional)
