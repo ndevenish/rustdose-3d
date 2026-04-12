@@ -1,0 +1,37 @@
+Crystal
+Type Cuboid
+Dimensions 50 50 50
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 495.72 223.26 148.54
+NumMonomers 21
+NumResidues 1235
+NumRNA 3
+ProteinHeavyAtoms Mn 6.999 Au 7.262
+SolventHeavyConc P 282 Se 678 Cu 725
+SolventFraction 0.7009
+ContainerMaterialType elemental
+MaterialElements C 22 H 10 N 2 O 5
+ContainerThickness 20.0
+ContainerDensity 3.4971
+
+Beam
+Type Tophat
+Energy 13.495
+Flux 1.566e+12
+Collimation Rectangular 60 60
+
+Wedge 0.0 45.0
+ExposureTime 10.0
+AngularResolution 45.0
+
+Beam
+Type Gaussian
+Energy 12.844
+Flux 3.991e+12
+FWHM 50 50
+Collimation Rectangular 50 50
+
+Wedge 45.0 90.0
+ExposureTime 10.0
+AngularResolution 45.0

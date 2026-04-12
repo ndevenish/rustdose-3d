@@ -1,0 +1,29 @@
+Crystal
+Type Cuboid
+Dimensions 1909.31 564.65 896.93
+PixelsPerMicron 0.0295
+AbsCoefCalc EXPSM
+CIF /Users/nickd/dials/raddose-web/RADDOSE-3D/raddose3d/tests/fixtures/alanine.cif
+DDM Bfactor
+DecayParam 5.7996 59.0029 21.2168
+
+Beam
+Type Tophat
+Energy 5.388
+Flux 1.777e+12
+Collimation Circular 2339.99 1118.96
+
+Wedge 0.0 360.0
+ExposureTime 176.07
+AngularResolution 0.1
+
+Beam
+Type Gaussian
+Energy 45.536
+Flux 6.181e+07
+FWHM 2766.47 188.47
+Collimation Rectangular 1857.62 196.16
+
+Wedge 16.4 360.0
+ExposureTime 183.42
+AngularResolution 0.1
