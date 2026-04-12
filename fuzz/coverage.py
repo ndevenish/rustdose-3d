@@ -655,22 +655,60 @@ def main():
 
     if effective_html_dir and effective_profdata_dest and effective_profdata_dest.exists():
         effective_html_dir.mkdir(parents=True, exist_ok=True)
-        html_cmd = [
-            str(llvm_cov), "show",
-            "--format=html",
-            f"--instr-profile={effective_profdata_dest}",
-            "--ignore-filename-regex", r"(/.cargo/registry/|/rustc/|_test\.rs$)",
-            f"--output-dir={effective_html_dir}",
-            str(args.rust_bin),
-            # Restrict to workspace source tree — this is the key flag that
-            # keeps the index scoped to your crates rather than all deps.
-            *(["--sources", str(args.source_dir)] if args.source_dir.exists() else []),
-        ]
-        html_result = subprocess.run(html_cmd, capture_output=True, text=True)
-        if html_result.returncode == 0:
-            print(f"HTML report written to {effective_html_dir / 'index.html'}")
+        import shutil as _shutil2
+        genhtml = _shutil2.which("genhtml")
+        if genhtml:
+            # genhtml (lcov) produces a prettier hierarchical directory tree.
+            # Feed it via llvm-cov export --format=lcov.
+            source_filter = (
+                ["--sources", str(args.source_dir)]
+                if args.source_dir.exists() else []
+            )
+            lcov_cmd = [
+                str(llvm_cov), "export",
+                "--format=lcov",
+                f"--instr-profile={effective_profdata_dest}",
+                "--ignore-filename-regex", r"(/.cargo/registry/|/rustc/|_test\.rs$)",
+                str(args.rust_bin),
+                *source_filter,
+            ]
+            lcov_result = subprocess.run(lcov_cmd, capture_output=True, text=True)
+            if lcov_result.returncode == 0 and lcov_result.stdout.strip():
+                lcov_file = effective_html_dir / "coverage.lcov"
+                lcov_file.write_text(lcov_result.stdout)
+                genhtml_cmd = [
+                    genhtml, str(lcov_file),
+                    "--output-directory", str(effective_html_dir),
+                    "--title", "RADDOSE-3D Rust coverage",
+                    "--legend",
+                    "--no-branch-coverage",  # lcov from llvm-cov has no branch data
+                    "--quiet",
+                ]
+                genhtml_result = subprocess.run(genhtml_cmd, capture_output=True, text=True)
+                if genhtml_result.returncode == 0:
+                    print(f"HTML report (genhtml) written to {effective_html_dir / 'index.html'}")
+                else:
+                    print(f"WARNING: genhtml failed: {genhtml_result.stderr[:200]}", file=sys.stderr)
+            else:
+                print(f"WARNING: lcov export failed: {lcov_result.stderr[:200]}", file=sys.stderr)
         else:
-            print(f"WARNING: llvm-cov show failed: {html_result.stderr[:200]}", file=sys.stderr)
+            # Fallback: llvm-cov show built-in HTML (flat list, less pretty)
+            print("genhtml not found — install lcov for a prettier report. Falling back to llvm-cov show.")
+            print("  sudo apt install lcov   # or: brew install lcov")
+            html_cmd = [
+                str(llvm_cov), "show",
+                "--format=html",
+                f"--instr-profile={effective_profdata_dest}",
+                "--ignore-filename-regex", r"(/.cargo/registry/|/rustc/|_test\.rs$)",
+                f"--output-dir={effective_html_dir}",
+                str(args.rust_bin),
+                *(["--sources", str(args.source_dir)] if args.source_dir.exists() else []),
+            ]
+            html_result = subprocess.run(html_cmd, capture_output=True, text=True)
+            if html_result.returncode == 0:
+                print(f"HTML report written to {effective_html_dir / 'index.html'}")
+            else:
+                print(f"WARNING: llvm-cov show failed: {html_result.stderr[:200]}", file=sys.stderr)
 
     # Cleanup (unless --keep-profraws)
     if args.keep_profraws:
