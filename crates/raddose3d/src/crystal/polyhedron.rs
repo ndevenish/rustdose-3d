@@ -972,19 +972,11 @@ impl super::Crystal for CrystalPolyhedron {
                 }
             }
             "EMSP" | "EMED" => {
-                let vertices: Vec<[f64; 3]> = self.vertices.clone();
-                let indices: Vec<[usize; 3]> = self.indices.clone();
-                let n = self.cryst_size_voxels[0]
-                    * self.cryst_size_voxels[1]
-                    * self.cryst_size_voxels[2];
-                let cryst_occ = vec![(true, true); n];
                 let mut micro_ed = MicroEdSimulation::new(
-                    vertices,
-                    indices,
+                    self.vertices.clone(),
                     self.cryst_coord.clone(),
                     self.pix_per_um,
                     self.cryst_size_voxels,
-                    cryst_occ,
                     self.crystal_type.clone(),
                 );
                 micro_ed.calculate_em(beam, wedge, &mut *self.coefcalc);

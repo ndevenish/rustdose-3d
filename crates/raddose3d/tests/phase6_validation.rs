@@ -112,24 +112,9 @@ fn phase6_microed_optimal_voltage_matches_java() {
         [hx, hy, -hz],
         [hx, hy, hz],
     ];
-    let indices: Vec<[usize; 3]> = vec![
-        [0, 2, 1],
-        [3, 2, 0],
-        [2, 5, 1],
-        [6, 5, 2],
-        [1, 4, 0],
-        [1, 5, 4],
-        [3, 7, 2],
-        [7, 6, 2],
-        [3, 0, 7],
-        [0, 4, 7],
-        [7, 4, 6],
-        [6, 4, 5],
-    ];
     let nx = (2.0 * pix).round() as usize + 1;
     let ny = (2.0 * pix).round() as usize + 1;
     let nz = (1.0 * pix).round() as usize + 1;
-    let n = nx * ny * nz;
     let cryst_coord: Vec<[f64; 3]> = (0..nx)
         .flat_map(|i| {
             (0..ny).flat_map(move |j| {
@@ -143,15 +128,11 @@ fn phase6_microed_optimal_voltage_matches_java() {
             })
         })
         .collect();
-    let cryst_occ = vec![(true, true); n];
-
     let mut micro_ed = MicroEdSimulation::new(
         vertices,
-        indices,
         cryst_coord,
         pix,
         [nx, ny, nz],
-        cryst_occ,
         "CUBOID".to_string(),
     );
 

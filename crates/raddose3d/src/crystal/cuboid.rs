@@ -599,20 +599,11 @@ impl super::Crystal for CrystalCuboid {
                 }
             }
             "EMSP" | "EMED" => {
-                let vertices: Vec<[f64; 3]> = self.vertices.to_vec();
-                let indices: Vec<[usize; 3]> = self.indices.to_vec();
-                let n = self.cryst_size_voxels[0]
-                    * self.cryst_size_voxels[1]
-                    * self.cryst_size_voxels[2];
-                // MicroED uses Vec<(bool, bool)> for occupancy
-                let cryst_occ = vec![(true, true); n];
                 let mut micro_ed = MicroEdSimulation::new(
-                    vertices,
-                    indices,
+                    self.vertices.to_vec(),
                     self.cryst_coord.clone(),
                     self.pix_per_um,
                     self.cryst_size_voxels,
-                    cryst_occ,
                     self.crystal_type.clone(),
                 );
                 micro_ed.calculate_em(beam, wedge, &mut *self.coefcalc);
