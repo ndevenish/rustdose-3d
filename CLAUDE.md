@@ -1,6 +1,6 @@
 # CLAUDE.md — Rust RADDOSE-3D
 
-Rust rewrite of [RADDOSE-3D](https://github.com/GarmanGroup/RADDOSE-3D), a radiation dose modelling tool for macromolecular crystallography. The Java source lives in the parent directory (`../src/se/raddo/raddose3D/`). The full porting plan is at `../snoopy-imagining-noodle.md`.
+Rust rewrite of [RADDOSE-3D](https://github.com/GarmanGroup/RADDOSE-3D), a radiation dose modelling tool for macromolecular crystallography. **This repository is the primary project.** The original Java source is linked at `java/` for reference. The full porting plan is at `java/snoopy-imagining-noodle.md`. The differential fuzzer lives in `fuzz/`.
 
 ## Build & Run
 
@@ -8,7 +8,7 @@ Rust rewrite of [RADDOSE-3D](https://github.com/GarmanGroup/RADDOSE-3D), a radia
 cargo build                              # Debug build
 cargo build --release                    # Release build
 cargo run -- -i tests/fixtures/insulin_test.txt  # Run CLI
-cargo test                               # Run all tests
+cargo test --release                     # Run all tests
 ```
 
 WASM is a separate build step and intentionally not part of `cargo build` — it requires `wasm-pack` (which bundles `wasm-opt`) and the `wasm32-unknown-unknown` rustup target:
@@ -19,15 +19,25 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 cd crates/raddose3d-wasm && wasm-pack build --target web
 ```
 
-## Workspace Layout
+## Repository Layout
 
-Three crates in a Cargo workspace:
+```
+/                          # Rust workspace (this repo, the primary project)
+├── crates/                # Rust crates (see Workspace Layout below)
+├── fuzz/                  # Differential fuzzer: Java vs Rust (see fuzz/CLAUDE.md)
+├── java/                  # Original Java RADDOSE-3D linked for reference (see java/CLAUDE.md)
+└── tests/fixtures/        # Integration test inputs (e.g. insulin_test.txt)
+```
+
+## Workspace Layout
 
 | Crate | Path | Purpose |
 |-------|------|---------|
 | `raddose3d` | `crates/raddose3d/` | Core library — traits, simulation, physics |
 | `raddose3d-parser` | `crates/raddose3d-parser/` | Input file parser (pest PEG grammar) |
 | `raddose3d-cli` | `crates/raddose3d-cli/` | CLI binary (`raddose3d -i input.txt`) |
+| `raddose3d-wasm` | `crates/raddose3d-wasm/` | WASM bindings (`wasm-bindgen`) |
+| `raddose3d-isomesh` | `crates/raddose3d-isomesh/` | Isosurface mesh utilities |
 
 ## Core Library Modules (`crates/raddose3d/src/`)
 
@@ -122,6 +132,8 @@ Verified against Java RADDOSE-3D on insulin test case (`tests/fixtures/insulin_t
 | Used Volume | 100.0% | 100.0% | exact |
 
 ## Porting Progress
+
+All 7 phases complete. The Rust implementation is the primary codebase going forward.
 
 | Phase | Description | Status |
 |-------|-------------|--------|
