@@ -1,0 +1,17 @@
+# Covers: AbsCoefCalc EXPSM (CIF small molecule input) + Tophat beam + single-angle wedge
+Crystal
+Type Cuboid
+Dimensions 20 20 20
+PixelsPerMicron 0.5
+AbsCoefCalc EXPSM
+CIF /Users/nickd/dials/raddose-web/RADDOSE-3D/raddose3d/tests/fixtures/alanine.cif
+
+Beam
+Type Tophat
+Flux 2e12
+Energy 30
+Collimation Rectangular 5 5
+
+Wedge 0 0
+ExposureTime 2
+AngularResolution 1

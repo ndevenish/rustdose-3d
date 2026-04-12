@@ -1,0 +1,24 @@
+# Covers: Spherical crystal + ProteinHeavyAtoms (I, Mn) + SolventHeavyConc Br + NumDNA
+Crystal
+Type Spherical
+Dimensions 1748.63
+PixelsPerMicron 0.0218
+AbsCoefCalc RD3D
+UnitCell 139.3 64.0 220.6
+NumMonomers 185
+NumResidues 1529
+NumDNA 3
+ProteinHeavyAtoms I 5.269 Mn 6.159
+SolventHeavyConc Br 1123
+SolventFraction 0.8617
+
+Beam
+Type Gaussian
+Energy 36.996
+Flux 4.367e+15
+FWHM 1703.88 353.76
+Collimation Circular 1065.77 1599.3
+
+Wedge 0.0 90.0
+ExposureTime 170.47
+AngularResolution 26.89

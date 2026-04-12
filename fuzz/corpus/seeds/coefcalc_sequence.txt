@@ -1,0 +1,21 @@
+# Covers: AbsCoefCalc Sequence + SeqFile (protein sequence from FASTA, MX coefcalc)
+Crystal
+Type Cuboid
+Dimensions 50 50 50
+PixelsPerMicron 0.5
+AbsCoefCalc Sequence
+SeqFile /Users/nickd/dials/raddose-web/RADDOSE-3D/raddose3d/tests/fixtures/rcsb_pdb_4OR0.fasta
+UnitCell 60 60 80
+NumMonomers 4
+SolventFraction 0.5
+
+Beam
+Type Gaussian
+Flux 2e12
+FWHM 50 50
+Energy 12.1
+Collimation Rectangular 50 50
+
+Wedge 0 90
+ExposureTime 10
+AngularResolution 10

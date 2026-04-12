@@ -1,0 +1,25 @@
+# Covers: Cylinder + SAXSseq + elemental container (SiO2) + Leal DDM + Circular collimation
+Crystal
+Type Cylinder
+Dimensions 10.0 5.0
+PixelsPerMicron 6.7203
+AbsCoefCalc SAXSseq
+SeqFile /Users/nickd/dials/raddose-web/RADDOSE-3D/raddose3d/tests/fixtures/bsa_fragment.fasta
+ProteinConc 284.569
+ContainerMaterialType elemental
+MaterialElements Si 1 O 2
+ContainerThickness 50.0
+ContainerDensity 2.648
+DDM Leal
+DecayParam 56.1145 324.8048 47.0208
+
+Beam
+Type Gaussian
+Energy 4.761
+Flux 8.547e+13
+FWHM 10000.0 10000.0
+Collimation Circular 869.4 869.4
+
+Wedge 0.0 0.0
+ExposureTime 31.21
+AngularResolution 1.0

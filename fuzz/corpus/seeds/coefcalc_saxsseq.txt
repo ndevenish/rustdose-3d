@@ -1,0 +1,20 @@
+# Covers: AbsCoefCalc SaxsSeq + SeqFile (SAXS with sequence-derived composition)
+Crystal
+Type Cuboid
+Dimensions 50 50 50
+PixelsPerMicron 0.5
+AbsCoefCalc SaxsSeq
+UnitCell 78.0 78.0 78.0
+SeqFile /Users/nickd/dials/raddose-web/RADDOSE-3D/raddose3d/tests/fixtures/rcsb_pdb_4OR0.fasta
+ProteinConc 5.0
+
+Beam
+Type Gaussian
+Flux 3e12
+FWHM 80 80
+Energy 13.0
+Collimation Rectangular 100 100
+
+Wedge 0 180
+ExposureTime 60
+AngularResolution 2

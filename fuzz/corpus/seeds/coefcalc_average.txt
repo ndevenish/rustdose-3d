@@ -1,0 +1,17 @@
+# Covers: AbsCoefCalc Average (average protein composition, no sequence or PDB)
+Crystal
+Type Cuboid
+Dimensions 100 100 100
+PixelsPerMicron 0.5
+AbsCoefCalc Average
+
+Beam
+Type Gaussian
+Flux 2e12
+FWHM 100 100
+Energy 12.1
+Collimation Rectangular 100 100
+
+Wedge 0 90
+ExposureTime 10
+AngularResolution 10

@@ -1,0 +1,29 @@
+# Covers: Monte Carlo + PE escape + CalcSurrounding + M-shell element (Pt) in SurroundingHeavyConc
+Crystal
+Type Cuboid
+Dimensions 10 10 10
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 8
+NumResidues 120
+SolventFraction 0.55
+Subprogram MONTECARLO
+Runs 1
+SimElectrons 1000
+CalculatePEEscape TRUE
+CalcSurrounding TRUE
+SurroundingHeavyConc Pt 100
+SurroundingThickness 20 20 20
+SurroundingDensity 21.4
+
+Beam
+Type Gaussian
+Flux 2e12
+FWHM 10 10
+Energy 12.1
+Collimation Rectangular 10 10
+
+Wedge 0 90
+ExposureTime 10
+AngularResolution 10
