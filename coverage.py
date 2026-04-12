@@ -337,6 +337,19 @@ def main():
              "which code paths are exercised. Non-MC/XFEL inputs are unaffected. "
              "Set to 0 to disable.",
     )
+    ap.add_argument(
+        "--save-profdata", type=Path, default=None, metavar="PATH",
+        help="Save the merged .profdata file here for onward use with llvm-cov "
+             "(e.g. 'llvm-cov show', 'llvm-cov report', genhtml, VS Code coverage "
+             "extensions). The binary path is also needed: "
+             "'llvm-cov show --instr-profile=<PATH> <BINARY>'.",
+    )
+    ap.add_argument(
+        "--save-covdata", type=Path, default=None, metavar="PATH",
+        help="Save the raw llvm-cov export JSON here (workspace files only, "
+             "same filter as the printed totals). Useful for scripted analysis "
+             "of uncovered lines/regions per file.",
+    )
     args = ap.parse_args()
 
     # Validate binary exists
@@ -549,10 +562,9 @@ def main():
     # ---------------------------------------------------------------------------
     if args.out_dir:
         args.out_dir.mkdir(parents=True, exist_ok=True)
-        import shutil
         for i, p in enumerate(selected, 1):
             dest = args.out_dir / f"{i:03d}_{p.name}"
-            shutil.copy2(p, dest)
+            _shutil.copy2(p, dest)
         print(f"\nCopied {len(selected)} input(s) to {args.out_dir}")
 
     # ---------------------------------------------------------------------------
@@ -594,6 +606,25 @@ def main():
         }
         args.report.write_text(json.dumps(report, indent=2))
         print(f"Report written to {args.report}")
+
+    # ---------------------------------------------------------------------------
+    # Phase 6: save profdata / covdata for onward processing (optional)
+    # ---------------------------------------------------------------------------
+    import shutil as _shutil
+    if args.save_profdata:
+        if merged_all_profdata.exists():
+            _shutil.copy2(merged_all_profdata, args.save_profdata)
+            print(f"Profdata saved to {args.save_profdata}")
+            print(f"  Use with: llvm-cov show --instr-profile={args.save_profdata} {args.rust_bin}")
+        else:
+            print("WARNING: no profdata to save (no inputs produced coverage)", file=sys.stderr)
+
+    if args.save_covdata:
+        if cov_data:
+            args.save_covdata.write_text(json.dumps(cov_data, indent=2))
+            print(f"Coverage JSON saved to {args.save_covdata}")
+        else:
+            print("WARNING: no coverage data to save", file=sys.stderr)
 
     # Cleanup (unless --keep-profraws)
     if args.keep_profraws:
