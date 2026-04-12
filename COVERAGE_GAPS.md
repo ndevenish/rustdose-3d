@@ -1,19 +1,20 @@
 # Coverage Gap Report
 
 Generated from `coverage_local4.json` (67% line coverage overall across workspace crates).
+Seed attempts verified against `coverage5.json`.
 
 ## Summary
 
-| Category | Approx lines | % of total | Action |
-|----------|-------------|-----------|--------|
-| Structurally unreachable from CLI | ~375 | 8% | None — by design |
-| Cryo/surrounding escape cluster | ~1,100 | 23% | Fix seed wiring |
-| M-shell heavy atom branches | ~80 | 2% | Add seed |
-| GOS inner-shell calculations | ~200 | 4% | Add seed |
-| MicroED cylinder/polyhedron geometry | ~125 | 3% | Add seed |
-| XFEL edge cases | ~160 | 3% | Add seed |
-| Small scattered gaps | ~600 | 13% | Partially addressable |
-| **Total uncovered** | **~4,702** | **33%** | |
+| Category | Approx lines | % of total | Action | Status |
+|----------|-------------|-----------|--------|--------|
+| Structurally unreachable from CLI | ~375 | 8% | None — by design | — |
+| Cryo/surrounding escape cluster | ~1,100 | 23% | Fix seed wiring | Open |
+| M-shell heavy atom branches | ~80 | 2% | Needs cryo+heavy seed | Revised (see §3) |
+| GOS inner-shell calculations | ~200 | 4% | Dead code in mc.rs | Revised (see §4) |
+| MicroED cylinder/polyhedron geometry | ~125 | 3% | Seed added ✓ (+3 lines) | Partial |
+| XFEL no-PulseEnergy path | ~10 | <1% | Already covered by MC | Closed |
+| Small scattered gaps | ~600 | 13% | Partially addressable | Open |
+| **Total uncovered** | **~4,702** | **33%** | | |
 
 ---
 
@@ -87,13 +88,13 @@ The seed `corpus/seeds/pe_escape_surrounding.txt` uses `CalcSurrounding TRUE` + 
 
 ## 3. M-shell heavy atom branches (~80 lines, 2%)
 
-**`raddose3d/src/coefcalc/compute.rs`** lines 770–820
+**`raddose3d/src/coefcalc/compute.rs`** lines 761–820
 
-Gated on: element present in crystal/solution with atomic number ≥ 73 (W, Re, Os, Ir, Pt, Au, Hg, Tl, Pb, Bi) AND beam energy above the element's M2/M3/M4/M5 edges (typically 2–4 keV, so any standard beam energy suffices).
+These lines are inside `calc_cryo_fluorescent_escape_factors` (starts line 677), **not** `calc_fluorescent_escape_factors` (starts line 831). The non-cryo version's M-shell branches (line 904+) are already covered. The cryo version is only called via `cryo_fluorescent_escape_factors()` which is only reached when `CalcSurrounding TRUE` is active.
 
-The existing `heavy_atoms.txt` seed uses Zn (Z=30) and S/Se — all below Z=73. A seed with `SolventHeavyConc Pt 100` or `ProteinHeavyAtoms Pb 1` would cover these branches.
+**Revised fix:** Add a seed with `CalcSurrounding TRUE` + `CalculatePEEscape TRUE` + a heavy atom (Z≥73) in `SurroundingHeavyConc` or `SurroundingElements`. This is part of the cryo/surrounding cluster in §2.
 
-**Suggested fix:** Add a seed with `ProteinHeavyAtoms Pt 2` or `SolventHeavyConc Pb 50` at standard energy (e.g. 12.1 keV).
+`corpus/seeds/heavy_atoms_mshell.txt` (Pt+Pb, no surrounding) does NOT cover these lines — it only exercises the non-cryo `calc_fluorescent_escape_factors` which was already covered.
 
 ---
 
@@ -101,9 +102,8 @@ The existing `heavy_atoms.txt` seed uses Zn (Z=30) and S/Se — all below Z=73. 
 
 **`raddose3d/src/simulation/mc.rs`** lines 1142–1171, 1678–1696
 
-Key uncovered regions:
-- `get_relative_shell_probs`: inner/outer shell CDF construction for GOS — requires L/M-shell ionisation (Z > ~12 with edges below beam energy)
-- Auger cascade inner-shell branch: `gos_electron_dose_v_resolved` accumulation
+- `mc.rs::get_relative_shell_probs` (lines 1142–1171): **never called** — dead code. The live code path calls `coef_calc.relative_shell_probs()` which dispatches to `CoefCalcCompute::calc_relative_shell_probs()`. The mc.rs private function is unreachable by any seed.
+- Lines 1678–1682: `gos_electron_dose_v_resolved` — may require a specific ionisation event path not yet triggered.
 
 **`raddose3d/src/simulation/xfel.rs`** lines 1484–1510, 1532–1533, 1569–1570, 1684–1698, 1736–1738
 
@@ -114,7 +114,7 @@ Key uncovered regions:
 - GOS electron dose inner-shell accumulation: lines 1684–1698
 - `inner_shell_lambda` branch in GOS inelastic: lines 1736–1738
 
-Both `montecarlo_gos.txt` and `xfel_basic.txt` seeds exist but use light elements (C/N/O/H/S). GOS inner-shell logic fires when `gos_inner_lambda > 0` which requires heavier elements with inner-shell cross-sections. **Suggested fix:** Add GOS seed with `ProteinHeavyAtoms Fe 4` or `SolventHeavyConc Fe 1000` — Fe (Z=26) has well-tabulated inner shells.
+`corpus/seeds/montecarlo_gos_heavy.txt` (Fe `SolventHeavyConc`) was added but the mc.rs function it was intended to cover is dead code. The XFEL branches require specific GOS inner-shell conditions — likely heavier elements in the XFEL context. No simple seed fix known for the dead-code lines; the XFEL branches need further investigation.
 
 ---
 
@@ -146,9 +146,10 @@ All mesh geometry paths (856–945) are only reached when the crystal is not a C
 Key uncovered regions:
 - Lines 461–471: `get_intersection_distance` — surrounding geometry intersection for XFEL. Needs `CalcSurrounding TRUE` + `Subprogram XFEL`.
 - Lines 637–638: `high_energy_angles` lazy load — ELSEPA high-energy table for heavy elements; needs high-Z element + XFEL.
-- Lines 994–997: non-pulsed XFEL path — `PulseEnergy` not provided, flux × total_sec used instead. The `xfel_basic.txt` seed specifies `PulseEnergy 2e-6`, bypassing this branch.
+- Lines 994–997: non-pulsed XFEL `else` branch — `do_xfel=false` path. **Already covered by `Subprogram MONTECARLO`** which creates `XfelSimulation` with `do_xfel=false`. `corpus/seeds/xfel_no_pulse_energy.txt` is redundant.
+- Lines 1484–1510, 1532–1533 etc.: GOS inner-shell Auger paths (see §4).
 
-**Suggested fix:** Add XFEL seed without `PulseEnergy` keyword. Add XFEL seed with `CalcSurrounding TRUE`.
+**Revised:** Lines 994–997 are already covered. The remaining gaps are surrounding geometry (part of §2 cryo cluster) and GOS inner-shell (§4).
 
 ---
 
@@ -186,15 +187,12 @@ Many of these require either: invalid/edge-case inputs (negative cell volume), n
 
 ## Actionable seed additions
 
-Priority order based on lines gained per seed:
-
-| Priority | Seed to add | Target gap | Est. lines |
-|----------|------------|-----------|-----------|
-| 1 | Investigate `is_cryo()` wiring in `pe_escape_surrounding.txt` | Cryo/surrounding cluster | ~1,100 |
-| 2 | `Type Cylinder` + `Subprogram EMSP` microED | MicroED mesh geometry | ~80 |
-| 3 | `ProteinHeavyAtoms Pt 2` at standard energy | M-shell branches | ~80 |
-| 4 | `Subprogram GOS` with heavy atoms (`SolventHeavyConc Fe 1000`) | GOS inner-shell | ~100 |
-| 5 | XFEL seed without `PulseEnergy` | XFEL non-pulsed path | ~10 |
-| 6 | XFEL seed with `CalcSurrounding TRUE` | XFEL surrounding | ~50 |
-| 7 | Multi-crystal input (two Crystal blocks) | `experiment.rs` error path | ~5 |
-| 8 | Non-orthogonal unit cell angles | `from_params.rs` cell volume | ~5 |
+| Priority | Seed / action | Target gap | Est. lines | Status |
+|----------|--------------|-----------|-----------|--------|
+| 1 | Investigate `is_cryo()` wiring in `pe_escape_surrounding.txt` | Cryo/surrounding cluster | ~1,100 | Open |
+| 2 | `Type Cylinder` + `Subprogram EMSP` microED | MicroED mesh geometry | ~80 | Done ✓ (+3) |
+| 3 | Cryo seed with heavy atom (Z≥73) in `SurroundingHeavyConc` | M-shell cryo branches | ~80 | Open (part of §2) |
+| 4 | `mc.rs::get_relative_shell_probs` | GOS inner-shell mc.rs | ~30 | Dead code — skip |
+| 5 | XFEL seed without `PulseEnergy` | XFEL non-pulsed path | — | Already covered by MC |
+| 6 | Multi-crystal input (two Crystal blocks) | `experiment.rs` error path | ~5 | Open |
+| 7 | Non-orthogonal unit cell angles | `from_params.rs` cell volume | ~5 | Open |
