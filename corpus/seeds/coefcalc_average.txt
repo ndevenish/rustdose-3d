@@ -1,3 +1,4 @@
+# Covers: AbsCoefCalc Average (average protein composition, no sequence or PDB)
 Crystal
 Type Cuboid
 Dimensions 100 100 100

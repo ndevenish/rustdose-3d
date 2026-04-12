@@ -1,3 +1,4 @@
+# Covers: CalculateFLEscape TRUE (non-MC fluorescence escape) + Runs 2 (multi-run averaging)
 Crystal
 Type Cuboid
 Dimensions 79 147 100

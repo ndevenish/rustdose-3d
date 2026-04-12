@@ -1,3 +1,4 @@
+# Covers: Baseline Polyhedron crystal + OBJ wireframe + RD3D coefcalc + Rectangular collimation
 Crystal
 Type Polyhedron
 Dimensions 30.0 30.0 30.0

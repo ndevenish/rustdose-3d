@@ -1,3 +1,4 @@
+# Covers: DDM Leal dose decay model with three DecayParam values
 Crystal
 Type Cuboid
 Dimensions 100 100 100

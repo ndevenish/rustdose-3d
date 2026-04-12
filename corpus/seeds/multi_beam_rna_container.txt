@@ -1,3 +1,4 @@
+# Covers: Multi-beam (Tophat + Gaussian) + NumRNA + ProteinHeavyAtoms Au/Mn + SolventHeavyConc multi-element + elemental container
 Crystal
 Type Cuboid
 Dimensions 50 50 50

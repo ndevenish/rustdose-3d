@@ -1,3 +1,4 @@
+# Covers: Baseline Spherical crystal (icosphere mesh) + RD3D coefcalc + Gaussian beam
 Crystal
 Type Spherical
 Dimensions 80

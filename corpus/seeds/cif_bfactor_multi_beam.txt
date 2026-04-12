@@ -1,3 +1,4 @@
+# Covers: EXPSM/CIF coefcalc + Bfactor DDM + two Beam/Wedge blocks + Circular collimation
 Crystal
 Type Cuboid
 Dimensions 1909.31 564.65 896.93

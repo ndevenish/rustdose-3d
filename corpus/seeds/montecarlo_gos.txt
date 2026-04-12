@@ -1,3 +1,4 @@
+# Covers: Subprogram GOS (Generalised Oscillator Strengths electron transport model)
 Crystal
 Type Cuboid
 Dimensions 10 10 10

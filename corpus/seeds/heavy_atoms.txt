@@ -1,3 +1,4 @@
+# Covers: ProteinHeavyAtoms (Se, Zn) + SolventHeavyConc (P, Mn) — anomalous/heavy-atom scattering
 Crystal
 Type Cuboid
 Dimensions 100 100 100

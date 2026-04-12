@@ -1,3 +1,4 @@
+# Covers: MicroED coefcalc + EMSP subprogram + Cylinder crystal (electron diffraction)
 Crystal
 Type Cylinder
 Dimensions 2 1

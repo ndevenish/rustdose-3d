@@ -1,3 +1,4 @@
+# Covers: MicroED coefcalc + EMED subprogram (energy-modified electron diffraction, distinct from EMSP)
 Crystal
 Type Cuboid
 Dimensions 2 2 1

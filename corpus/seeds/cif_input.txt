@@ -1,3 +1,4 @@
+# Covers: AbsCoefCalc EXPSM (CIF small molecule input) + Tophat beam + single-angle wedge
 Crystal
 Type Cuboid
 Dimensions 20 20 20

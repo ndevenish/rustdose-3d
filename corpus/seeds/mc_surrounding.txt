@@ -1,3 +1,4 @@
+# Covers: Monte Carlo + PE escape + CalcSurrounding (water, O 55500 mM) + SurroundingThickness
 Crystal
 Type Cuboid
 Dimensions 10 10 10

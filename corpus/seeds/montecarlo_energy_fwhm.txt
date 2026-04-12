@@ -1,3 +1,4 @@
+# Covers: Monte Carlo + Tophat beam + EnergyFWHM (beam energy spread / bandwidth sampling)
 Crystal
 Type Cuboid
 Dimensions 10 10 10

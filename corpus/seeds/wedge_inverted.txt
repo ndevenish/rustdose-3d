@@ -1,3 +1,4 @@
+# Covers: Wedge with start > end angle (inverted/reversed wedge direction)
 Crystal
 Type Cuboid
 Dimensions 100 100 100

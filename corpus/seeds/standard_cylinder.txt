@@ -1,3 +1,4 @@
+# Covers: Large Cylinder + SAXSseq + elemental container (SiO2) + single-angle wedge (SAXS geometry)
 Crystal
 Type Cylinder
 Dimensions 1700 1000

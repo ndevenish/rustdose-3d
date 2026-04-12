@@ -1,3 +1,4 @@
+# Covers: Cylinder + SAXSseq + elemental container (SiO2) + Leal DDM + Circular collimation
 Crystal
 Type Cylinder
 Dimensions 10.0 5.0

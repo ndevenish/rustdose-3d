@@ -1,3 +1,4 @@
+# Covers: Subprogram XFEL + PulseEnergy + Tophat beam + single-angle wedge (femtosecond dose)
 Crystal
 Type Cuboid
 Dimensions 10 10 10
