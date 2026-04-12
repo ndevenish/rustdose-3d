@@ -47,7 +47,7 @@ Three crates in a Cargo workspace:
 | `crystal/mod.rs` | `Crystal` trait, `expose_rd3d()`, `create_crystal()` factory | `Crystal.java` |
 | `crystal/cuboid.rs` | `CrystalCuboid` — 8 vertices, 12 triangles, ray-casting | `CrystalCuboid.java` + `CrystalPolyhedron.java` |
 | `crystal/polyhedron.rs` | `CrystalPolyhedron` — general mesh (OBJ, cylinder, icosphere), `cylinder_geometry()`, `icosphere_geometry()` | `CrystalPolyhedron.java`, `CrystalCylinder.java`, `CrystalSphericalNew.java` |
-| `crystal/spherical.rs` | `CrystalSpherical` — analytic sphere, pre-computed occupancy | `CrystalSpherical.java` |
+| `crystal/spherical.rs` | `CrystalSpherical` — analytic sphere, pre-computed occupancy. Selectable via `Type SphericalAnalytic` (Rust-only — Java has no equivalent keyword; `Type Spherical` in Java dispatches to the icosphere mesh). **Excluded from differential fuzzing.** | `CrystalSpherical.java` |
 | `output/mod.rs` | `Output` trait, `ExposeObserver` trait | `Output.java` |
 | `output/summary.rs` | `OutputSummaryText`, `OutputSummaryCSV` | `OutputSummaryText.java` |
 | `output/exposure_summary.rs` | `ExposureSummary` — DWD, dose stats, quantiles | `ExposureSummary.java` (548 lines) |
@@ -231,3 +231,4 @@ PE/FL escape and cryo surrounding are implemented (`crystal/escape.rs`, integrat
 - `PE_ANGLE_RESOLUTION` (escape.rs line 21) controls track samples per voxel. Java hardcodes 1. Increasing reduces variance but costs O(n²) time.
 - Gumbel PDF negative beta: At high density + low PE energy (e.g. ρ=3.6 g/mL, E_pe<0.82 keV), the Gumbel scale parameter goes negative. Java relies on sign cancellation. Rust matches this. See `gumbel_pdf()` in `escape.rs`.
 - `Type Spherical` dispatch: maps to `CrystalSphericalNew` (icosphere mesh) matching Java.
+- `Type SphericalAnalytic`: Rust-only keyword that dispatches to `CrystalSpherical` (analytic radius occupancy + closed-form chord depth). Java has no equivalent — `Type Spherical` in Java always uses the mesh. Do not use in differential fuzzing.
