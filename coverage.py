@@ -357,6 +357,15 @@ def main():
              "'llvm-cov show --format=html'. Opens index.html in that directory. "
              "Defaults to html/ inside --out-dir when --out-dir is set.",
     )
+    ap.add_argument(
+        "--source-dir", type=Path,
+        default=REPO_ROOT / "raddose3d" / "crates",
+        metavar="DIR",
+        help="Restrict the HTML report to source files under this directory "
+             "(passed as a positional source path to llvm-cov show). Keeps the "
+             "report scoped to your code rather than all compiled dependencies. "
+             f"Default: {REPO_ROOT / 'raddose3d' / 'crates'}",
+    )
     args = ap.parse_args()
 
     import shutil as _shutil
@@ -653,6 +662,9 @@ def main():
             "--ignore-filename-regex", r"(/.cargo/registry/|/rustc/|_test\.rs$)",
             f"--output-dir={effective_html_dir}",
             str(args.rust_bin),
+            # Restrict to workspace source tree — this is the key flag that
+            # keeps the index scoped to your crates rather than all deps.
+            *(["--sources", str(args.source_dir)] if args.source_dir.exists() else []),
         ]
         html_result = subprocess.run(html_cmd, capture_output=True, text=True)
         if html_result.returncode == 0:
