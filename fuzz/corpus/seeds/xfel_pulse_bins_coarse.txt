@@ -1,0 +1,24 @@
+# Covers: XFEL with ExposureTime 55 → PULSE_LENGTH=55 → PULSE_BIN_LENGTH=1
+# (the >50 fs bin-size branch in XFEL.java; tiny crystal keeps memory/time low)
+Crystal
+Type Cuboid
+Dimensions 2 2 2
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 24
+NumResidues 51
+Subprogram XFEL
+Runs 1
+SimPhotons 1000
+
+Beam
+Type Tophat
+Flux 2e12
+Energy 9.0
+Collimation Rectangular 2 2
+PulseEnergy 2e-6
+
+Wedge 0 0
+ExposureTime 55
+AngularResolution 1

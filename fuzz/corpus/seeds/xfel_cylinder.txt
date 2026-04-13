@@ -1,0 +1,25 @@
+# Covers: XFEL subprogram with a Cylinder crystal type (CrystalCylinder extends
+# CrystalPolyhedron, dispatches to XFEL.java via startXFEL — exercises the
+# polyhedron XFEL path rather than the cuboid path)
+Crystal
+Type Cylinder
+Dimensions 20 20
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 24
+NumResidues 51
+Subprogram XFEL
+Runs 1
+SimPhotons 1000
+
+Beam
+Type Tophat
+Flux 2e12
+Energy 9.0
+Collimation Circular 10 10
+PulseEnergy 2e-6
+
+Wedge 0 0
+ExposureTime 1
+AngularResolution 1

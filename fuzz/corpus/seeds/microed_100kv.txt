@@ -1,0 +1,21 @@
+# Covers: MicroED EMSP at 100 kV (hits beamEnergy==100 branch in EMLETWay, baseDose=6.6)
+Crystal
+Type Cuboid
+Dimensions 2 2 1
+PixelsPerMicron 2
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 24
+NumResidues 51
+Subprogram EMSP
+
+Beam
+Type Gaussian
+Flux 1e6
+FWHM 2 2
+Energy 100
+Collimation Rectangular 2 2
+
+Wedge 0 60
+ExposureTime 60
+AngularResolution 2

@@ -216,11 +216,82 @@ In a correct implementation, the crystal's `energy_per_fluence` would be compute
 
 ---
 
+---
+
+## Bug 3: MicroED Spherical Volume Branch is Structurally Unreachable
+
+### Location
+`MicroED.java` lines 232–241, `Crystal.java` lines 294–313
+
+### The Code
+
+```java
+// Crystal.java lines 294-313 (in CrystalPolyhedron constructor)
+crystalType = "CUBOID";
+XDim = (double) properties.get(Crystal.CRYSTAL_DIM_X);
+try {
+    YDim = (double) properties.get(Crystal.CRYSTAL_DIM_Y);
+} catch (NullPointerException e) {
+    crystalType = "SPHERICAL";   // only reached when Y is null
+    YDim = XDim;
+    ZDim = XDim;
+}
+try {
+    ZDim = (double) properties.get(Crystal.CRYSTAL_DIM_Z);
+} catch (NullPointerException e) {
+    if (crystalType == "CUBOID") {   // only when Z is null and was still CUBOID
+        crystalType = "CYLINDER";
+        ...
+    }
+}
+```
+
+```java
+// MicroED.java lines 232-241
+if (crystalTypeEM == "CYLINDER") {
+    crystalSurfaceArea = (Math.PI * (XDimension/2) * (YDimension/2)) * 1E02;
+    ZDimension -= 0.001;
+}
+if (crystalTypeEM == "SPHERICAL") {
+    // NEVER REACHED — see analysis below
+    crystalVolume = ((4/3) * Math.PI * ...) * 1E-24;
+}
+//note the volume would need to be updated for a polyhedron!!!
+//although it isn't used
+```
+
+### Why the SPHERICAL Branch Is Unreachable
+
+The `crystalType = "SPHERICAL"` assignment (Crystal.java:301) is only reached when the Y dimension property is null — i.e., when a crystal is described with only a single dimension. In Java, `Type Spherical` dispatches to `CrystalSphericalNew`, which is an **icosphere mesh** (a subclass of `CrystalPolyhedron`). The icosphere has a full 3-D bounding box: X = Y = Z = 2×Radius. All three dimensions are present in the property map, so the NullPointerException at line 297 is never thrown, and `crystalType` stays `"CUBOID"`.
+
+As a result, any `Type Spherical` crystal passed to `startMicroED` arrives with `crystalTypeEM = "CUBOID"`, and neither the CYLINDER nor SPHERICAL branch in `MicroED.java` is entered.
+
+### On the `==` Operator
+
+`MicroED.java` uses `==` for all three string comparisons (`"CUBOID"`, `"CYLINDER"`, `"SPHERICAL"`). This is the same pattern used throughout the codebase (`Crystal.java:309`, `XFEL.java:2699+`, `MC.java:2659+`, `BeamGaussian.java:115`, etc.). It is technically safe here because all the string values are assigned from Java string literals, which the JVM interns. A string literal `"CYLINDER"` set at Crystal.java:310 and compared against the literal `"CYLINDER"` at MicroED.java:232 are the same interned object — `==` evaluates to true.
+
+The `"SPHERICAL"` branch is unreachable not because `==` fails but because `crystalType` is never set to `"SPHERICAL"` for any crystal type that reaches MicroED. The `==` comparisons would break only if strings were ever constructed dynamically (e.g., via `toUpperCase()` or concatenation) rather than from literals — but they are not.
+
+### Effect on Simulation Output
+
+None. `crystalVolume` is the only field affected by the SPHERICAL branch, and it is explicitly noted as unused in the MicroED source (comment at line 242: "although it isn't used"). The branch exists to set a volume that participates in no output calculation.
+
+### Coverage Impact
+
+Because this branch is structurally unreachable, MicroED.java's line coverage ceiling with the current Java source is approximately 30–35%. Lines 239–241 (spherical volume) can never be covered by any seed input. The remaining ~65% of MicroED.java (lines 838–4845) is dead code from a Monte Carlo electron-tracking simulation that was written but commented out of `CalculateEM`.
+
+### Rust Status
+
+Not applicable. The Rust `MicroEdSimulation` (`micro_ed.rs`) does not replicate MicroED's internal crystal-type dispatch or `crystalVolume` field — it uses the crystal geometry directly. No compatibility shim is needed. This bug is excluded from differential fuzzing.
+
+---
+
 ## Summary
 
 | Bug | File | Effect | Trigger |
 |-----|------|--------|---------|
 | Hardcoded `muabsIndex = 4` | `CrystalPolyhedron.java:1240` | FL Escape overestimated by ~57% | Any run with `CalculateFlEscape True` and elements with L-shell fluorescence |
 | `energyPerFluence` scope leak | `Crystal.java:1236→1361` | Absorbed Energy underestimated by ~8x | `CalcSurrounding True` + `CalculatePEEscape True` |
+| MicroED SPHERICAL branch unreachable | `MicroED.java:239`, `Crystal.java:294–313` | `crystalVolume` always computed as cuboid for spherical MicroED crystals | Any `Type Spherical` + `Subprogram EMSP/EMED` run (but `crystalVolume` is unused, so no observable effect) |
 
-Both bugs affect only downstream reporting metrics; the core dose deposition to voxels is not affected by Bug 2 (dose uses `fluenceToDoseFactor`, not `energyPerFluence`), and Bug 1 affects only the spatial redistribution of FL energy (not the total dose deposited, which explains why dose metrics differ by only 1-2%).
+Bugs 1 and 2 affect downstream reporting metrics only; core dose deposition to voxels is unaffected. Bug 3 has no observable effect on any output.

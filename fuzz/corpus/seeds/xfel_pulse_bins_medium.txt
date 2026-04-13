@@ -1,0 +1,25 @@
+# Covers: XFEL with ExposureTime 10 → PULSE_LENGTH=10 → PULSE_BIN_LENGTH=0.1
+# (the 2–50 fs bin-size branch in XFEL.java; xfel_basic.txt uses ExposureTime 1
+# which hits the ≤1 branch with PULSE_BIN_LENGTH=0.01)
+Crystal
+Type Cuboid
+Dimensions 4 4 4
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 78.0 78.0 78.0
+NumMonomers 24
+NumResidues 51
+Subprogram XFEL
+Runs 1
+SimPhotons 1000
+
+Beam
+Type Tophat
+Flux 2e12
+Energy 9.0
+Collimation Rectangular 4 4
+PulseEnergy 2e-6
+
+Wedge 0 0
+ExposureTime 10
+AngularResolution 1

@@ -163,6 +163,10 @@ class Config:
     b0_param: float = 1.0
     beta_param: float = 0.1    # must be positive (Gumbel-sign issue)
 
+    # Crystal orientation
+    goniometer_axis: "Optional[float]" = None   # None = horizontal (default); 90.0 = vertical
+    polarisation_direction: "Optional[float]" = None  # None = horizontal; 90.0 = vertical
+
     # Subprogram
     subprogram: str = ""        # "" | MONTECARLO | XFEL | EMSP
     runs: int = 1
@@ -310,6 +314,11 @@ def render(cfg: Config) -> str:
             lines.append(f"ContainerThickness {cfg.container_thickness}")
             lines.append(f"ContainerDensity {cfg.container_density}")
 
+    if cfg.goniometer_axis is not None:
+        lines.append(f"GoniometerAxis {cfg.goniometer_axis}")
+    if cfg.polarisation_direction is not None:
+        lines.append(f"PolarisationDirection {cfg.polarisation_direction}")
+
     if cfg.ddm != "Simple":
         lines.append(f"DDM {cfg.ddm}")
         if cfg.ddm in ("Leal", "Bfactor"):
@@ -443,10 +452,18 @@ class GrammarGenerator:
             cfg.coefcalc = self._c(["RD3D", "RD3D", "SMALLMOLE", "CIF"])
 
         # ---- Crystal dimensions ----
+        # For XFEL, 20% chance of a "tiny crystal" that allows ExposureTime > 1 s,
+        # exercising the PULSE_BIN_LENGTH = 0.1 fs (2–50 s) branch.  Without this,
+        # large voxel counts drive budget-limited max_exp to < 0.001 s always.
+        _xfel_tiny = (cfg.subprogram == "XFEL" and self._flip(0.2))
         if cfg.crystal_type == "Cuboid":
-            cfg.dim_x = round(self._u(0.5, 2000), 2)
-            cfg.dim_y = round(self._u(0.5, 2000), 2)
-            cfg.dim_z = round(self._u(0.5, 2000), 2)
+            if _xfel_tiny:
+                d = round(self._u(1.0, 5.0), 1)
+                cfg.dim_x = cfg.dim_y = cfg.dim_z = d
+            else:
+                cfg.dim_x = round(self._u(0.5, 2000), 2)
+                cfg.dim_y = round(self._u(0.5, 2000), 2)
+                cfg.dim_z = round(self._u(0.5, 2000), 2)
         elif cfg.crystal_type == "Cylinder":
             cfg.dim_x = round(self._u(10, 10000), 1)   # height
             cfg.dim_y = round(self._u(5, 5000), 1)     # diameter
@@ -459,7 +476,15 @@ class GrammarGenerator:
             cfg.dim_x = cfg.dim_y = cfg.dim_z = d
 
         # ---- PixelsPerMicron (major cost driver — budget enforced by retry loop) ----
-        cfg.pixels_per_micron = round(self._u(0.001, 10.0), 4)
+        # For tiny XFEL crystals, cap PPM so voxel × ExposureTime stays in budget.
+        # Target: ≤ 10 voxels so max_exp can reach ≥ 2 s (medium PULSE_BIN_LENGTH branch).
+        if _xfel_tiny:
+            max_dim = max(cfg.dim_x, cfg.dim_y, cfg.dim_z)
+            max_ppm = (10.0 / (max_dim ** 3)) ** (1.0 / 3.0)
+            max_ppm = max(0.05, min(max_ppm, 2.0))
+            cfg.pixels_per_micron = round(self._u(0.01, max_ppm), 4)
+        else:
+            cfg.pixels_per_micron = round(self._u(0.001, 10.0), 4)
 
         # ---- Composition ----
         if cfg.coefcalc in ("RD3D", "MicroED"):
@@ -502,6 +527,12 @@ class GrammarGenerator:
             cfg.gamma_param = round(self._u(0.001, 100.0), 4)
             cfg.b0_param = round(self._u(0.001, 500.0), 4)
             cfg.beta_param = round(max(0.001, self._u(0.001, 50.0)), 4)  # must stay positive
+
+        # ---- Crystal orientation (goniometer / polarisation) ----
+        # 30% chance of vertical goniometer; 20% chance of vertical polarisation.
+        # Both are independent and apply to all subprograms.
+        cfg.goniometer_axis = 90.0 if self._flip(0.3) else None
+        cfg.polarisation_direction = 90.0 if self._flip(0.2) else None
 
         # ---- Subprogram parameters ----
         if cfg.subprogram == "MONTECARLO":
@@ -647,10 +678,24 @@ class GrammarGenerator:
         if cfg.subprogram == "MONTECARLO":
             candidates.append(("mc_min", lambda c: setattr(c, "sim_electrons", 100)))
 
-        # -- XFEL exposure --
+        # -- Goniometer axis --
+        candidates.append(("goniometer_vertical", lambda c: setattr(c, "goniometer_axis", 90.0)))
+        candidates.append(("goniometer_horizontal", lambda c: setattr(c, "goniometer_axis", None)))
+
+        # -- XFEL exposure (also exercises different PULSE_BIN_LENGTH branches) --
         if cfg.subprogram == "XFEL":
             candidates.append(("xfel_tiny_exp", lambda c: [
                 setattr(w, "exposure_time", 1e-8)
+                for _, ws in c.segments for w in ws
+            ]))
+            # medium bin: PULSE_LENGTH 2–50 → PULSE_BIN_LENGTH = 0.1 fs
+            candidates.append(("xfel_medium_exp", lambda c: [
+                setattr(w, "exposure_time", 10.0)
+                for _, ws in c.segments for w in ws
+            ]))
+            # coarse bin: PULSE_LENGTH > 50 → PULSE_BIN_LENGTH = 1 fs
+            candidates.append(("xfel_coarse_exp", lambda c: [
+                setattr(w, "exposure_time", 55.0)
                 for _, ws in c.segments for w in ws
             ]))
 
@@ -703,6 +748,9 @@ class GrammarGenerator:
         # Swap crystal type (safe: Cuboid↔Spherical)
         if cfg.crystal_type in ("Cuboid", "Spherical") and cfg.coefcalc not in ("SAXSseq",):
             transforms.append("swap_crystal_type")
+
+        # Toggle goniometer axis
+        transforms.append("toggle_goniometer")
 
         # Add container
         transforms.append("add_container")
@@ -769,6 +817,9 @@ class GrammarGenerator:
                 else:
                     cfg.crystal_type = "Cuboid"
 
+            elif t == "toggle_goniometer":
+                cfg.goniometer_axis = None if cfg.goniometer_axis is not None else 90.0
+
             elif t == "add_container":
                 self._sample_container(cfg)
 
@@ -831,8 +882,13 @@ class GrammarGenerator:
         if cfg.subprogram == "XFEL" or cfg.subprogram == "EMSP" or cfg.crystal_type == "Cylinder":
             beam = self._sample_beam(cfg)
             if cfg.subprogram == "XFEL":
+                # Budget-limited max exposure (no hardcoded 0.01 cap).
+                # For very small crystals (low vox) this naturally allows
+                # ExposureTime > 1 s, exercising different PULSE_BIN_LENGTH
+                # branches in XFEL.java: ≤1 → 0.01 fs, 2–50 → 0.1 fs, >50 → 1 fs.
+                # Cap at 100 s to prevent unrealistically large time-bin arrays.
                 max_exp = self.budget / max(vox * XFEL_PER_VOXEL_PER_SECOND * cfg.runs, 1e-9)
-                max_exp = max(0.0001, min(max_exp, 0.01))
+                max_exp = max(0.0001, min(max_exp, 100.0))
                 exposure_time = round(self._u(0.0001, max_exp), 6)
             elif cfg.subprogram == "EMSP":
                 exposure_time = 1.0  # EMSP doesn't use exposure time, placeholder
