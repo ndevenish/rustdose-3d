@@ -214,6 +214,11 @@ def main():
     ap.add_argument("--rust-bin", type=Path, default=DEFAULT_RUST_BIN)
     args = ap.parse_args()
 
+    if not args.java_jar.exists():
+        print(f"ERROR: Java JAR not found: {args.java_jar}", file=sys.stderr)
+        print("Build it with: cd java && ant jar", file=sys.stderr)
+        sys.exit(1)
+
     inputs = _collect_inputs(args.paths)
     if not inputs:
         print("No .txt inputs found.")
