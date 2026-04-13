@@ -1,7 +1,7 @@
 // RADDOSE-3D input file grammar (PEG, case-insensitive)
 // Ported from ANTLR 3.4 grammar: lib/antlrworks-parsergenerator/Inputfile.g
 
-WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" | "," }
 COMMENT    = _{ ("#" | "//" | "!") ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }
 
 configfile = { SOI ~ (crystal | beam | wedge)* ~ EOI }
