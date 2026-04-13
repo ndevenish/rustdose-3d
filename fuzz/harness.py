@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Optional
 
 REPO_ROOT = Path(__file__).parent.parent
-DEFAULT_JAVA_JAR = REPO_ROOT / "raddose3d.jar"
-DEFAULT_RUST_BIN = REPO_ROOT / "raddose3d" / "target" / "release" / "raddose3d"
+DEFAULT_JAVA_JAR = REPO_ROOT / "java" / "raddose3d.jar"
+DEFAULT_RUST_BIN = REPO_ROOT / "target" / "release" / "raddose3d"
 DEFAULT_TIMEOUT = 60.0    # seconds — shared deadline for both processes
 DEFAULT_GRACE   = 30.0    # extra seconds given to the straggler after the first finishes
 # Absolute cap on total wall time = timeout + grace, regardless of when the first finishes.
