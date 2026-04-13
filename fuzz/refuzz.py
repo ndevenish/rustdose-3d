@@ -235,7 +235,7 @@ def main():
     def _run_one(txt_path: Path):
         try:
                 input_text = txt_path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
+        except UnicodeDecodeError:
                 input_text = txt_path.read_text(encoding="latin-1")
         with tempfile.TemporaryDirectory(prefix="raddose_refuzz_") as tmp:
             tmp_path = Path(tmp)
