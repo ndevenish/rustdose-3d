@@ -233,7 +233,7 @@ def main():
     old_to_new: Counter = Counter()  # (old_name, new_name) counts
 
     def _run_one(txt_path: Path):
-        input_text = txt_path.read_text()
+        input_text = txt_path.read_text(errors="replace")
         with tempfile.TemporaryDirectory(prefix="raddose_refuzz_") as tmp:
             tmp_path = Path(tmp)
             input_copy = tmp_path / "input.txt"
