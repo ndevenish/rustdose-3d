@@ -407,12 +407,69 @@ impl MicroEdSimulation {
         // Store slice doses (indices 1..=N in result array).
         self.all_doses = dose3_results[1..].to_vec();
 
-        // Print slice data (equivalent to the commented-out Java CSV writer).
-        println!("Slice Number,Slice Depth (nm),Slice Dose (MGy)");
-        for (i, &sd) in self.all_doses.iter().enumerate() {
-            let depth = i as f64 * self.slice_thickness;
-            println!("{},{:.4},{:.8e}", i + 1, depth, sd);
+        // Write summary CSV — matches Java's WriterFile("outputMicroED.CSV").
+        // Format: one header + one data row, all fields as %f (6 decimal places).
+        let summary_path = "outputMicroED.CSV";
+        let beam_en = beam.photon_energy();
+        match Self::write_summary_csv(
+            summary_path,
+            beam_en,
+            dose3,
+            self.number_elastic,
+            self.number_single_elastic,
+            self.number_inelastic,
+            self.number_productive,
+            information_coef,
+            optimal_en,
+            optimal_t,
+        ) {
+            Ok(()) => {}
+            Err(e) => eprintln!("Warning: could not write {}: {}", summary_path, e),
         }
+
+        // Write slice data CSV — matches Java's WriterFile("outputMicroED_slices.csv").
+        let slice_path = "outputMicroED_slices.csv";
+        match Self::write_slice_csv(slice_path, &self.all_doses, self.slice_thickness) {
+            Ok(()) => println!("Slice data written to {}", slice_path),
+            Err(e) => eprintln!("Warning: could not write {}: {}", slice_path, e),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn write_summary_csv(
+        path: &str,
+        beam_en: f64,
+        dose: f64,
+        elastic: f64,
+        single_elastic: f64,
+        inelastic: f64,
+        productive: f64,
+        info_coef: f64,
+        best_en: f64,
+        best_t: f64,
+    ) -> std::io::Result<()> {
+        use std::io::Write;
+        let mut f = std::fs::File::create(path)?;
+        writeln!(
+            f,
+            "Beam_en, Dose, Elastic, Single_elastic, Inelastic, Productive, Info_coef, Best_en, Best_t"
+        )?;
+        writeln!(
+            f,
+            " {beam_en:.6}, {dose:.6}, {elastic:.6}, {single_elastic:.6}, {inelastic:.6}, {productive:.6}, {info_coef:.6}, {best_en:.6}, {best_t:.6}"
+        )?;
+        Ok(())
+    }
+
+    fn write_slice_csv(path: &str, doses: &[f64], slice_thickness: f64) -> std::io::Result<()> {
+        use std::io::Write;
+        let mut f = std::fs::File::create(path)?;
+        writeln!(f, "Slice Number,Slice Depth (nm),Slice Dose (MGy)")?;
+        for (i, &sd) in doses.iter().enumerate() {
+            let depth = i as f64 * slice_thickness;
+            writeln!(f, "{},{:.4},{:.8e}", i + 1, depth, sd)?;
+        }
+        Ok(())
     }
 
     // ── CSDA range ────────────────────────────────────────────────────────────
