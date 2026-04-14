@@ -235,6 +235,20 @@ This difference in `sumZ` propagates into Wk → Wak → GOS cross-sections, pro
 
 **Separately fixed (not a known divergence):** A related bug where Rust's `integrate_dist` started the integration at the fine subshell binding energy (`shell_binding_subshell_kev`) instead of the coarse per-shell binding (`shell_binding_kev`) — matching Java's `getShellBinding` — has been corrected. This was causing a 24% GOS lambda error and the wrong optimal accelerating voltage.
 
+### Helical Scan Angle Normalisation: Fixed
+
+`compute_angles()` (`crystal/mod.rs`) normalises the wedge start angle by subtracting `N × 2π` where `N = (start_ang / 2π)` cast to integer. Java uses `(int)` which truncates toward zero; the original Rust code used `.floor()`. For negative start angles (e.g. `Wedge -45 315`, start = −π/4):
+- Java: `(int)(−0.125) = 0` → start stays at −π/4, translation delta at angle 0 is 0 µm
+- Rust (old): `floor(−0.125) = −1` → start shifts to +7π/4, translation delta at angle 0 is `2π × trans_per_rad` — the full scan length, placing the crystal outside the beam at the first exposure
+
+**Fix (committed):** replaced `.floor() as i64` with `as i64` (truncation). After the fix, helical scans with negative start angles match Java exactly. Seed: `fuzz/corpus/seeds/helical_negative_start_angle.txt`.
+
+### SAXS with NumResidues=0: Known-Invalid Input
+
+When `AbsCoefCalc SAXS` is used with all residue counts zero (`NumResidues=0`, `NumRNA=0`, `NumDNA=0`, `NumCarb=0`), the monomer mass is zero → molarity = `ProteinConc / 0 = Infinity` → `num_monomers` saturates to `i32::MAX = 2147483647`. This produces ~86 billion atoms in a small unit cell and physically meaningless coefficients with ~10% elastic divergence between Java and Rust.
+
+**Rust behaviour:** emits `KNOWN:SAXS_ZERO_RESIDUES: ...` to stderr and exits non-zero (`coefcalc/saxs.rs`). Java silently overflows and produces garbage output. The differential fuzzer classifies this as `KNOWN_SAXS_ZERO_RESIDUES` (routed to `corpus/known/`) rather than `RUST_CRASH`. Seed: `fuzz/corpus/seeds/saxs_num_residues_zero.txt`.
+
 ### PE/FL Escape: Validation Status
 PE/FL escape and cryo surrounding are implemented (`crystal/escape.rs`, integrated into `expose_rd3d()`). Validated on LiFePO₄ test case (1µm sphere, SMALLMOLE, 1.487 keV). Two Java bugs are intentionally reproduced for compatibility — see `docs/java-bugs-analysis.md`.
 
