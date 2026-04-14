@@ -1748,8 +1748,11 @@ impl CoefCalcCompute {
         let wak = Self::get_wak(e_kev, wk, uk_ev);
         let wdis_ev = 3.0 * wak - 2.0 * uk_ev;
         let wdis_j = (wdis_ev / 1000.0) * KEV_TO_JOULES;
-        let uk_kev = uk_ev / 1000.0;
-        let binding_j = uk_kev * KEV_TO_JOULES;
+        // Java's integrateDist ignores the Uk parameter for the starting point and
+        // uses getShellBinding(i, e) (coarse: K/L1/M1 by index) instead of
+        // getShellBindingSubshell (fine subshell). Match that behaviour.
+        let coarse_uk_kev = Self::shell_binding_kev(element, shell);
+        let binding_j = coarse_uk_kev * KEV_TO_JOULES;
         let step = wdis_j / (WBINS as f64);
         if step <= 0.0 {
             return 0.0;
