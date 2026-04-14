@@ -227,6 +227,14 @@ Java's `CrystalPolyhedron.findDepth` has a deduplication loop that is effectivel
 
 Java's `BeamGaussian.bivariateGaussianVolume` uses a polar coordinate integration (100 angular trapezoid steps with analytical radial integral) for circular/elliptical apertures. Rust matches this algorithm exactly. A previous Cartesian grid (100×100 midpoint Riemann sum) approach was more accurate but produced a ~0.047% normalization difference that was amplified to ~2.75% in DWD by steeply-decaying DDM models (Leal/Bfactor).
 
+### MicroED GOS Inelastic Lambda: Known ~1% Divergence
+
+Java's `CoefCalcCompute.getWkMolecule` accumulates `sumZ` as `int` with compound assignment (`sumZ += Z * atomNum`). Because Java's compound `+=` truncates the double result to int after each step, the running sum is effectively floor'd after every element. Rust uses `sum_z += (z as i64) * atom_num.round() as i64` (round, not truncate), which is physically more correct since atom counts from fractional unit-cell compositions are not necessarily integers.
+
+This difference in `sumZ` propagates into Wk → Wak → GOS cross-sections, producing a ~1% divergence in GOS Inelastic Lambda (Java: 176.31 nm, Rust: 178.21 nm for the 03653 test case) and a corresponding sub-percent shift in inelastic event counts. The Rust result is more accurate; matching Java's truncation bug is not desirable.
+
+**Separately fixed (not a known divergence):** A related bug where Rust's `integrate_dist` started the integration at the fine subshell binding energy (`shell_binding_subshell_kev`) instead of the coarse per-shell binding (`shell_binding_kev`) — matching Java's `getShellBinding` — has been corrected. This was causing a 24% GOS lambda error and the wrong optimal accelerating voltage.
+
 ### PE/FL Escape: Validation Status
 PE/FL escape and cryo surrounding are implemented (`crystal/escape.rs`, integrated into `expose_rd3d()`). Validated on LiFePO₄ test case (1µm sphere, SMALLMOLE, 1.487 keV). Two Java bugs are intentionally reproduced for compatibility — see `docs/java-bugs-analysis.md`.
 
