@@ -55,6 +55,11 @@ class RunResult:
         p = self.output_dir / f"{self.impl}-Summary.csv"
         return p if p.exists() else None
 
+    def micro_ed_csv_path(self) -> Optional[Path]:
+        """outputMicroED.CSV written to cwd (= output_dir) by both Java and Rust."""
+        p = self.output_dir / "outputMicroED.CSV"
+        return p if p.exists() else None
+
 
 def run_both(
     input_path: Path,
@@ -79,14 +84,18 @@ def run_both(
     java_out_dir.mkdir(parents=True, exist_ok=True)
     rust_out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Resolve input_path to absolute so it remains valid when each process
+    # runs in its own output subdirectory as cwd.
+    input_path_abs = input_path.resolve()
+
     java_cmd = [
         "java", "-jar", str(java_jar),
-        "-i", str(input_path),
+        "-i", str(input_path_abs),
         "-p", str(java_out_dir / "java-"),
     ]
     rust_cmd = [
         str(rust_bin),
-        "-i", str(input_path),
+        "-i", str(input_path_abs),
         "-p", str(rust_out_dir / "rust-"),
     ]
 
@@ -99,8 +108,11 @@ def run_both(
     first_done_at: list[Optional[float]] = [None]
     first_done_lock = threading.Lock()
 
-    java_proc = _launch(java_cmd, work_dir)
-    rust_proc = _launch(rust_cmd, work_dir)
+    # Each process runs in its own output dir as cwd so that hardcoded output
+    # files (outputMicroED.CSV, outputMicroED_slices.csv, etc.) land in the
+    # per-impl directory rather than clobbering each other in the shared work_dir.
+    java_proc = _launch(java_cmd, java_out_dir)
+    rust_proc = _launch(rust_cmd, rust_out_dir)
 
     results: list[Optional[RunResult]] = [None, None]
 

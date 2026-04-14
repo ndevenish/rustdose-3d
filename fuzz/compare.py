@@ -52,6 +52,19 @@ COMPARE_METRICS = [
     "Dose Inefficiency PE",
 ]
 
+# Metrics from outputMicroED.CSV (MicroED/EMED subprogram).
+# Keys match the CSV header fields (stripped).
+MICRO_ED_METRICS = [
+    "Dose",
+    "Elastic",
+    "Single_elastic",
+    "Inelastic",
+    "Productive",
+    "Info_coef",
+    "Best_en",
+    "Best_t",
+]
+
 TOL_MATCH = 1e-4      # 0.01%  — differences below this are "match"
 TOL_MINOR = 1e-2      # 1%     — differences below this are "minor"
 # differences >= TOL_MINOR are "major"
@@ -127,7 +140,30 @@ def compare(java_result: RunResult, rust_result: RunResult) -> Comparison:
                           note=f"exit={rust_result.exit_code}",
                           java_time=jt, rust_time=rt)
 
-    # ---- Both succeeded: compare Summary.csv ----
+    # ---- Both succeeded: try MicroED CSV first, fall back to Summary.csv ----
+    java_micro = java_result.micro_ed_csv_path()
+    rust_micro = rust_result.micro_ed_csv_path()
+
+    if java_micro is not None or rust_micro is not None:
+        # At least one side produced a MicroED CSV — treat this as a MicroED run.
+        if java_micro is None or rust_micro is None:
+            missing = "java outputMicroED.CSV" if java_micro is None else "rust outputMicroED.CSV"
+            return Comparison(Category.PARSE_ERROR,
+                              note=f"missing: {missing}",
+                              java_time=jt, rust_time=rt)
+        try:
+            java_metrics = _parse_micro_ed_csv(java_micro)
+            rust_metrics = _parse_micro_ed_csv(rust_micro)
+        except Exception as e:
+            return Comparison(Category.PARSE_ERROR, note=str(e),
+                              java_time=jt, rust_time=rt)
+        diffs = _collect_diffs(java_metrics, rust_metrics, MICRO_ED_METRICS)
+        if not diffs:
+            return Comparison(Category.PARSE_ERROR, note="no comparable MicroED metrics found",
+                              java_time=jt, rust_time=rt)
+        return _classify(diffs, jt, rt)
+
+    # ---- Standard run: compare Summary.csv ----
     java_csv = java_result.summary_csv_path()
     rust_csv = rust_result.summary_csv_path()
 
@@ -158,30 +194,64 @@ def compare(java_result: RunResult, rust_result: RunResult) -> Comparison:
     multi_wedge = len(java_rows) > 1
     diffs = []
     for row_idx, (java_metrics, rust_metrics) in enumerate(zip(java_rows, rust_rows)):
-        for name in COMPARE_METRICS:
-            j = java_metrics.get(name)
-            r = rust_metrics.get(name)
-            if j is None or r is None:
-                continue
-            label = f"{name}[{row_idx}]" if multi_wedge else name
-            nan_inf = _is_nan_inf(j) or _is_nan_inf(r)
-            if nan_inf and not (_is_nan_inf(j) and _is_nan_inf(r)):
-                # One has NaN/Inf, other doesn't
-                diffs.append(MetricDiff(label, j, r, rel_diff=float("inf"), is_nan_inf=True))
-            elif not (math.isnan(j) or math.isnan(r)):
-                rel = _rel_diff(j, r)
-                diffs.append(MetricDiff(label, j, r, rel_diff=rel, is_nan_inf=False))
+        label_prefix = f"[{row_idx}]" if multi_wedge else ""
+        diffs.extend(_collect_diffs(java_metrics, rust_metrics, COMPARE_METRICS, label_prefix))
 
     if not diffs:
         return Comparison(Category.PARSE_ERROR, note="no comparable metrics found",
                           java_time=jt, rust_time=rt)
 
-    # Check for NaN/Inf disagreements first
+    return _classify(diffs, jt, rt)
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _parse_micro_ed_csv(path: Path) -> dict[str, float]:
+    """Parse outputMicroED.CSV into a {field: value} dict (single data row)."""
+    with open(path) as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+    if not rows:
+        raise ValueError(f"Empty MicroED CSV: {path}")
+    result = {}
+    for key, val in rows[0].items():
+        if key is None:
+            continue
+        try:
+            result[key.strip()] = float(val.strip())
+        except (ValueError, AttributeError):
+            pass
+    return result
+
+
+def _collect_diffs(
+    java_metrics: dict[str, float],
+    rust_metrics: dict[str, float],
+    metric_names: list[str],
+    label_prefix: str = "",
+) -> list[MetricDiff]:
+    diffs = []
+    for name in metric_names:
+        j = java_metrics.get(name)
+        r = rust_metrics.get(name)
+        if j is None or r is None:
+            continue
+        label = f"{name}{label_prefix}"
+        nan_inf = _is_nan_inf(j) or _is_nan_inf(r)
+        if nan_inf and not (_is_nan_inf(j) and _is_nan_inf(r)):
+            diffs.append(MetricDiff(label, j, r, rel_diff=float("inf"), is_nan_inf=True))
+        elif not (math.isnan(j) or math.isnan(r)):
+            diffs.append(MetricDiff(label, j, r, rel_diff=_rel_diff(j, r), is_nan_inf=False))
+    return diffs
+
+
+def _classify(diffs: list[MetricDiff], jt: float, rt: float) -> Comparison:
     nan_inf_diffs = [d for d in diffs if d.is_nan_inf]
     if nan_inf_diffs:
         return Comparison(Category.NAN_INF, diffs=diffs,
-                          max_rel_diff=float("inf"),
-                          java_time=jt, rust_time=rt)
+                          max_rel_diff=float("inf"), java_time=jt, rust_time=rt)
 
     max_rel = max(d.rel_diff for d in diffs)
     if max_rel < TOL_MATCH:
@@ -191,8 +261,6 @@ def compare(java_result: RunResult, rust_result: RunResult) -> Comparison:
     else:
         cat = Category.MAJOR_DIFF
 
-    # Check for large runtime divergence even when outputs match.
-    # Only flag if at least one run exceeds 10s (avoids noise on fast inputs).
     if jt > 0.5 and rt > 0.5 and max(jt, rt) > 10.0:
         ratio = max(jt, rt) / min(jt, rt)
         if ratio >= PERF_DIVERGE_RATIO:
@@ -201,13 +269,8 @@ def compare(java_result: RunResult, rust_result: RunResult) -> Comparison:
                               note=f"{slower} {ratio:.1f}x slower",
                               java_time=jt, rust_time=rt)
 
-    return Comparison(cat, diffs=diffs, max_rel_diff=max_rel,
-                      java_time=jt, rust_time=rt)
+    return Comparison(cat, diffs=diffs, max_rel_diff=max_rel, java_time=jt, rust_time=rt)
 
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 def _parse_summary_csv(path: Path) -> list[dict[str, float]]:
     """Parse a RADDOSE-3D Summary.csv into a list of {metric_name: value} dicts, one per wedge row."""
