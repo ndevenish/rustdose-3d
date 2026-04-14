@@ -356,9 +356,12 @@ pub fn expose_rd3d(
 
 /// Compute the angle array for a wedge.
 fn compute_angles(wedge: &Wedge) -> Vec<f64> {
-    // Normalize angles to [0, 2π)
+    // Normalize angles to [0, 2π). Match Java's (int) cast which truncates toward zero,
+    // not floor(). For negative start angles (e.g. Wedge -45 315), floor(-0.125) = -1
+    // but (int)(-0.125) = 0. Using floor shifts all angles by 2π, misplacing the crystal
+    // by one full revolution via translation_vector(angle - start_ang).
     let twopi = 2.0 * std::f64::consts::PI;
-    let diff = (wedge.start_ang / twopi).floor() as i64;
+    let diff = (wedge.start_ang / twopi) as i64; // truncate toward zero, matching Java (int) cast
     let start = wedge.start_ang - twopi * diff as f64;
     let end = wedge.end_ang - twopi * diff as f64;
 

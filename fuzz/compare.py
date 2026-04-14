@@ -4,12 +4,19 @@ Compare Java and Rust RADDOSE-3D output files and classify the result.
 
 import csv
 import math
+import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from typing import Optional
 
 from harness import RunResult
+
+# Rust emits "KNOWN:<TAG>: explanation" to stderr before exiting non-zero for
+# inputs that are invalid in a known, specific way.  The fuzzer classifies
+# these as KNOWN_CRASH and names files/JSON with the full "KNOWN_<TAG>" label
+# rather than the generic RUST_CRASH name.
+_KNOWN_MARKER_RE = re.compile(r'^KNOWN:(\w+)', re.MULTILINE)
 
 
 class Category(Enum):
@@ -18,7 +25,8 @@ class Category(Enum):
     MAJOR_DIFF = auto()      # Max relative diff >= tol_major
     NAN_INF = auto()         # NaN or Inf in one but not the other
     JAVA_CRASH = auto()      # Java non-zero exit, Rust succeeded
-    RUST_CRASH = auto()      # Rust non-zero exit, Java succeeded
+    RUST_CRASH = auto()      # Rust non-zero exit, Java succeeded (unexpected)
+    KNOWN_CRASH = auto()     # Rust non-zero exit with KNOWN:<TAG> marker, Java succeeded
     BOTH_CRASH = auto()      # Both non-zero exit
     JAVA_TIMEOUT = auto()
     RUST_TIMEOUT = auto()
@@ -32,7 +40,7 @@ class Category(Enum):
         """Categories worth saving to corpus."""
         return self in {
             Category.MAJOR_DIFF, Category.NAN_INF,
-            Category.JAVA_CRASH, Category.RUST_CRASH,
+            Category.JAVA_CRASH, Category.RUST_CRASH, Category.KNOWN_CRASH,
             Category.JAVA_TIMEOUT, Category.RUST_TIMEOUT,
             Category.BOTH_TIMEOUT, Category.PERF_DIVERGE,
         }
@@ -92,12 +100,24 @@ class Comparison:
     rust_time: float = 0.0
     note: str = ""
 
+    @property
+    def file_category_name(self) -> str:
+        """Name used in filenames and JSON 'category' fields.
+
+        For KNOWN_CRASH the note carries the specific tag (e.g. 'SAXS_ZERO_RESIDUES'),
+        so files are labelled 'KNOWN_SAXS_ZERO_RESIDUES' rather than the generic
+        'KNOWN_CRASH'.  All other categories use their enum name unchanged.
+        """
+        if self.category == Category.KNOWN_CRASH and self.note:
+            return f"KNOWN_{self.note}"
+        return self.category.name
+
     def summary_line(self) -> str:
-        parts = [self.category.name]
+        parts = [self.file_category_name]
         if self.diffs:
             worst = max(self.diffs, key=lambda d: d.rel_diff)
             parts.append(f"max_diff={self.max_rel_diff:.2e} [{worst.name}]")
-        if self.note:
+        if self.note and self.category != Category.KNOWN_CRASH:
             parts.append(self.note)
         parts.append(f"java={self.java_time:.1f}s rust={self.rust_time:.1f}s")
         return "  ".join(parts)
@@ -139,6 +159,11 @@ def compare(java_result: RunResult, rust_result: RunResult) -> Comparison:
                           java_time=jt, rust_time=rt)
 
     if rust_result.crashed:
+        known_tag = _detect_known_crash(rust_result)
+        if known_tag is not None:
+            return Comparison(Category.KNOWN_CRASH,
+                              note=known_tag,
+                              java_time=jt, rust_time=rt)
         return Comparison(Category.RUST_CRASH,
                           note=f"exit={rust_result.exit_code}",
                           java_time=jt, rust_time=rt)
@@ -210,6 +235,13 @@ def compare(java_result: RunResult, rust_result: RunResult) -> Comparison:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _detect_known_crash(rust_result: RunResult) -> Optional[str]:
+    """Return the KNOWN tag (e.g. 'SAXS_ZERO_RESIDUES') if Rust stderr contains a
+    KNOWN:<TAG> marker, else None."""
+    m = _KNOWN_MARKER_RE.search(rust_result.stderr)
+    return m.group(1) if m else None
+
 
 def _parse_micro_ed_csv(path: Path) -> dict[str, float]:
     """Parse outputMicroED.CSV into a {field: value} dict (single data row)."""

@@ -232,7 +232,7 @@ def main():
                     next_i += 1
 
                 # ---- Accumulate stats ----
-                category_counts[result.category.name] += 1
+                category_counts[result.file_category_name] += 1
                 total_java_time += result.java_time
                 total_rust_time += result.rust_time
 
@@ -241,7 +241,7 @@ def main():
                     "iter": i,
                     "source": source,
                     "estimated_cost": round(cfg_cost, 3),
-                    "category": result.category.name,
+                    "category": result.file_category_name,
                     "max_rel_diff": result.max_rel_diff if not (
                         result.max_rel_diff == float("inf")
                     ) else "inf",
@@ -488,8 +488,11 @@ def _save_input(
 ) -> Path:
     """Save an interesting input and its outputs to corpus/."""
     cat = result.category
+    file_cat = result.file_category_name
 
-    if cat in (Category.JAVA_CRASH, Category.RUST_CRASH, Category.BOTH_CRASH):
+    if cat == Category.KNOWN_CRASH:
+        subdir = "known"
+    elif cat in (Category.JAVA_CRASH, Category.RUST_CRASH, Category.BOTH_CRASH):
         subdir = (
             "crashes/java" if cat == Category.JAVA_CRASH else
             "crashes/rust" if cat == Category.RUST_CRASH else
@@ -505,13 +508,13 @@ def _save_input(
     save_dir = CORPUS_DIR / subdir
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    base = f"{run_id}_{iteration:04d}_{cat.name}"
+    base = f"{run_id}_{iteration:04d}_{file_cat}"
     input_save = save_dir / f"{base}.txt"
     input_save.write_text(input_text)
 
     # Save a short metadata sidecar
     meta = {
-        "category": cat.name,
+        "category": file_cat,
         "max_rel_diff": result.max_rel_diff if result.max_rel_diff != float("inf") else "inf",
         "note": result.note,
         "java_time": result.java_time,

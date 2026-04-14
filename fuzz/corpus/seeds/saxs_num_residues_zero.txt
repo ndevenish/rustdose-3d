@@ -1,0 +1,35 @@
+# Seed for SAXS with NumResidues=0 elastic coefficient divergence.
+# Root cause: when NumResidues=0 (and NumRNA=NumDNA=NumCarb=0), total_mass=0, so
+# molarity = ProteinConc / 0 = Infinity, and num_monomers overflows.
+# Both Java and Rust saturate to i32::MAX / Integer.MAX_VALUE = 2147483647,
+# so atom counts are the same, but the elastic (coherent) scattering coefficient
+# diverges ~10.5% between the two implementations due to floating-point behaviour
+# at these extreme atom counts during density/solvent-water calculation.
+# This produces ~5.4% Dose Inefficiency and ~10.5% Diffraction Efficiency divergence.
+# Not easily fixable without exactly matching Java's FP evaluation path.
+
+Crystal
+
+Type Cuboid
+Dimensions 100 50 50
+PixelsPerMicron 0.5
+AbsCoefCalc SAXS
+UnitCell 100 100 100 90 90 90
+ProteinConc 10.0
+NumMonomers 1
+NumResidues 0
+ProteinHeavyAtoms P 1
+SolventHeavyConc Na 150 Cl 154
+SolventFraction 0.99
+DDM Simple
+
+Beam
+
+Type Gaussian
+Flux 2e13
+FWHM 29 7
+Energy 12.4
+Collimation Rectangular 400 400
+
+Wedge 0 0
+ExposureTime 1

@@ -1,0 +1,33 @@
+# Seed for helical scan with negative start angle.
+# Bug: compute_angles() used floor() instead of truncation (Java (int) cast) to normalise
+# the start angle.  For Wedge -45 315:
+#   Java: (int)(-0.125) = 0  → start angle stays at -π/4, translation delta starts at 0
+#   Rust: floor(-0.125) = -1 → start angle shifts to +7π/4, translation delta starts at 2π
+# With TranslatePerDegree 2 µm/°, this placed the crystal ~775 µm off-axis (full scan
+# length) at the very first exposure angle, producing zero dose in Rust.
+#
+# Fix: replace .floor() as i64 with plain as i64 (truncate toward zero) in compute_angles().
+
+Crystal
+
+Type Cuboid
+Dimensions 100 50 50
+PixelsPerMicron 0.5
+AbsCoefCalc RD3D
+UnitCell 78 78 37 90 90 90
+NumMonomers 1
+NumResidues 200
+SolventFraction 0.50
+
+Beam
+
+Type Gaussian
+Flux 2e12
+FWHM 20 20
+Energy 12.4
+Collimation Rectangular 50 50
+
+Wedge -45 315
+ExposureTime 10
+StartOffset 0.0 -200.0 0.0
+TranslatePerDegree 0.0 0.556 0.0

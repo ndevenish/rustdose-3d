@@ -61,7 +61,7 @@ impl CoefCalcSAXS {
             num_carb,
             protein_conc,
             vol,
-        );
+        )?;
         compute.num_monomers = num_monomers;
 
         // Heavy protein atoms
@@ -116,6 +116,10 @@ impl CoefCalcSAXS {
 }
 
 /// Calculate num_monomers from protein concentration (g/L) and cell volume (Å³).
+///
+/// Returns `Err` with a `KNOWN:X` prefix when the input is known-invalid (e.g. all residue
+/// counts zero), so the differential fuzzer can classify these as `KNOWN_X` rather than
+/// unexpected crashes.
 pub fn calculate_num_monomers_saxs(
     num_residues: i32,
     num_rna: i32,
@@ -123,23 +127,40 @@ pub fn calculate_num_monomers_saxs(
     num_carb: i32,
     protein_conc: f64,
     cell_volume_angstrom3: f64,
-) -> i32 {
+) -> Result<i32, String> {
     let total_mass = AVG_RESIDUE_MASS * num_residues as f64
         + AVG_RNA_MASS * num_rna as f64
         + AVG_DNA_MASS * num_dna as f64
         + AVG_CARB_MASS * num_carb as f64;
+
+    if total_mass == 0.0 {
+        // Emit a machine-readable marker so the differential fuzzer can recognise this as a
+        // known-invalid input rather than an unexpected crash.
+        eprintln!(
+            "KNOWN:SAXS_ZERO_RESIDUES: SAXS requires at least one of \
+             NumResidues/NumRNA/NumDNA/NumCarb to be non-zero so that a monomer mass can be \
+             estimated. With all counts zero the calculated molarity is infinite, producing \
+             physically meaningless coefficients. Set NumResidues to the number of residues \
+             per monomer."
+        );
+        return Err(
+            "SAXS_ZERO_RESIDUES: all residue counts are zero; cannot estimate monomer mass"
+                .to_string(),
+        );
+    }
+
     let molarity = protein_conc / total_mass;
     let volume_litres = ANGSTROM_TO_LITRE * cell_volume_angstrom3;
     let num = (molarity * volume_litres * AVOGADRO_NUM).round();
     if num < 1.0 {
         println!("WARNING: calculated monomers < 1; increase unit cell size. Using 1.");
-        return 1;
+        return Ok(1);
     }
     println!(
         "Calculated number of monomers in cell volume: {}",
         num as i32
     );
-    num as i32
+    Ok(num as i32)
 }
 
 impl CoefCalc for CoefCalcSAXS {

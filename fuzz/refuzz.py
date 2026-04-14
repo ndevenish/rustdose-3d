@@ -19,6 +19,7 @@ Usage:
 import argparse
 import glob as glob_module
 import json
+import re
 import sys
 import tempfile
 from collections import Counter
@@ -46,6 +47,8 @@ def _subdir_for(cat: Category) -> str:
         return "crashes/java"
     if cat == Category.RUST_CRASH:
         return "crashes/rust"
+    if cat == Category.KNOWN_CRASH:
+        return "known"
     if cat == Category.BOTH_CRASH:
         return "crashes/both"
     if cat in (Category.JAVA_TIMEOUT, Category.RUST_TIMEOUT, Category.BOTH_TIMEOUT):
@@ -56,7 +59,11 @@ def _subdir_for(cat: Category) -> str:
 
 
 def _old_category_name(txt_path: Path) -> str | None:
-    """Read old category from .json sidecar, else infer from filename stem."""
+    """Read old category from .json sidecar, else infer from filename stem.
+
+    Returns the full file_category_name string, e.g. 'KNOWN_SAXS_ZERO_RESIDUES'
+    or 'RUST_CRASH', so callers see the specific tag for KNOWN_CRASH cases.
+    """
     json_path = txt_path.with_suffix(".json")
     if json_path.exists():
         try:
@@ -64,6 +71,11 @@ def _old_category_name(txt_path: Path) -> str | None:
         except Exception:
             pass
     stem = txt_path.stem
+    # Check KNOWN_X patterns before enum names so 'KNOWN_SAXS_ZERO_RESIDUES'
+    # is returned intact rather than being matched by no enum variant.
+    m = re.search(r'_(KNOWN_\w+?)(?:_\d+)*$', stem)
+    if m:
+        return m.group(1)
     for cat in Category:
         if stem.endswith(f"_{cat.name}"):
             return cat.name
@@ -73,13 +85,19 @@ def _old_category_name(txt_path: Path) -> str | None:
 def _rename_stem(stem: str, new_cat_name: str) -> str:
     """Replace the category token in a filename stem with new_cat_name.
 
-    Handles collision suffixes like _1 or _1_1 that may follow the category.
+    Handles KNOWN_X compound tokens and collision suffixes like _1 or _1_1.
     """
+    # KNOWN_X tokens first — they span two underscore-separated words
+    m = re.search(r'_(KNOWN_\w+?)((?:_\d+)*)$', stem)
+    if m:
+        prefix = stem[:m.start()]
+        suffix = m.group(2)  # e.g. "", "_1", "_1_1"
+        return f"{prefix}_{new_cat_name}{suffix}"
     for cat in Category:
         marker = f"_{cat.name}"
         idx = stem.find(marker)
         if idx != -1:
-            suffix = stem[idx + len(marker):]  # e.g. "", "_1", "_1_1"
+            suffix = stem[idx + len(marker):]
             prefix = stem[:idx]
             return f"{prefix}_{new_cat_name}{suffix}"
     # Filename doesn't follow convention — append new category
@@ -110,10 +128,15 @@ def _outcome_label(old: str | None, new: Category) -> str:
         return "ERROR"
     if old is None:
         return "new"
-    try:
-        old_cat = Category[old]
-    except KeyError:
-        return "?"
+    # Resolve old string to a Category, handling KNOWN_X compound names
+    old_cat: Category | None = None
+    if old and old.startswith("KNOWN_"):
+        old_cat = Category.KNOWN_CRASH
+    else:
+        try:
+            old_cat = Category[old]
+        except KeyError:
+            return "?"
     if old_cat == new:
         return "-"
     # Rank categories by severity (higher = worse)
@@ -123,6 +146,7 @@ def _outcome_label(old: str | None, new: Category) -> str:
         Category.PERF_DIVERGE: 2,
         Category.MAJOR_DIFF: 3,
         Category.NAN_INF: 3,
+        Category.KNOWN_CRASH: 3,   # known-invalid input: same severity tier as major diff
         Category.BOTH_CRASH: 4,
         Category.JAVA_CRASH: 4,
         Category.RUST_CRASH: 4,
@@ -157,7 +181,7 @@ def _update_corpus(
 
     # Build updated sidecar metadata
     new_meta = {
-        "category": new_result.category.name,
+        "category": new_result.file_category_name,
         "max_rel_diff": (new_result.max_rel_diff
                          if new_result.max_rel_diff != float("inf") else "inf"),
         "note": new_result.note,
@@ -176,7 +200,7 @@ def _update_corpus(
         ]
 
     dest_dir = CORPUS_DIR / new_subdir
-    new_stem = _rename_stem(txt_path.stem, new_result.category.name)
+    new_stem = _rename_stem(txt_path.stem, new_result.file_category_name)
     dest_txt = dest_dir / f"{new_stem}.txt"
 
     if dest_txt.resolve() == txt_path.resolve():
@@ -280,7 +304,7 @@ def main():
                     action, new_path = "skipped", txt_path
 
                 outcome_counts[label] += 1
-                old_to_new[(old_cat_name or "?", new_cat.name)] += 1
+                old_to_new[(old_cat_name or "?", new_result.file_category_name)] += 1
 
                 # Progress line
                 old_str = f"{old_cat_name or '?':15}"
