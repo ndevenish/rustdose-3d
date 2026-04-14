@@ -158,9 +158,7 @@ fn main() {
             ConfigItem::Beam(b) => match beam::create_beam(b) {
                 Ok(beam) => {
                     if uses_special_subprogram {
-                        use std::io::Write;
-                        print!("{}", beam.description());
-                        let _ = std::io::stdout().flush();
+                        println!("{}", beam.description());
                     }
                     experiment.set_beam(beam);
                 }
